@@ -12,14 +12,16 @@ namespace ECommerceBackend.API.Health
 
         public static Task WritePublicAsync(HttpContext context, HealthReport report)
         {
-            context.Response.ContentType = "application/json";
+            PrepareResponse(context);
             var response = new { status = report.Status.ToString() };
-            return context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
+            return context.Response.WriteAsync(
+                JsonSerializer.Serialize(response, JsonOptions),
+                context.RequestAborted);
         }
 
         public static Task WriteDetailedAsync(HttpContext context, HealthReport report)
         {
-            context.Response.ContentType = "application/json";
+            PrepareResponse(context);
 
             var response = new
             {
@@ -35,7 +37,17 @@ namespace ECommerceBackend.API.Health
                 })
             };
 
-            return context.Response.WriteAsync(JsonSerializer.Serialize(response, JsonOptions));
+            return context.Response.WriteAsync(
+                JsonSerializer.Serialize(response, JsonOptions),
+                context.RequestAborted);
+        }
+
+        private static void PrepareResponse(HttpContext context)
+        {
+            context.Response.ContentType = "application/json";
+            context.Response.Headers.CacheControl = "no-store, no-cache";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers.Expires = "0";
         }
     }
 }

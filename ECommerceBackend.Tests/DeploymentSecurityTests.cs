@@ -73,6 +73,23 @@ public sealed class DeploymentSecurityTests
             provider.GetRequiredService<IOptions<ReverseProxyOptions>>().Value);
     }
 
+    [Theory]
+    [InlineData("0.0.0.0/0")]
+    [InlineData("::/0")]
+    public void ReverseProxy_WhenTrustBoundaryCoversEveryAddress_FailsValidation(string network)
+    {
+        using var provider = CreateProvider(
+            Environments.Development,
+            new Dictionary<string, string?>
+            {
+                ["ReverseProxy:Enabled"] = "true",
+                ["ReverseProxy:KnownNetworks:0"] = network
+            });
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<ReverseProxyOptions>>().Value);
+    }
+
     [Fact]
     public async Task ForwardedHeaders_TrustConfiguredProxyAndIgnoreUntrustedSource()
     {
@@ -124,6 +141,9 @@ public sealed class DeploymentSecurityTests
         Assert.DoesNotContain("database", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("internal-sql", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("duration", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("no-store, no-cache", context.Response.Headers.CacheControl);
+        Assert.Equal("no-cache", context.Response.Headers.Pragma);
+        Assert.Equal("0", context.Response.Headers.Expires);
     }
 
     private static ServiceProvider CreateProvider(

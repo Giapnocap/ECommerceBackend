@@ -44,6 +44,10 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.Equal(HttpStatusCode.OK, categories.StatusCode);
         Assert.Equal(HttpStatusCode.OK, paymentMethods.StatusCode);
         Assert.Equal(HttpStatusCode.OK, openApi.StatusCode);
+        Assert.True(health.Headers.CacheControl?.NoStore);
+
+        var healthDetails = await client.GetAsync("/health/details");
+        Assert.Equal(HttpStatusCode.Unauthorized, healthDetails.StatusCode);
     }
 
     [Fact]
@@ -101,6 +105,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/cart")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/orders/my")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports/sales-summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/health/details")).StatusCode);
 
         using var checkout = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
         {

@@ -68,6 +68,8 @@ PaymentWebhooks__GenericHmac__MaxFutureSkewMinutes=5
 The app validates JWT, CORS, payment webhook, outbox and SMTP settings on startup. Production
 also fails closed for insecure SQL TLS, wildcard/localhost `AllowedHosts`, a non-absolute Data
 Protection path, or an enabled reverse proxy without a trusted proxy/network.
+Catch-all trusted networks such as `0.0.0.0/0` and `::/0` are rejected because they allow clients
+to spoof forwarded scheme and address information.
 
 ## Payment Webhook
 
@@ -219,6 +221,7 @@ Use `/health/live` for liveness probes and `/health/ready` for readiness probes.
 unhealthy when the oldest pending outbox message exceeds `Outbox__MaxPendingAgeMinutes`; dead-letter
 messages report a degraded state. Public endpoints return only aggregate status; check names,
 descriptions, timings and diagnostic data are available only from `/health/details` to an Admin.
+Health responses send `Cache-Control: no-store` so gateways and clients do not reuse stale probe results.
 
 Deploy the additive order-lifecycle migration before enabling expiration. Start with
 `OrderLifecycle__ExpirationDryRun=true`, inspect overdue counts and readiness, then switch it to

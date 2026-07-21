@@ -654,7 +654,9 @@ namespace ECommerceBackend.API.Extensions
             var knownNetworks = options.KnownNetworks ?? [];
             return knownProxies.Length + knownNetworks.Length > 0
                 && knownProxies.All(proxy => IPAddress.TryParse(proxy, out _))
-                && knownNetworks.All(network => TryParseNetwork(network, out _));
+                && knownNetworks.All(network =>
+                    TryParseNetwork(network, out var parsedNetwork)
+                    && parsedNetwork.PrefixLength > 0);
         }
 
         private static bool IsValidDataProtectionOptions(
