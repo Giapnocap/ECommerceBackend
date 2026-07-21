@@ -43,8 +43,8 @@ jobs:
         run: >-
           ./scripts/VerifyCoverage.ps1
           -ReportDirectory ./TestResults
-          -MinimumLineRate 60
-          -MinimumBranchRate 40
+          -MinimumLineRate 75
+          -MinimumBranchRate 60
       - uses: actions/upload-artifact@v4
         if: always()
         with:

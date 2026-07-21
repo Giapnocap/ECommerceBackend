@@ -46,6 +46,15 @@ internal static class TestServiceFactory
             Consistency(context),
             CreateMapper());
 
+    public static CartService CreateCartService(AppDbContext context)
+        => new(
+            Repository<Cart>(context),
+            Repository<CartItem>(context),
+            Repository<Product>(context),
+            context,
+            Consistency(context),
+            CreateMapper());
+
     public static UploadService CreateUploadService(
         AppDbContext context,
         TestWebHostEnvironment environment)

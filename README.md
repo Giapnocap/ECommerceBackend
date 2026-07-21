@@ -126,7 +126,7 @@ Additional backend hardening:
 - Release publish excludes local settings and configuration templates.
 - CI runs release build, format verification, migration-model validation and NuGet vulnerability auditing.
 - CI runs both the non-SQL suite and dedicated SQL Server integration suite.
-- Coverage reports are uploaded by CI. The initial regression gate is 60% line coverage and 40% branch coverage; these thresholds will be raised as API and orchestration tests are expanded.
+- Coverage reports are uploaded by CI. The regression gate requires at least 75% line coverage and 60% branch coverage.
 
 ## Auth Token Notes
 

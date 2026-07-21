@@ -366,43 +366,45 @@ public sealed class SqlServerCommerceFlowTests
             var migrator = context.GetService<IMigrator>();
             await migrator.MigrateAsync("20260719110525_HardenOrderLifecycleAndInventory");
 
-            var user = new User
-            {
-                Id = Guid.NewGuid(),
-                UserName = "legacy_payment_customer",
-                NormalizedUserName = "LEGACY_PAYMENT_CUSTOMER",
-                Email = "legacy_payment_customer@example.com",
-                NormalizedEmail = "LEGACY_PAYMENT_CUSTOMER@EXAMPLE.COM",
-                FullName = "Legacy Payment Customer",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Customer@123"),
-                CreatedAt = DateTime.UtcNow
-            };
-            var order = new Order
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                OrderNumber = $"ORD-{Guid.NewGuid():N}"[..32],
-                IdempotencyKey = Guid.NewGuid().ToString("N"),
-                IdempotencyRequestHash = new string('B', 64),
-                OrderDate = DateTime.UtcNow,
-                ShippingAddress = "Legacy address"
-            };
-            order.SetPricing(100m, discount: 0, shipping: 0, tax: 0);
-            order.ChangeStatus(OrderStatus.Confirmed, null);
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var paymentId = Guid.NewGuid();
+            var createdAt = DateTime.UtcNow;
             var paidAt = new DateTime(2026, 7, 18, 9, 30, 0, DateTimeKind.Utc);
-            var payment = new Payment
-            {
-                Id = Guid.NewGuid(),
-                OrderId = order.Id,
-                Method = PaymentMethod.CashOnDelivery,
-                Amount = 100m,
-                Provider = "generic-hmac",
-                ProviderTransactionId = "legacy-txn",
-                CreatedAt = paidAt.AddMinutes(-5),
-            };
-            payment.ChangeStatus(PaymentStatus.Paid, paidAt);
-            context.AddRange(user, order, payment);
-            await context.SaveChangesAsync();
+            var paymentCreatedAt = paidAt.AddMinutes(-5);
+            var orderNumber = $"ORD-{Guid.NewGuid():N}"[..32];
+            var idempotencyKey = Guid.NewGuid().ToString("N");
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword("Customer@123");
+
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [Users]
+                    ([Id], [UserName], [NormalizedUserName], [Email], [NormalizedEmail],
+                     [PasswordHash], [FullName], [Phone], [IsDeleted], [CreatedAt],
+                     [PasswordChangedAt], [TokenVersion])
+                VALUES
+                    ({userId}, {"legacy_payment_customer"}, {"LEGACY_PAYMENT_CUSTOMER"},
+                     {"legacy_payment_customer@example.com"}, {"LEGACY_PAYMENT_CUSTOMER@EXAMPLE.COM"},
+                     {passwordHash}, {"Legacy Payment Customer"}, NULL, {false}, {createdAt}, NULL, {0})
+                """);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [Orders]
+                    ([Id], [UserId], [OrderNumber], [IdempotencyKey], [IdempotencyRequestHash],
+                     [OrderDate], [SubtotalAmount], [DiscountAmount], [ShippingFee], [TaxAmount],
+                     [TotalAmount], [Status], [ShippingAddress], [Note])
+                VALUES
+                    ({orderId}, {userId}, {orderNumber}, {idempotencyKey}, {new string('B', 64)},
+                     {createdAt}, {100m}, {0m}, {0m}, {0m}, {100m}, {(int)OrderStatus.Confirmed},
+                     {"Legacy address"}, NULL)
+                """);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [Payments]
+                    ([Id], [OrderId], [Method], [Status], [Amount], [Provider],
+                     [ProviderTransactionId], [CreatedAt], [PaidAt])
+                VALUES
+                    ({paymentId}, {orderId}, {(int)PaymentMethod.CashOnDelivery},
+                     {(int)PaymentStatus.Paid}, {100m}, {"generic-hmac"}, {"legacy-txn"},
+                     {paymentCreatedAt}, {paidAt})
+                """);
 
             const string payload = "{\"providerTransactionId\":\"legacy-txn\",\"status\":\"paid\"}";
             var eventId = Guid.NewGuid();
@@ -412,7 +414,7 @@ public sealed class SqlServerCommerceFlowTests
                 INSERT INTO [PaymentWebhookEvents]
                     ([Id], [PaymentId], [Provider], [ProviderEventId], [PayloadHash], [Payload], [ReceivedAt], [ProcessedAt])
                 VALUES
-                    ({eventId}, {payment.Id}, {"generic-hmac"}, {"legacy-event"}, {payloadHash}, {payload}, {processedAt}, {processedAt})
+                    ({eventId}, {paymentId}, {"generic-hmac"}, {"legacy-event"}, {payloadHash}, {payload}, {processedAt}, {processedAt})
                 """);
 
             await migrator.MigrateAsync();

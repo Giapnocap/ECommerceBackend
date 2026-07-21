@@ -7,7 +7,7 @@ The GitHub Actions workflow has two jobs:
 
 Configure these two jobs as required checks in repository branch protection after a remote repository is connected.
 
-The current coverage regression gate is 60% line coverage and 40% branch coverage. It protects the tested baseline; raise it only after adding meaningful tests, never by excluding production code.
+The coverage regression gate requires at least 75% line coverage and 60% branch coverage. Raise it only after adding meaningful tests, never by excluding production code.
 
 SQL Server integration tests require both environment variables:
 
