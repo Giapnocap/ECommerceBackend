@@ -46,6 +46,7 @@ namespace ECommerceBackend.Application.Services
             AddToCartRequest request,
             CancellationToken cancellationToken = default)
         {
+            EnsurePositiveQuantity(request.Quantity);
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken);
@@ -112,6 +113,7 @@ namespace ECommerceBackend.Application.Services
             UpdateCartItemRequest request,
             CancellationToken cancellationToken = default)
         {
+            EnsureNonNegativeQuantity(request.Quantity);
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken);
@@ -297,6 +299,18 @@ namespace ECommerceBackend.Application.Services
                 throw new BusinessException(
                     $"Sản phẩm '{product.Name}' chỉ còn {product.StockQuantity} trong kho.");
             }
+        }
+
+        private static void EnsurePositiveQuantity(int quantity)
+        {
+            if (quantity <= 0)
+                throw new BusinessException("cart_quantity_invalid", "Cart quantity must be greater than zero.");
+        }
+
+        private static void EnsureNonNegativeQuantity(int quantity)
+        {
+            if (quantity < 0)
+                throw new BusinessException("cart_quantity_invalid", "Cart quantity cannot be negative.");
         }
 
     }

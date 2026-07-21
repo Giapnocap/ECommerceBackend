@@ -153,6 +153,8 @@ missing referenced files are reported and never removed from the database automa
 - Cart mutations serialize per cart.
 - Order lifecycle and webhook mutations lock the order before its payment.
 - Checkout and cancellation lock product rows in stable GUID order.
+- Checkout preflights every cart line after acquiring product locks and before mutating any stock,
+  order, payment or cart state; an unavailable line therefore leaves the entire cart unchanged.
 - Catalogue writes lock categories before products; multi-category updates lock category GUIDs in ascending order.
 - Product-image mutations use the product row as their serialization boundary and load image state after acquiring that lock.
 - Product administration writes stock through `InventoryPolicy`; the returned mutation is persisted verbatim in the inventory ledger.

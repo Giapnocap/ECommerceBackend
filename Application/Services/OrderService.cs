@@ -171,6 +171,12 @@ namespace ECommerceBackend.Application.Services
                     item.Product = product;
                 }
 
+                foreach (var item in cart.CartItems)
+                {
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryPolicy.EnsureCanReserve(item.Product!, item.Quantity));
+                }
+
                 var orderOccurredAt = UtcNow;
                 var subtotal = DomainRuleGuard.AsBusiness(() =>
                     OrderPricingPolicy.CalculateSubtotal(cart.CartItems.Select(item =>

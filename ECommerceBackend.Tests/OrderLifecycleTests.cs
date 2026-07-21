@@ -139,6 +139,51 @@ public sealed class OrderLifecycleTests
             && transaction.Type == InventoryTransactionType.OrderCancelled));
     }
 
+    [Fact]
+    public async Task Checkout_PreflightsEveryLineBeforeMutatingInventoryOrOrderState()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedCheckoutAsync(context, stock: 2);
+        var unavailable = new Product
+        {
+            Id = Guid.NewGuid(),
+            CategoryId = fixture.Product.CategoryId,
+            Name = "Unavailable Product",
+            Price = 50,
+            StockQuantity = 1,
+            IsDeleted = true,
+            CreatedAt = Now.UtcDateTime
+        };
+        context.Products.Add(unavailable);
+        await context.SaveChangesAsync();
+        await AddCartItemAsync(context, fixture.Cart.Id, fixture.Product.Id);
+        context.CartItems.Add(new CartItem
+        {
+            Id = Guid.NewGuid(),
+            CartId = fixture.Cart.Id,
+            ProductId = unavailable.Id,
+            Quantity = 1,
+            UnitPrice = unavailable.Price
+        });
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now));
+
+        var exception = await Assert.ThrowsAsync<BusinessException>(() => service.PlaceOrderAsync(
+            fixture.User.Id,
+            CreateRequest(),
+            "unavailable-product"));
+
+        Assert.Equal("inventory_product_unavailable", exception.Code);
+        Assert.Equal(2, fixture.Product.StockQuantity);
+        Assert.Equal(1, unavailable.StockQuantity);
+        Assert.Equal(2, await context.CartItems.AsNoTracking().CountAsync());
+        Assert.Empty(context.ChangeTracker.Entries<Order>());
+        Assert.Empty(context.ChangeTracker.Entries<Payment>());
+        Assert.Empty(await context.InventoryTransactions.AsNoTracking().ToListAsync());
+    }
+
     private static Order CreateOrderEntity()
     {
         var order = new Order

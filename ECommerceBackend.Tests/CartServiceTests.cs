@@ -117,6 +117,35 @@ public sealed class CartServiceTests
             new UpdateCartItemRequest { Quantity = 2 }));
     }
 
+    [Fact]
+    public async Task Mutations_RejectInvalidQuantityBeforeChangingCart()
+    {
+        await using var context = TestAppDbContext.Create();
+        var product = await SeedProductAsync(context, stockQuantity: 5);
+        var service = TestServiceFactory.CreateCartService(context);
+        var userId = Guid.NewGuid();
+
+        var addException = await Assert.ThrowsAsync<BusinessException>(() => service.AddItemAsync(
+            userId,
+            new AddToCartRequest { ProductId = product.Id, Quantity = -1 }));
+        Assert.Equal("cart_quantity_invalid", addException.Code);
+        Assert.Empty(context.CartItems);
+
+        var cart = await service.AddItemAsync(userId, new AddToCartRequest
+        {
+            ProductId = product.Id,
+            Quantity = 1
+        });
+        var itemId = Assert.Single(cart.Items).Id;
+        var updateException = await Assert.ThrowsAsync<BusinessException>(() => service.UpdateItemAsync(
+            userId,
+            itemId,
+            new UpdateCartItemRequest { Quantity = -1 }));
+
+        Assert.Equal("cart_quantity_invalid", updateException.Code);
+        Assert.Equal(1, (await context.CartItems.AsNoTracking().SingleAsync()).Quantity);
+    }
+
     private static async Task<Product> SeedProductAsync(
         AppDbContext context,
         int stockQuantity)

@@ -11,6 +11,14 @@ namespace ECommerceBackend.Domain.Policies
     {
         public static InventoryMutation Reserve(Product product, int quantity)
         {
+            EnsureCanReserve(product, quantity);
+
+            product.StockQuantity -= quantity;
+            return new InventoryMutation(-quantity, product.StockQuantity);
+        }
+
+        public static void EnsureCanReserve(Product product, int quantity)
+        {
             ArgumentNullException.ThrowIfNull(product);
             EnsurePositiveQuantity(quantity);
 
@@ -27,9 +35,6 @@ namespace ECommerceBackend.Domain.Policies
                     "inventory_insufficient",
                     $"Product '{product.Name}' has insufficient stock. Available: {product.StockQuantity}, requested: {quantity}.");
             }
-
-            product.StockQuantity -= quantity;
-            return new InventoryMutation(-quantity, product.StockQuantity);
         }
 
         public static InventoryMutation Release(Product product, int quantity)
