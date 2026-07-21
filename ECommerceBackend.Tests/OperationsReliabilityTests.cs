@@ -75,13 +75,18 @@ public sealed class OperationsReliabilityTests
             var referencedName = $"{Guid.NewGuid():N}.png";
             var missingName = $"{Guid.NewGuid():N}.png";
             var oldOrphanName = $"{Guid.NewGuid():N}.png";
+            var secondOldOrphanName = $"{Guid.NewGuid():N}.png";
             var freshOrphanName = $"{Guid.NewGuid():N}.png";
             await File.WriteAllBytesAsync(Path.Combine(productsFolder, referencedName), [1]);
             await File.WriteAllBytesAsync(Path.Combine(productsFolder, oldOrphanName), [1]);
+            await File.WriteAllBytesAsync(Path.Combine(productsFolder, secondOldOrphanName), [1]);
             await File.WriteAllBytesAsync(Path.Combine(productsFolder, freshOrphanName), [1]);
             await File.WriteAllBytesAsync(Path.Combine(productsFolder, "manual-note.txt"), [1]);
             File.SetLastWriteTimeUtc(
                 Path.Combine(productsFolder, oldOrphanName),
+                Now.UtcDateTime.AddHours(-2));
+            File.SetLastWriteTimeUtc(
+                Path.Combine(productsFolder, secondOldOrphanName),
                 Now.UtcDateTime.AddHours(-2));
             File.SetLastWriteTimeUtc(
                 Path.Combine(productsFolder, freshOrphanName),
@@ -118,16 +123,20 @@ public sealed class OperationsReliabilityTests
                 actorUserId);
             Assert.True(dryRun.DryRun);
             Assert.Equal(0, dryRun.DeletedFileCount);
+            Assert.Equal(2, dryRun.EligibleOrphanCount);
             Assert.True(File.Exists(Path.Combine(productsFolder, oldOrphanName)));
 
             var cleanup = await service.ReconcileAsync(
-                new UploadReconciliationRequest { DeleteOrphans = true, MaxDeletes = 10 },
+                new UploadReconciliationRequest { DeleteOrphans = true, MaxDeletes = 1 },
                 actorUserId);
 
             Assert.False(cleanup.DryRun);
             Assert.Equal(1, cleanup.MissingFileCount);
+            Assert.Equal(2, cleanup.EligibleOrphanCount);
             Assert.Equal(1, cleanup.DeletedFileCount);
-            Assert.False(File.Exists(Path.Combine(productsFolder, oldOrphanName)));
+            Assert.NotEqual(
+                File.Exists(Path.Combine(productsFolder, oldOrphanName)),
+                File.Exists(Path.Combine(productsFolder, secondOldOrphanName)));
             Assert.True(File.Exists(Path.Combine(productsFolder, freshOrphanName)));
             Assert.True(File.Exists(Path.Combine(productsFolder, "manual-note.txt")));
             Assert.Single(await context.AuditEvents.AsNoTracking()

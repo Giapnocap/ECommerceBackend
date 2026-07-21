@@ -89,6 +89,17 @@ namespace ECommerceBackend.Infrastructure.Notifications
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
+                    var released = await _store.ReleaseClaimAsync(
+                        message.Id,
+                        lockId,
+                        CancellationToken.None);
+                    if (!released)
+                    {
+                        _logger.LogWarning(
+                            "Outbox message {OutboxMessageId} could not release its lease during shutdown.",
+                            message.Id);
+                    }
+
                     throw;
                 }
                 catch (Exception ex)

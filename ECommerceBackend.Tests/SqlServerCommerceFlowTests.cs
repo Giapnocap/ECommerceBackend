@@ -341,6 +341,34 @@ public sealed class SqlServerCommerceFlowTests
                     message => message.ProcessedAt != null
                         && message.DeadLetteredAt == null
                         && message.LockId == null));
+
+            var releasableMessage = new OutboxMessage
+            {
+                Id = Guid.NewGuid(),
+                Type = OutboxMessageTypes.NotificationRequested,
+                Payload = "{}",
+                OccurredAt = DateTime.UtcNow,
+                NextAttemptAt = DateTime.UtcNow
+            };
+            verificationContext.OutboxMessages.Add(releasableMessage);
+            await verificationContext.SaveChangesAsync();
+            var store = new EfOutboxStore(verificationContext);
+            var ownerLock = Guid.NewGuid();
+            var claimed = await store.ClaimBatchAsync(
+                ownerLock,
+                1,
+                DateTime.UtcNow,
+                DateTime.UtcNow.AddMinutes(-5));
+
+            Assert.Equal(releasableMessage.Id, Assert.Single(claimed).Id);
+            Assert.False(await store.ReleaseClaimAsync(releasableMessage.Id, Guid.NewGuid()));
+            Assert.True(await store.ReleaseClaimAsync(releasableMessage.Id, ownerLock));
+            verificationContext.ChangeTracker.Clear();
+            var released = await verificationContext.OutboxMessages.AsNoTracking()
+                .SingleAsync(message => message.Id == releasableMessage.Id);
+            Assert.Null(released.LockId);
+            Assert.Null(released.LockedAt);
+            Assert.Equal(0, released.Attempts);
         }
         finally
         {

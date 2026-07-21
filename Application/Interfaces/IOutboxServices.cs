@@ -35,6 +35,11 @@ namespace ECommerceBackend.Application.Interfaces
             DateTime? deadLetteredAt,
             string error,
             CancellationToken cancellationToken = default);
+
+        Task<bool> ReleaseClaimAsync(
+            Guid messageId,
+            Guid lockId,
+            CancellationToken cancellationToken = default);
     }
 
     public interface IOutboxMessageHandler

@@ -156,5 +156,33 @@ namespace ECommerceBackend.Infrastructure.Data
 
             return affected == 1;
         }
+
+        public async Task<bool> ReleaseClaimAsync(
+            Guid messageId,
+            Guid lockId,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_context.Database.IsRelational())
+            {
+                var message = await _context.OutboxMessages.SingleOrDefaultAsync(
+                    candidate => candidate.Id == messageId && candidate.LockId == lockId,
+                    cancellationToken);
+                if (message is null)
+                    return false;
+
+                message.LockId = null;
+                message.LockedAt = null;
+                await _context.SaveChangesAsync(cancellationToken);
+                return true;
+            }
+
+            var affected = await _context.OutboxMessages
+                .Where(message => message.Id == messageId && message.LockId == lockId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(message => message.LockId, (Guid?)null)
+                    .SetProperty(message => message.LockedAt, (DateTime?)null), cancellationToken);
+
+            return affected == 1;
+        }
     }
 }

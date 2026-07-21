@@ -74,13 +74,13 @@ namespace ECommerceBackend.Application.Services
             var eligible = orphans
                 .Where(file => GeneratedImageName().IsMatch(file.Name)
                     && file.LastWriteTimeUtc <= cutoff)
-                .Take(maxDeletes)
                 .ToList();
+            var deleteCandidates = eligible.Take(maxDeletes).ToList();
 
             var deleted = 0;
             if (request.DeleteOrphans)
             {
-                foreach (var file in eligible)
+                foreach (var file in deleteCandidates)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     try
@@ -109,6 +109,7 @@ namespace ECommerceBackend.Application.Services
                         {
                             ["deletedCount"] = deleted,
                             ["eligibleCount"] = eligible.Count,
+                            ["batchSize"] = deleteCandidates.Count,
                             ["graceMinutes"] = _options.ReconciliationGraceMinutes
                         });
                     await _context.SaveChangesAsync(cancellationToken);

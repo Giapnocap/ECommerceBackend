@@ -393,6 +393,50 @@ public class PaymentAndOutboxTests
         Assert.Null(message.DeadLetteredAt);
         Assert.True(message.NextAttemptAt > DateTime.UtcNow);
     }
+
+    [Fact]
+    public async Task OutboxProcessor_ShutdownReleasesLeaseWithoutConsumingAttempt()
+    {
+        await using var context = TestAppDbContext.Create();
+        var message = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            Type = OutboxMessageTypes.NotificationRequested,
+            Payload = "{}",
+            OccurredAt = DateTime.UtcNow,
+            NextAttemptAt = DateTime.UtcNow
+        };
+        context.OutboxMessages.Add(message);
+        await context.SaveChangesAsync();
+        var handler = new BlockingOutboxMessageHandler();
+        var processor = new OutboxProcessor(
+            new EfOutboxStore(context),
+            handler,
+            Options.Create(new OutboxOptions
+            {
+                BatchSize = 1,
+                MaxAttempts = 3,
+                LockTimeoutMinutes = 5,
+                ProcessingTimeoutSeconds = 30,
+                PollIntervalSeconds = 1
+            }),
+            NullLogger<OutboxProcessor>.Instance);
+        using var stopping = new CancellationTokenSource();
+
+        var processing = processor.ProcessBatchAsync(stopping.Token);
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        stopping.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => processing);
+        context.ChangeTracker.Clear();
+        var persisted = await context.OutboxMessages.AsNoTracking().SingleAsync();
+        Assert.Null(persisted.LockId);
+        Assert.Null(persisted.LockedAt);
+        Assert.Equal(0, persisted.Attempts);
+        Assert.Null(persisted.ProcessedAt);
+        Assert.Null(persisted.DeadLetteredAt);
+    }
+
     [Fact]
     public async Task OutboxProcessor_ReclaimsStaleLeaseAndDeliversOnce()
     {
@@ -588,6 +632,19 @@ public class PaymentAndOutboxTests
             OutboxMessage message,
             CancellationToken cancellationToken = default)
             => Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+    }
+    private sealed class BlockingOutboxMessageHandler : IOutboxMessageHandler
+    {
+        public TaskCompletionSource<bool> Started { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task HandleAsync(
+            OutboxMessage message,
+            CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult(true);
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
     }
     private sealed class AlwaysFailingNotificationSender : INotificationSender
     {
