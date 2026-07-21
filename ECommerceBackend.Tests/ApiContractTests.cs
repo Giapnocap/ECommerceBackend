@@ -6,6 +6,7 @@ using System.Text.Json;
 using ECommerceBackend.API.Errors;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
+using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
@@ -185,6 +186,74 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             (await client.PostAsync("/api/auth/logout-all", content: null)).StatusCode);
     }
 
+    [Fact]
+    public async Task AdminSession_CanReachEveryOperationalArea()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Admin)).AccessToken);
+
+        foreach (var path in new[]
+        {
+            "/api/users?page=1&pageSize=10",
+            "/api/orders?page=1&pageSize=10",
+            "/api/inventory/low-stock?page=1&pageSize=10",
+            "/api/reports/sales-summary",
+            "/api/operations/outbox/dead-letters?page=1&pageSize=10",
+            "/api/operations/audit-events?page=1&pageSize=10",
+            "/health/details"
+        })
+        {
+            await AssertStatusAsync(client, path, HttpStatusCode.OK);
+        }
+    }
+
+    [Fact]
+    public async Task StaffSession_UsesPermissionsWithoutReceivingAdminAccess()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Staff)).AccessToken);
+
+        await AssertStatusAsync(client, "/api/orders?page=1&pageSize=10", HttpStatusCode.OK);
+        await AssertStatusAsync(client, "/api/inventory/low-stock?page=1&pageSize=10", HttpStatusCode.OK);
+        await AssertStatusAsync(client, "/api/users?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/reports/sales-summary", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/operations/audit-events", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/health/details", HttpStatusCode.Forbidden);
+    }
+
+    private async Task<AuthResponse> CreateRoleSessionAsync(HttpClient client, string roleName)
+    {
+        var suffix = Guid.NewGuid().ToString("N");
+        var userName = $"{roleName.ToLowerInvariant()}_{suffix[..12]}";
+        const string password = "RoleSession@123";
+
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var role = await context.Roles.SingleAsync(candidate => candidate.Name == roleName);
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                UserName = userName,
+                NormalizedUserName = userName.ToUpperInvariant(),
+                Email = $"{userName}@example.com",
+                NormalizedEmail = $"{userName}@example.com".ToUpperInvariant(),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
+                FullName = $"{roleName} API Contract",
+                CreatedAt = DateTime.UtcNow
+            };
+            context.Users.Add(user);
+            context.UserRoles.Add(new UserRole { UserId = user.Id, RoleId = role.Id });
+            await context.SaveChangesAsync();
+        }
+
+        return await PostAuthAsync(client, "/api/auth/login", new LoginRequest
+        {
+            UserName = userName,
+            Password = password
+        });
+    }
+
     private static async Task<AuthResponse> PostAuthAsync<TRequest>(
         HttpClient client,
         string path,
@@ -198,6 +267,15 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 
     private static void SetBearerToken(HttpClient client, string token)
         => client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+    private static async Task AssertStatusAsync(
+        HttpClient client,
+        string path,
+        HttpStatusCode expectedStatus)
+    {
+        using var response = await client.GetAsync(path);
+        Assert.Equal(expectedStatus, response.StatusCode);
+    }
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response)
         => JsonDocument.Parse(await response.Content.ReadAsStringAsync());

@@ -17,6 +17,39 @@ public sealed class OperationsReliabilityTests
     private static readonly DateTimeOffset Now = new(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task GetAuditEvents_AppliesTrimmedFiltersAndHalfOpenTimeRange()
+    {
+        await using var context = TestAppDbContext.Create();
+        var actorUserId = Guid.NewGuid();
+        var matching = Audit(actorUserId, "user.role.assign", "User", Now.UtcDateTime.AddMinutes(-1));
+        context.AuditEvents.AddRange(
+            matching,
+            Audit(actorUserId, "user.role.assign", "User", Now.UtcDateTime),
+            Audit(Guid.NewGuid(), "user.role.assign", "User", Now.UtcDateTime.AddMinutes(-1)),
+            Audit(actorUserId, "user.password.change", "User", Now.UtcDateTime.AddMinutes(-1)));
+        await context.SaveChangesAsync();
+        var service = new OperationsService(
+            context,
+            new EfDataConsistencyService(context),
+            CreateAuditWriter(context, actorUserId),
+            new FixedTimeProvider(Now));
+
+        var result = await service.GetAuditEventsAsync(new AuditQueryParams
+        {
+            ActorUserId = actorUserId,
+            Action = "  user.role.assign  ",
+            EntityType = " User ",
+            From = Now.UtcDateTime.AddMinutes(-2),
+            To = Now.UtcDateTime,
+            Page = 1,
+            PageSize = 10
+        });
+
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(matching.Id, Assert.Single(result.Items).Id);
+    }
+
+    [Fact]
     public async Task RedriveDeadLetter_IsIdempotentAndWritesAuditWithoutExposingPayload()
     {
         await using var context = TestAppDbContext.Create();
@@ -166,4 +199,19 @@ public sealed class OperationsReliabilityTests
             new HttpContextAccessor { HttpContext = httpContext },
             new FixedTimeProvider(Now));
     }
+
+    private static AuditEvent Audit(
+        Guid actorUserId,
+        string action,
+        string entityType,
+        DateTime createdAt)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            ActorUserId = actorUserId,
+            Action = action,
+            EntityType = entityType,
+            CorrelationId = Guid.NewGuid().ToString("N"),
+            CreatedAt = createdAt
+        };
 }

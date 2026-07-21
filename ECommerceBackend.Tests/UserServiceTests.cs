@@ -10,6 +10,34 @@ namespace ECommerceBackend.Tests;
 public class UserServiceTests
 {
     [Fact]
+    public async Task UpdateProfileAsync_NormalizesFieldsAndRejectsMissingUser()
+    {
+        await using var context = TestAppDbContext.Create();
+        var user = User("profile_customer", "profile_customer@example.com");
+        context.Users.Add(user);
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateUserService(context);
+
+        var updated = await service.UpdateProfileAsync(user.Id, new UpdateProfileRequest
+        {
+            FullName = "  Updated Customer  ",
+            Phone = " 0901234567 "
+        });
+        var withoutPhone = await service.UpdateProfileAsync(user.Id, new UpdateProfileRequest
+        {
+            FullName = "Updated Customer",
+            Phone = "   "
+        });
+
+        Assert.Equal("Updated Customer", updated.FullName);
+        Assert.Equal("0901234567", updated.Phone);
+        Assert.Null(withoutPhone.Phone);
+        await Assert.ThrowsAsync<NotFoundException>(() => service.UpdateProfileAsync(
+            Guid.NewGuid(),
+            new UpdateProfileRequest { FullName = "Missing User" }));
+    }
+
+    [Fact]
     public async Task ChangePasswordAsync_RevokesSessionsAndInvalidatesExistingAccessTokens()
     {
         await using var context = TestAppDbContext.Create();

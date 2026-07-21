@@ -184,6 +184,39 @@ public sealed class OrderLifecycleTests
         Assert.Empty(await context.InventoryTransactions.AsNoTracking().ToListAsync());
     }
 
+    [Fact]
+    public async Task GetAllOrdersAsync_FiltersByCustomerAndPaginatesNewestFirst()
+    {
+        await using var context = TestAppDbContext.Create();
+        var customer = ListedUser("list_customer");
+        var otherCustomer = ListedUser("list_other");
+        context.Users.AddRange(customer, otherCustomer);
+        var customerId = customer.Id;
+        var otherCustomerId = otherCustomer.Id;
+        var oldest = ListedOrder(customerId, "LIST-001", Now.UtcDateTime.AddMinutes(-3));
+        var middle = ListedOrder(customerId, "LIST-002", Now.UtcDateTime.AddMinutes(-2));
+        var newest = ListedOrder(customerId, "LIST-003", Now.UtcDateTime.AddMinutes(-1));
+        context.Orders.AddRange(
+            oldest,
+            middle,
+            newest,
+            ListedOrder(otherCustomerId, "LIST-OTHER", Now.UtcDateTime));
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateOrderService(context, new FixedTimeProvider(Now));
+
+        var result = await service.GetAllOrdersAsync(new OrderQueryParams
+        {
+            UserId = customerId,
+            Status = OrderStatus.Pending,
+            Page = 2,
+            PageSize = 1
+        });
+
+        Assert.Equal(3, result.TotalCount);
+        Assert.Equal(3, result.TotalPages);
+        Assert.Equal(middle.Id, Assert.Single(result.Items).Id);
+    }
+
     private static Order CreateOrderEntity()
     {
         var order = new Order
@@ -196,6 +229,35 @@ public sealed class OrderLifecycleTests
         order.SetPricing(100, 0, 0, 0);
         return order;
     }
+
+    private static Order ListedOrder(Guid userId, string number, DateTime orderDate)
+    {
+        var order = new Order
+        {
+            Id = Guid.NewGuid(),
+            UserId = userId,
+            OrderNumber = number,
+            IdempotencyKey = $"key-{number}",
+            IdempotencyRequestHash = new string('A', 64),
+            OrderDate = orderDate,
+            ShippingAddress = "Listing test"
+        };
+        order.SetPricing(100, 0, 0, 0);
+        return order;
+    }
+
+    private static User ListedUser(string userName)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            UserName = userName,
+            NormalizedUserName = userName.ToUpperInvariant(),
+            Email = $"{userName}@example.com",
+            NormalizedEmail = $"{userName}@example.com".ToUpperInvariant(),
+            FullName = userName,
+            PasswordHash = "test-hash",
+            CreatedAt = Now.UtcDateTime
+        };
 
     private static PlaceOrderRequest CreateRequest() => new()
     {

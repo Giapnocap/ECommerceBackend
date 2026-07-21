@@ -113,7 +113,7 @@ Má»¥c tiÃªu:
 Ket qua:
 
 - Tao `ECommerceBackend.Tests` va them vao solution.
-- Bo test hien tai co 133 unit test cho auth/session, user/category/product/cart/order, payment webhook,
+- Bo test hien tai co 187 unit/API test cho auth/session, RBAC end-to-end, user/category/product/cart/order, payment webhook,
   reporting, middleware va outbox; 10 SQL Server integration flows duoc chay theo environment flag.
 - Dung EF Core InMemory cho service tests khong phu thuoc SQL Server.
 - Dung SQL Server database tam cho lock, transaction, migration, outbox va race-condition tests.
