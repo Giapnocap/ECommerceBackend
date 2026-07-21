@@ -6,5 +6,8 @@ Uploads/
 DataProtectionKeys/
 appsettings.Local.json
 *.csproj.user
+*.user
+*.suo
 *.log
 TestResults/
+.tools/

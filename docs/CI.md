@@ -1,9 +1,13 @@
 # CI Verification
 
-The GitHub Actions workflow has two required jobs:
+The GitHub Actions workflow has two jobs:
 
-- `build-and-unit-tests` builds the Release solution and runs tests outside the `SqlServerIntegration` category.
+- `build-and-unit-tests` restores with NuGet vulnerability auditing, verifies formatting, builds Release, validates that the EF model has no pending migration, runs tests outside the `SqlServerIntegration` category, enforces the coverage regression gate, and uploads the Cobertura report.
 - `sql-server-integration-tests` starts SQL Server 2022, enables the integration-test gate, and runs only the SQL Server category.
+
+Configure these two jobs as required checks in repository branch protection after a remote repository is connected.
+
+The current coverage regression gate is 60% line coverage and 40% branch coverage. It protects the tested baseline; raise it only after adding meaningful tests, never by excluding production code.
 
 SQL Server integration tests require both environment variables:
 

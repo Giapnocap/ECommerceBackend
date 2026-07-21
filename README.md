@@ -124,7 +124,9 @@ Additional backend hardening:
 - OpenAPI security metadata follows the authenticated fallback policy and keeps reviewed public endpoints anonymous.
 - Payment webhook documents payload-limit and rate-limit responses.
 - Release publish excludes local settings and configuration templates.
-- Release build, formatting, SQL Server integration tests, migration checks and package vulnerability audits pass.
+- CI runs release build, format verification, migration-model validation and NuGet vulnerability auditing.
+- CI runs both the non-SQL suite and dedicated SQL Server integration suite.
+- Coverage reports are uploaded by CI. The initial regression gate is 60% line coverage and 40% branch coverage; these thresholds will be raised as API and orchestration tests are expanded.
 
 ## Auth Token Notes
 

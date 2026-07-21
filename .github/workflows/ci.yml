@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  NUGET_AUDIT_MODE: all
+
 jobs:
   build-and-unit-tests:
     runs-on: ubuntu-latest
@@ -16,15 +20,37 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: dotnet restore ECommerceBackend.sln
+      - run: >-
+          dotnet restore ECommerceBackend.sln
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=low
+          -warnaserror:NU1901,NU1902,NU1903,NU1904
+      - run: dotnet format ECommerceBackend.sln --no-restore --verify-no-changes
       - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
+      - run: dotnet tool install dotnet-ef --tool-path ./.tools --version 8.0.20
+      - run: ./.tools/dotnet-ef migrations has-pending-model-changes --no-build --configuration Release
       - run: >-
           dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
           --configuration Release
           --no-build
           --settings coverage.runsettings
           --filter "Category!=SqlServerIntegration"
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults
           --logger "console;verbosity=normal"
+      - shell: pwsh
+        run: >-
+          ./scripts/VerifyCoverage.ps1
+          -ReportDirectory ./TestResults
+          -MinimumLineRate 60
+          -MinimumBranchRate 40
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-coverage
+          path: TestResults/**/coverage.cobertura.xml
+          if-no-files-found: error
 
   sql-server-integration-tests:
     runs-on: ubuntu-latest
@@ -51,7 +77,12 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - run: dotnet restore ECommerceBackend.sln
+      - run: >-
+          dotnet restore ECommerceBackend.sln
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=low
+          -warnaserror:NU1901,NU1902,NU1903,NU1904
       - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
       - run: >-
           dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
