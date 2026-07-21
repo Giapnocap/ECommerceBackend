@@ -65,8 +65,10 @@ PaymentWebhooks__GenericHmac__Secret=<at least 32 bytes from a secret store>
 PaymentWebhooks__GenericHmac__MaxFutureSkewMinutes=5
 ```
 
-The app validates JWT, CORS, payment webhook, outbox and SMTP settings on startup. Production
-also fails closed for insecure SQL TLS, wildcard/localhost `AllowedHosts`, a non-absolute Data
+The app validates JWT, CORS, payment webhook, outbox and SMTP settings on startup. Common
+placeholder values are rejected for the production JWT key and enabled bootstrap/webhook secrets.
+`appsettings.Local.json` is loaded only in Development and cannot override deployment settings.
+Production also fails closed for insecure SQL TLS, wildcard/localhost `AllowedHosts`, a non-absolute Data
 Protection path, or an enabled reverse proxy without a trusted proxy/network.
 Catch-all trusted networks such as `0.0.0.0/0` and `::/0` are rejected because they allow clients
 to spoof forwarded scheme and address information.

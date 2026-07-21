@@ -19,6 +19,27 @@ namespace ECommerceBackend.Tests;
 public sealed class DeploymentSecurityTests
 {
     [Fact]
+    public void LocalSettings_LoadOnlyInDevelopmentAndCannotOverrideProductionConfiguration()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"ECommerceBackend.Config.{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(root, "appsettings.Local.json"),
+                """{"ConfigSource":"local-file"}""");
+
+            Assert.Equal("local-file", LoadConfigSource(root, Environments.Development));
+            Assert.Equal("deployment-environment", LoadConfigSource(root, Environments.Production));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ProductionSecurity_RejectsInsecureDatabaseAndMissingHostAllowlist()
     {
         using var provider = CreateProvider(
@@ -161,6 +182,21 @@ public sealed class DeploymentSecurityTests
         services.AddECommerceConfigurationValidation(configuration, environment);
         services.AddECommerceReverseProxy(configuration);
         return services.BuildServiceProvider();
+    }
+
+    private static string? LoadConfigSource(string root, string environmentName)
+    {
+        var configuration = new ConfigurationManager();
+        configuration.SetBasePath(root);
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConfigSource"] = "deployment-environment"
+        });
+        configuration.AddECommerceLocalSettings(new TestWebHostEnvironment(root)
+        {
+            EnvironmentName = environmentName
+        });
+        return configuration["ConfigSource"];
     }
 
     private static async Task<(string Scheme, string? RemoteIp)> InvokeForwardedHeadersAsync(

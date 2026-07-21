@@ -32,6 +32,53 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void ProductionJwtPlaceholder_FailsValidation()
+    {
+        using var provider = CreateProvider(
+            "replace-with-at-least-32-bytes-from-a-secret-store",
+            Environments.Production);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<JwtOptions>>().Value);
+    }
+
+    [Fact]
+    public void EnabledAdminBootstrap_WithPlaceholderPassword_FailsValidation()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["AdminBootstrap:Enabled"] = "true",
+            ["AdminBootstrap:UserName"] = "admin",
+            ["AdminBootstrap:Email"] = "admin@example.com",
+            ["AdminBootstrap:FullName"] = "Initial Admin",
+            ["AdminBootstrap:Password"] = "replace-with-a-secure-password"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<AdminBootstrapOptions>>().Value);
+    }
+
+    [Fact]
+    public void EnabledPaymentWebhook_WithPlaceholderSecret_FailsValidation()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["PaymentWebhooks:GenericHmac:Enabled"] = "true",
+            ["PaymentWebhooks:GenericHmac:ProviderCode"] = "generic-hmac",
+            ["PaymentWebhooks:GenericHmac:Secret"] = "replace-with-at-least-32-bytes-from-a-secret-store"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<PaymentWebhookOptions>>().Value);
+    }
+
+    [Fact]
     public void ProductionOutbox_WithoutSmtp_FailsValidation()
     {
         var values = new Dictionary<string, string?>

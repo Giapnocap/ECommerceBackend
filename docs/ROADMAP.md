@@ -137,6 +137,7 @@ Ket qua:
 - Chuan hoa exception, validation, authentication va rate-limit errors bang `ProblemDetails`.
 - Giu cac compatibility fields `message`, `code`, `traceId`, `details`, `errors` de khong gay frontend regression.
 - Them correlation ID, Serilog request logging, deterministic outbox clock va publish smoke tests.
+- Local settings chi duoc nap trong Development; production placeholder secrets bi tu choi khi startup.
 
 Má»¥c tiÃªu:
 

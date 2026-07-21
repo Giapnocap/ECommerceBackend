@@ -72,7 +72,9 @@ namespace ECommerceBackend.API.Extensions
 
             services.AddOptions<JwtOptions>()
                 .Bind(configuration.GetSection(JwtOptions.SectionName))
-                .Validate(IsValidJwtOptions, "Jwt config is invalid.")
+                .Validate(
+                    options => IsValidJwtOptions(options, environment),
+                    "Jwt config is invalid or contains a production placeholder secret.")
                 .ValidateOnStart();
 
             services.AddOptions<ReverseProxyOptions>()
@@ -513,8 +515,11 @@ namespace ECommerceBackend.API.Extensions
             return services;
         }
 
-        private static bool IsValidJwtOptions(JwtOptions options)
-            => HasUsableJwtOptions(options);
+        private static bool IsValidJwtOptions(
+            JwtOptions options,
+            IWebHostEnvironment environment)
+            => HasUsableJwtOptions(options)
+                && (!environment.IsProduction() || !LooksLikePlaceholder(options.Key));
 
         private static bool HasUsableJwtOptions(JwtOptions options)
         {
@@ -611,7 +616,8 @@ namespace ECommerceBackend.API.Extensions
                 && options.Email.Length <= 254
                 && !string.IsNullOrWhiteSpace(options.FullName)
                 && options.FullName.Length <= 100
-                && options.Password.Length is >= 12 and <= 128;
+                && options.Password.Length is >= 12 and <= 128
+                && !LooksLikePlaceholder(options.Password);
         }
 
         private static bool IsValidPaymentWebhookOptions(PaymentWebhookOptions options)
@@ -631,7 +637,8 @@ namespace ECommerceBackend.API.Extensions
             }
 
             return !options.Enabled
-                || Encoding.UTF8.GetByteCount(options.Secret) >= PaymentWebhookOptions.MinimumSecretBytes;
+                || (Encoding.UTF8.GetByteCount(options.Secret) >= PaymentWebhookOptions.MinimumSecretBytes
+                    && !LooksLikePlaceholder(options.Secret));
         }
 
         private static bool IsValidOutboxOptions(OutboxOptions options)
@@ -769,6 +776,16 @@ namespace ECommerceBackend.API.Extensions
                 || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(host, "[::1]", StringComparison.OrdinalIgnoreCase);
+
+        private static bool LooksLikePlaceholder(string value)
+        {
+            var normalized = value.Trim().ToLowerInvariant();
+            return normalized.StartsWith("replace-with", StringComparison.Ordinal)
+                || normalized.StartsWith("change-me", StringComparison.Ordinal)
+                || normalized.StartsWith("changeme", StringComparison.Ordinal)
+                || normalized.Contains("placeholder", StringComparison.Ordinal)
+                || normalized.StartsWith('<') && normalized.EndsWith('>');
+        }
 
         private static bool IsValidOrderLifecycleOptions(OrderLifecycleOptions options)
             => options.PendingCodHoldMinutes is >= 1 and <= 1440
