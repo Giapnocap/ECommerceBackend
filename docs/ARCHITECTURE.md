@@ -207,7 +207,9 @@ format; `TraceId` and `SpanId` are separate structured log properties for cross-
 
 Catalogue reads pass request cancellation into EF Core and split collection includes to avoid a
 cartesian product when products have multiple images. Query count, duration and returned item
-count are emitted without recording search text. Full-text search and response caching remain
+count are emitted without recording search text. The bounded `catalog.outcome` tag distinguishes
+successful, cancelled and failed database queries so optimization decisions include unsuccessful
+traffic instead of measuring only the happy path. Full-text search and response caching remain
 measurement-gated because their operational cost and invalidation rules are not yet justified.
 
 Exception, MVC validation, authentication, authorization and rate-limit failures share the
@@ -223,5 +225,8 @@ are rethrown because replacing a partially written response would corrupt the HT
 - Local image storage is retained behind `IUploadService` for the current deployment scope.
 - COD is the only checkout method currently enabled. The generic HMAC webhook is provider
   neutral; a real gateway still needs its own Infrastructure adapter and credential mapping.
+- Payment adapters are validated before persistence: provider codes must be route-safe, checkout
+  methods must be defined, initial states must follow the payment state machine, and webhook-capable
+  checkout providers must return a bounded transaction ID.
 - Product variants, promotions, tax and shipping calculators remain future domain modules;
   they should only be added when their business rules are defined.

@@ -195,10 +195,12 @@ namespace ECommerceBackend.Application.Services
                     orderOccurredAt.AddMinutes(_lifecycleOptions.PendingCodHoldMinutes)));
                 orderId = order.Id;
                 var paymentProvider = _paymentProviders.GetCheckoutProvider(request.PaymentMethod);
-                var initializedPayment = paymentProvider.Initialize(new PaymentInitializationRequest(
-                    order.Id,
-                    order.OrderNumber,
-                    order.TotalAmount));
+                var initializedPayment = PaymentProviderContract.NormalizeInitialization(
+                    paymentProvider,
+                    paymentProvider.Initialize(new PaymentInitializationRequest(
+                        order.Id,
+                        order.OrderNumber,
+                        order.TotalAmount)));
 
                 var paymentCreatedAt = orderOccurredAt;
                 var payment = new Payment

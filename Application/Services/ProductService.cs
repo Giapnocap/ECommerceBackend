@@ -98,28 +98,54 @@ namespace ECommerceBackend.Application.Services
                 _ => query.OrderByDescending(product => product.CreatedAt).ThenByDescending(product => product.Id)
             };
 
-            var totalCount = await query.CountAsync(cancellationToken);
-            var items = await query
-                .Skip(Paging.GetSkipCount(paging))
-                .Take(paging.Size)
-                .ToListAsync(cancellationToken);
-
-            stopwatch.Stop();
-            var tags = new TagList
+            int totalCount;
+            List<Product> items;
+            try
             {
-                { "catalog.has_search", !string.IsNullOrWhiteSpace(queryParams.Keyword) },
-                { "catalog.has_category", queryParams.CategoryId.HasValue },
-                { "catalog.sort", NormalizeSortTag(queryParams.SortBy, queryParams.SortOrder) }
-            };
-            CatalogQueryCounter.Add(1, tags);
-            CatalogQueryDuration.Record(stopwatch.Elapsed.TotalMilliseconds, tags);
-            CatalogQueryResultCount.Record(items.Count, tags);
+                totalCount = await query.CountAsync(cancellationToken);
+                items = await query
+                    .Skip(Paging.GetSkipCount(paging))
+                    .Take(paging.Size)
+                    .ToListAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                RecordCatalogQuery(queryParams, stopwatch, "cancelled", resultCount: null);
+                throw;
+            }
+            catch
+            {
+                RecordCatalogQuery(queryParams, stopwatch, "failed", resultCount: null);
+                throw;
+            }
+
+            RecordCatalogQuery(queryParams, stopwatch, "success", items.Count);
 
             return PagedResult<ProductResponse>.Create(
                 _mapper.Map<IEnumerable<ProductResponse>>(items),
                 totalCount,
                 paging.Page,
                 paging.Size);
+        }
+
+        private static void RecordCatalogQuery(
+            ProductQueryParams queryParams,
+            Stopwatch stopwatch,
+            string outcome,
+            int? resultCount)
+        {
+            stopwatch.Stop();
+            var tags = new TagList
+            {
+                { "catalog.has_search", !string.IsNullOrWhiteSpace(queryParams.Keyword) },
+                { "catalog.has_category", queryParams.CategoryId.HasValue },
+                { "catalog.sort", NormalizeSortTag(queryParams.SortBy, queryParams.SortOrder) },
+                { "catalog.outcome", outcome }
+            };
+            CatalogQueryCounter.Add(1, tags);
+            CatalogQueryDuration.Record(stopwatch.Elapsed.TotalMilliseconds, tags);
+            if (resultCount.HasValue)
+                CatalogQueryResultCount.Record(resultCount.Value, tags);
         }
 
         public async Task<ProductResponse> GetByIdAsync(

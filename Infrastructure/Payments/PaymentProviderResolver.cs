@@ -1,3 +1,4 @@
+using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Domain.Enums;
@@ -17,15 +18,19 @@ namespace ECommerceBackend.Infrastructure.Payments
 
             foreach (var provider in providerList)
             {
-                var code = provider.Code?.Trim();
-                if (string.IsNullOrWhiteSpace(code))
-                    throw new InvalidOperationException("Payment provider code cannot be empty.");
+                var code = PaymentProviderContract.NormalizeCode(provider.Code);
 
                 if (!providersByCode.TryAdd(code, provider))
                     throw new InvalidOperationException($"Payment provider code '{code}' is registered more than once.");
 
                 if (provider.CheckoutMethod is not { } method)
                     continue;
+
+                if (!Enum.IsDefined(method))
+                {
+                    throw new InvalidOperationException(
+                        $"Payment provider '{code}' uses undefined checkout method '{method}'.");
+                }
 
                 if (!checkoutProviders.TryAdd(method, provider))
                 {
@@ -57,7 +62,7 @@ namespace ECommerceBackend.Infrastructure.Payments
                 .OrderBy(pair => pair.Key)
                 .Select(pair => new PaymentCheckoutCapability(
                     pair.Key,
-                    pair.Value.Code,
+                    PaymentProviderContract.NormalizeCode(pair.Value.Code),
                     pair.Value.SupportsWebhooks))
                 .ToArray();
     }

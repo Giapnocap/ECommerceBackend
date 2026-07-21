@@ -162,7 +162,41 @@ public class ProductServiceTests
 
         var tags = Assert.Single(observations);
         Assert.Contains(tags, tag => tag.Key == "catalog.has_search" && Equals(tag.Value, true));
+        Assert.Contains(tags, tag => tag.Key == "catalog.outcome" && Equals(tag.Value, "success"));
         Assert.DoesNotContain(tags, tag => tag.Value?.ToString()?.Contains(searchText) == true);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_RecordsCancelledQueryWithoutSearchText()
+    {
+        const string searchText = "cancelled-private-search";
+        var observations = new List<KeyValuePair<string, object?>[]>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, currentListener) =>
+        {
+            if (instrument.Meter.Name == "ECommerceBackend.Catalog")
+                currentListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) =>
+        {
+            if (instrument.Name == "catalog.queries")
+                observations.Add(tags.ToArray());
+        });
+        listener.Start();
+
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateProductService(context);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.GetAllAsync(
+            new ProductQueryParams { Keyword = searchText },
+            cancellation.Token));
+
+        var cancelled = Assert.Single(observations, tags => tags.Any(tag =>
+            tag.Key == "catalog.outcome" && Equals(tag.Value, "cancelled")));
+        Assert.DoesNotContain(cancelled, tag =>
+            tag.Value?.ToString()?.Contains(searchText, StringComparison.Ordinal) == true);
     }
 
     [Fact]

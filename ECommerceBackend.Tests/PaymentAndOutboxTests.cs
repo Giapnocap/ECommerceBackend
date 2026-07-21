@@ -148,6 +148,64 @@ public class PaymentAndOutboxTests
         Assert.False(capability.SupportsWebhooks);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("bad code")]
+    [InlineData("bad/code")]
+    public void PaymentProviderResolver_RejectsUnsafeProviderCode(string code)
+    {
+        Assert.Throws<InvalidOperationException>(() => new PaymentProviderResolver(
+        [
+            new StubPaymentProvider(
+                code,
+                PaymentMethod.CashOnDelivery,
+                supportsWebhooks: false,
+                new PaymentInitializationResult(PaymentStatus.Pending, code))
+        ]));
+    }
+
+    [Fact]
+    public void PaymentProviderResolver_RejectsUndefinedCheckoutMethod()
+    {
+        Assert.Throws<InvalidOperationException>(() => new PaymentProviderResolver(
+        [
+            new StubPaymentProvider(
+                "invalid-method",
+                (PaymentMethod)99,
+                supportsWebhooks: false,
+                new PaymentInitializationResult(PaymentStatus.Pending, "invalid-method"))
+        ]));
+    }
+
+    [Fact]
+    public void PaymentProviderContract_NormalizesValidInitializationAndRejectsBrokenAdapters()
+    {
+        var valid = new StubPaymentProvider(
+            " provider-one ",
+            PaymentMethod.CashOnDelivery,
+            supportsWebhooks: true,
+            new PaymentInitializationResult(PaymentStatus.Pending, "PROVIDER-ONE", " transaction-1 "));
+
+        var normalized = PaymentProviderContract.NormalizeInitialization(
+            valid,
+            valid.Initialize(new PaymentInitializationRequest(Guid.NewGuid(), "ORDER-1", 100)));
+
+        Assert.Equal("provider-one", normalized.Provider);
+        Assert.Equal("transaction-1", normalized.ProviderTransactionId);
+        Assert.Throws<InvalidOperationException>(() => PaymentProviderContract.NormalizeInitialization(
+            valid,
+            new PaymentInitializationResult(PaymentStatus.Pending, "another-provider", "transaction-1")));
+        Assert.Throws<InvalidOperationException>(() => PaymentProviderContract.NormalizeInitialization(
+            valid,
+            new PaymentInitializationResult(PaymentStatus.Refunded, "provider-one", "transaction-1")));
+        Assert.Throws<InvalidOperationException>(() => PaymentProviderContract.NormalizeInitialization(
+            valid,
+            new PaymentInitializationResult(PaymentStatus.Pending, "provider-one", new string('x', 201))));
+        Assert.Throws<InvalidOperationException>(() => PaymentProviderContract.NormalizeInitialization(
+            valid,
+            new PaymentInitializationResult(PaymentStatus.Pending, "provider-one")));
+    }
+
     [Fact]
     public async Task GenericHmacProvider_RejectsInvalidSignature()
     {
@@ -675,5 +733,23 @@ public class PaymentAndOutboxTests
             Messages.Add((recipientEmail, subject, message, idempotencyKey));
             return Task.CompletedTask;
         }
+    }
+    private sealed class StubPaymentProvider(
+        string code,
+        PaymentMethod? checkoutMethod,
+        bool supportsWebhooks,
+        PaymentInitializationResult initialization) : IPaymentProvider
+    {
+        public string Code => code;
+        public PaymentMethod? CheckoutMethod => checkoutMethod;
+        public bool SupportsWebhooks => supportsWebhooks;
+
+        public PaymentInitializationResult Initialize(PaymentInitializationRequest request)
+            => initialization;
+
+        public Task<VerifiedPaymentWebhook> VerifyWebhookAsync(
+            PaymentWebhookRequest request,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }
