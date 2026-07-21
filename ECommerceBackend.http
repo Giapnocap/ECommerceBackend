@@ -1,0 +1,332 @@
+@BaseUrl = http://localhost:5171
+@AdminPassword = replace-with-local-admin-password
+
+# Update these values from responses when your HTTP client does not support named-response variables.
+@AdminToken =
+@AdminRefreshToken =
+@CustomerToken =
+@CustomerRefreshToken =
+@CategoryId =
+@ProductId =
+@ProductImageId =
+@CartItemId =
+@OrderId =
+@UserId =
+@IdempotencyKey = checkout-demo-001
+@PaymentProvider = generic-hmac
+@PaymentEventId = replace-with-provider-event-id
+@PaymentSignature = replace-with-hex-hmac-signature
+
+### Swagger JSON
+GET {{BaseUrl}}/swagger/v1/swagger.json
+Accept: application/json
+
+### Health - live
+GET {{BaseUrl}}/health/live
+Accept: application/json
+
+### Health - ready
+GET {{BaseUrl}}/health/ready
+Accept: application/json
+
+### Health - all checks
+GET {{BaseUrl}}/health
+Accept: application/json
+
+### Admin login
+# @name adminLogin
+POST {{BaseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "userName": "admin",
+  "password": "{{AdminPassword}}"
+}
+
+### Admin profile
+GET {{BaseUrl}}/api/users/me
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### List users - Admin
+GET {{BaseUrl}}/api/users?page=1&pageSize=20
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Assign role - Admin
+PUT {{BaseUrl}}/api/users/{{UserId}}/role
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "roleName": "Staff"
+}
+
+### Create category - Admin
+# @name createCategory
+POST {{BaseUrl}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "name": "Phase 6 Demo Category",
+  "parentId": null
+}
+
+### List categories
+GET {{BaseUrl}}/api/categories
+Accept: application/json
+
+### Get category by id
+GET {{BaseUrl}}/api/categories/{{CategoryId}}
+Accept: application/json
+
+### Create product - Admin
+# @name createProduct
+POST {{BaseUrl}}/api/products
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "name": "Phase 6 Demo Product",
+  "price": 199000.00,
+  "stockQuantity": 10,
+  "description": "Demo product for the Phase 6 HTTP request collection.",
+  "categoryId": "{{CategoryId}}"
+}
+
+### List products with filter/sort/page
+GET {{BaseUrl}}/api/products?keyword=Phase%206&sortBy=price&sortOrder=asc&page=1&pageSize=12
+Accept: application/json
+
+### Get product by id
+GET {{BaseUrl}}/api/products/{{ProductId}}
+Accept: application/json
+
+### Update product - Admin
+PUT {{BaseUrl}}/api/products/{{ProductId}}
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "name": "Phase 6 Demo Product Updated",
+  "price": 209000.00,
+  "stockQuantity": 12,
+  "description": "Updated demo product for the Phase 6 HTTP request collection.",
+  "categoryId": "{{CategoryId}}"
+}
+
+### Upload product image - Admin
+# Replace ./sample-product.jpg with a real local image path before sending.
+POST {{BaseUrl}}/api/products/{{ProductId}}/images?isMain=true
+Authorization: Bearer {{AdminToken}}
+Content-Type: multipart/form-data; boundary=BoundaryPhase6
+
+--BoundaryPhase6
+Content-Disposition: form-data; name="file"; filename="sample-product.jpg"
+Content-Type: image/jpeg
+
+< ./sample-product.jpg
+--BoundaryPhase6--
+
+### Register customer
+# Change userName/email when re-running after the user already exists.
+# @name registerCustomer
+POST {{BaseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "userName": "phase6_customer",
+  "email": "phase6_customer@example.com",
+  "password": "Customer@123",
+  "fullName": "Phase 6 Customer",
+  "phone": "0901234567"
+}
+
+### Customer login
+# @name customerLogin
+POST {{BaseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "userName": "phase6_customer",
+  "password": "Customer@123"
+}
+
+### Customer profile
+GET {{BaseUrl}}/api/users/me
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### Update customer profile
+PUT {{BaseUrl}}/api/users/me
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "fullName": "Phase 6 Customer Updated",
+  "phone": "0901234568"
+}
+
+### Get cart
+GET {{BaseUrl}}/api/cart
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### Add product to cart
+# @name addToCart
+POST {{BaseUrl}}/api/cart/items
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "productId": "{{ProductId}}",
+  "quantity": 2
+}
+
+### Update cart item quantity
+PUT {{BaseUrl}}/api/cart/items/{{CartItemId}}
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "quantity": 1
+}
+
+### Remove cart item
+DELETE {{BaseUrl}}/api/cart/items/{{CartItemId}}
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### Clear cart
+DELETE {{BaseUrl}}/api/cart
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### Add product to cart for checkout
+POST {{BaseUrl}}/api/cart/items
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "productId": "{{ProductId}}",
+  "quantity": 1
+}
+
+### Place order
+# @name placeOrder
+POST {{BaseUrl}}/api/orders
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+Idempotency-Key: {{IdempotencyKey}}
+
+{
+  "shippingAddress": "123 Phase 6 Street, District 1, Ho Chi Minh City",
+  "note": "Demo checkout from ECommerceBackend.http",
+  "paymentMethod": 0
+}
+
+### My orders
+GET {{BaseUrl}}/api/orders/my?page=1&pageSize=10
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### Get order by id
+GET {{BaseUrl}}/api/orders/{{OrderId}}
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### List all orders - Admin/Staff
+GET {{BaseUrl}}/api/orders?page=1&pageSize=10
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Update order status to Shipping - Admin/Staff
+PUT {{BaseUrl}}/api/orders/{{OrderId}}/status
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "status": 2,
+  "note": "Order handed to shipping"
+}
+
+### Update order status to Delivered - Admin/Staff
+PUT {{BaseUrl}}/api/orders/{{OrderId}}/status
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "status": 3,
+  "note": "Delivered and COD collected"
+}
+
+### Low-stock products - Admin/Staff
+GET {{BaseUrl}}/api/inventory/low-stock?threshold=10&page=1&pageSize=20
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Product inventory history - Admin/Staff
+GET {{BaseUrl}}/api/inventory/products/{{ProductId}}/transactions?page=1&pageSize=20
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Sales summary - Admin
+GET {{BaseUrl}}/api/reports/sales-summary?lowStockThreshold=10&topProductLimit=10
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Signed payment webhook (enable/configure GenericHmac first)
+# Accepted status values: paid, failed, cancelled, refunded.
+# Signature input: {{PaymentEventId}} + "." + the exact raw JSON body below.
+POST {{BaseUrl}}/api/payments/webhooks/{{PaymentProvider}}
+Content-Type: application/json
+X-Payment-Event-Id: {{PaymentEventId}}
+X-Payment-Signature: {{PaymentSignature}}
+
+{
+  "providerTransactionId": "replace-with-provider-transaction-id",
+  "status": "paid",
+  "amount": 100,
+  "occurredAt": "2026-07-17T10:00:00Z"
+}
+
+### Checkout payment methods
+GET {{BaseUrl}}/api/payments/methods
+Accept: application/json
+
+### Refresh customer token
+POST {{BaseUrl}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{CustomerRefreshToken}}"
+}
+
+### Logout customer
+POST {{BaseUrl}}/api/auth/logout
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "refreshToken": "{{CustomerRefreshToken}}"
+}
+
+### Logout customer from all sessions
+POST {{BaseUrl}}/api/auth/logout-all
+Authorization: Bearer {{CustomerToken}}
+
+### Delete product image - Admin
+DELETE {{BaseUrl}}/api/products/{{ProductId}}/images/{{ProductImageId}}
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Delete product - Admin
+DELETE {{BaseUrl}}/api/products/{{ProductId}}
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Delete category - Admin
+DELETE {{BaseUrl}}/api/categories/{{CategoryId}}
+Accept: application/json
+Authorization: Bearer {{AdminToken}}

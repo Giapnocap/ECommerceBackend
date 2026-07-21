@@ -1,0 +1,107 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerGen;
+
+namespace ECommerceBackend.API.Swagger
+{
+    public class DefaultResponseOperationFilter : IOperationFilter
+    {
+        public void Apply(OpenApiOperation operation, OperationFilterContext context)
+        {
+            var errorSchema = context.SchemaGenerator.GenerateSchema(
+                typeof(ApiErrorResponse),
+                context.SchemaRepository);
+
+            AddErrorResponse(operation, "400", "Bad Request - validation or business rule error.", errorSchema);
+            AddErrorResponse(operation, "500", "Internal Server Error.", errorSchema);
+
+            if (SwaggerAuthorizationMetadata.RequiresAuthorization(context.MethodInfo)
+                || IsPaymentWebhook(context))
+            {
+                AddErrorResponse(operation, "401", "Unauthorized - access token is missing or invalid.", errorSchema);
+            }
+
+            if (SwaggerAuthorizationMetadata.RequiresAuthorization(context.MethodInfo))
+            {
+                AddErrorResponse(operation, "403", "Forbidden - authenticated user does not have enough permission.", errorSchema);
+            }
+
+            if (CanReturnNotFound(context))
+                AddErrorResponse(operation, "404", "Not Found - requested resource does not exist.", errorSchema);
+
+            if (CanReturnConflict(context))
+                AddErrorResponse(operation, "409", "Conflict - resource was modified by another operation.", errorSchema);
+
+            if (CanReturnPayloadTooLarge(context))
+                AddErrorResponse(operation, "413", "Payload Too Large - request exceeds the configured limit.", errorSchema);
+
+            if (HasAttribute<EnableRateLimitingAttribute>(context))
+                AddErrorResponse(operation, "429", "Too Many Requests - endpoint rate limit was exceeded.", errorSchema);
+        }
+
+        private static void AddErrorResponse(
+            OpenApiOperation operation,
+            string statusCode,
+            string description,
+            OpenApiSchema schema)
+        {
+            if (operation.Responses.ContainsKey(statusCode))
+                return;
+
+            operation.Responses.Add(statusCode, new OpenApiResponse
+            {
+                Description = description,
+                Content = new Dictionary<string, OpenApiMediaType>
+                {
+                    ["application/problem+json"] = new() { Schema = schema }
+                }
+            });
+        }
+
+        private static bool CanReturnNotFound(OperationFilterContext context)
+            => context.ApiDescription.RelativePath?.Contains("{id}", StringComparison.OrdinalIgnoreCase) == true
+                || context.MethodInfo.Name.Contains("GetById", StringComparison.OrdinalIgnoreCase)
+                || context.MethodInfo.Name.Contains("Delete", StringComparison.OrdinalIgnoreCase)
+                || context.MethodInfo.Name.Contains("Update", StringComparison.OrdinalIgnoreCase)
+                || IsPaymentWebhook(context);
+
+        private static bool CanReturnConflict(OperationFilterContext context)
+        {
+            var controllerName = context.MethodInfo.DeclaringType?.Name;
+            var methodName = context.MethodInfo.Name;
+
+            return controllerName switch
+            {
+                "CartController" => !string.Equals(methodName, "GetMyCart", StringComparison.OrdinalIgnoreCase),
+                "OrderController" => methodName is "PlaceOrder" or "UpdateStatus",
+                "ProductController" => methodName is "Update" or "Delete" or "UploadImage" or "DeleteImage",
+                "CategoryController" => methodName is "Create" or "Update" or "Delete",
+                "UserController" => methodName is "AssignRole" or "ChangePassword",
+                "AuthController" => methodName is "Register" or "Refresh",
+                "PaymentController" => methodName == "HandleWebhook",
+                _ => false
+            };
+        }
+
+        private static bool IsPaymentWebhook(OperationFilterContext context)
+            => context.MethodInfo.DeclaringType?.Name == "PaymentController"
+                && context.MethodInfo.Name == "HandleWebhook";
+
+        private static bool CanReturnPayloadTooLarge(OperationFilterContext context)
+            => IsPaymentWebhook(context)
+                || context.ApiDescription.SupportedRequestFormats.Any(format =>
+                    string.Equals(format.MediaType, "multipart/form-data", StringComparison.OrdinalIgnoreCase));
+
+        private static bool HasAttribute<TAttribute>(OperationFilterContext context)
+            where TAttribute : Attribute
+            => context.MethodInfo.DeclaringType!
+                .GetCustomAttributes(true)
+                .OfType<TAttribute>()
+                .Any()
+                || context.MethodInfo
+                    .GetCustomAttributes(true)
+                    .OfType<TAttribute>()
+                    .Any();
+    }
+}

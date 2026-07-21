@@ -1,0 +1,61 @@
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-unit-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore ECommerceBackend.sln
+      - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
+      - run: >-
+          dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
+          --configuration Release
+          --no-build
+          --settings coverage.runsettings
+          --filter "Category!=SqlServerIntegration"
+          --logger "console;verbosity=normal"
+
+  sql-server-integration-tests:
+    runs-on: ubuntu-latest
+    env:
+      RUN_SQL_INTEGRATION_TESTS: "1"
+      ECOMMERCE_TEST_SQL_CONNECTION: "Server=localhost,1433;Database=ECommerceBackendIntegration;User Id=sa;Password=ECommerce!CiSql2026;TrustServerCertificate=True;Encrypt=False;"
+
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "ECommerce!CiSql2026"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'ECommerce!CiSql2026' -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore ECommerceBackend.sln
+      - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
+      - run: >-
+          dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "Category=SqlServerIntegration"
+          --logger "console;verbosity=normal"

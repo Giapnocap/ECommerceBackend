@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+logs/
+Uploads/
+DataProtectionKeys/
+appsettings.Local.json
+*.csproj.user
+*.log
+TestResults/
