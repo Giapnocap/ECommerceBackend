@@ -51,6 +51,41 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task OpenApi_DescribesSecurityAndCriticalRequestContracts()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        using var response = await client.GetAsync("/swagger/v1/swagger.json");
+        response.EnsureSuccessStatusCode();
+        using var document = await ReadJsonAsync(response);
+        var paths = document.RootElement.GetProperty("paths");
+
+        var checkout = paths.GetProperty("/api/orders").GetProperty("post");
+        Assert.True(checkout.TryGetProperty("security", out _));
+        AssertRequiredParameter(checkout, "Idempotency-Key", "header");
+
+        var publicProducts = paths.GetProperty("/api/products").GetProperty("get");
+        Assert.False(publicProducts.TryGetProperty("security", out _));
+
+        var webhook = paths
+            .GetProperty("/api/payments/webhooks/{providerCode}")
+            .GetProperty("post");
+        Assert.False(webhook.TryGetProperty("security", out _));
+        AssertRequiredParameter(webhook, "providerCode", "path");
+        AssertRequiredParameter(webhook, "X-Payment-Event-Id", "header");
+        AssertRequiredParameter(webhook, "X-Payment-Signature", "header");
+
+        var requestBody = webhook.GetProperty("requestBody");
+        Assert.True(requestBody.GetProperty("required").GetBoolean());
+        Assert.True(requestBody
+            .GetProperty("content")
+            .TryGetProperty("application/json", out _));
+
+        var responses = webhook.GetProperty("responses");
+        foreach (var statusCode in new[] { "200", "400", "401", "409", "413", "429", "500" })
+            Assert.True(responses.TryGetProperty(statusCode, out _), $"Missing webhook response {statusCode}.");
+    }
+
+    [Fact]
     public async Task AnonymousProtectedEndpoint_ReturnsStableProblemDetails()
     {
         using var client = await _factory.CreateInitializedClientAsync();
@@ -166,6 +201,24 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response)
         => JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+    private static void AssertRequiredParameter(
+        JsonElement operation,
+        string expectedName,
+        string expectedLocation)
+    {
+        var parameter = operation
+            .GetProperty("parameters")
+            .EnumerateArray()
+            .Single(item => string.Equals(
+                item.GetProperty("name").GetString(),
+                expectedName,
+                StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(expectedLocation, parameter.GetProperty("in").GetString());
+        Assert.True(parameter.GetProperty("required").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(parameter.GetProperty("description").GetString()));
+    }
 }
 
 public sealed class TestApiFactory : WebApplicationFactory<Program>

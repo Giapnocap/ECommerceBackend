@@ -35,6 +35,7 @@ namespace ECommerceBackend.API.Controllers
             _maxPayloadBytes = options.Value.MaxPayloadBytes;
         }
 
+        /// <summary>List payment methods currently available for checkout</summary>
         [HttpGet("methods")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(IReadOnlyList<PaymentMethodResponse>), StatusCodes.Status200OK)]
@@ -52,6 +53,8 @@ namespace ECommerceBackend.API.Controllers
             return Ok(methods);
         }
 
+        /// <summary>Process a signed payment provider webhook</summary>
+        /// <remarks>The signature is verified against the exact UTF-8 JSON request body.</remarks>
         [HttpPost("webhooks/{providerCode}")]
         [AllowAnonymous]
         [EnableRateLimiting("webhook")]

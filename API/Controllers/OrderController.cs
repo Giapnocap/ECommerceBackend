@@ -86,6 +86,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>Cancel one of the current customer's eligible orders</summary>
         [HttpPost("{id:guid}/cancel")]
         [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
         [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]

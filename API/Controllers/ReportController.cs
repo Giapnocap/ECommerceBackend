@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
+    /// <summary>Administrative commerce reports</summary>
     [ApiController]
     [Route("api/reports")]
     [Authorize(Policy = PermissionNames.ViewReports)]

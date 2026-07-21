@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
+    /// <summary>Administrative recovery, audit and reconciliation operations</summary>
     [ApiController]
     [Route("api/operations")]
     [Authorize(Roles = RoleNames.Admin)]
@@ -26,6 +27,7 @@ namespace ECommerceBackend.API.Controllers
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
+        /// <summary>List outbox messages that exhausted delivery retries</summary>
         [HttpGet("outbox/dead-letters")]
         [ProducesResponseType(typeof(PagedResult<DeadLetterResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetDeadLetters(
@@ -33,6 +35,7 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.GetDeadLettersAsync(query, cancellationToken));
 
+        /// <summary>Return a dead-lettered outbox message to the delivery queue</summary>
         [HttpPost("outbox/dead-letters/{id:guid}/redrive")]
         [ProducesResponseType(typeof(RedriveOutboxResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RedriveDeadLetter(
@@ -40,6 +43,7 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.RedriveDeadLetterAsync(id, CurrentUserId, cancellationToken));
 
+        /// <summary>Search security and business audit events</summary>
         [HttpGet("audit-events")]
         [ProducesResponseType(typeof(PagedResult<AuditEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAuditEvents(
@@ -47,6 +51,7 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.GetAuditEventsAsync(query, cancellationToken));
 
+        /// <summary>Detect or repair inconsistencies between uploaded files and database records</summary>
         [HttpPost("uploads/reconcile")]
         [ProducesResponseType(typeof(UploadReconciliationResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReconcileUploads(

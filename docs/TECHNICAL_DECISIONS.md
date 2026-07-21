@@ -57,6 +57,7 @@ Tài liệu này ghi lại các quyết định nền tảng để các phase ti
 - XML documentation file duoc generate trong build va duoc include vao Swagger neu file ton tai.
 - `AuthorizeOperationFilter` gan Bearer security requirement cho endpoint co `[Authorize]`.
 - `DefaultResponseOperationFilter` them response loi mac dinh voi schema `ApiErrorResponse`, giup cac endpoint co error contract nhat quan ma khong lap attribute o tung action.
+- `RequestContractOperationFilter` documents required checkout/webhook headers and the provider-specific raw JSON webhook body that MVC cannot infer automatically.
 - Controller actions khai bao success schema bang `ProducesResponseType` vi phan lon action tra `IActionResult`.
 - `ECommerceBackend.http` dong vai tro request collection demo cho cac flow chinh cua API.
 

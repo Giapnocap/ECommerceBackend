@@ -501,6 +501,7 @@ namespace ECommerceBackend.API.Extensions
                 });
 
                 options.OperationFilter<AuthorizeOperationFilter>();
+                options.OperationFilter<RequestContractOperationFilter>();
                 options.OperationFilter<DefaultResponseOperationFilter>();
 
                 var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";

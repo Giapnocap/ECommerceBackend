@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
+    /// <summary>Inventory reporting and transaction history</summary>
     [ApiController]
     [Route("api/inventory")]
     [Authorize(Policy = PermissionNames.ViewInventory)]
