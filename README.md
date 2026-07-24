@@ -1,162 +1,186 @@
-# ECommerceBackend
+# ECommerce Backend
 
-ASP.NET Core 8 Web API cho hệ thống e-commerce, triển khai dưới dạng modular monolith phân tầng:
+REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NET Core 8 và SQL Server. Dự án tập trung vào tính nhất quán dữ liệu, phân quyền, xử lý đồng thời và khả năng vận hành của các luồng backend thực tế.
 
-- `Domain`: entity và enum thuần nghiệp vụ.
-- `Application`: DTO, validation, service, interface, exception.
-- `Infrastructure`: EF Core DbContext, repository, migrations.
-- `API`: controllers, middleware, Swagger, dependency registration.
+## Công Nghệ
 
-## Yêu Cầu
+- .NET 8, ASP.NET Core Web API
+- Entity Framework Core, SQL Server
+- JWT Bearer, role và permission policies
+- FluentValidation, AutoMapper
+- Serilog, ProblemDetails, correlation ID
+- Swagger/OpenAPI
+- xUnit, EF Core InMemory và SQL Server integration tests
+
+## Chức Năng Chính
+
+- Đăng ký, đăng nhập, refresh-token rotation, phát hiện token reuse và thu hồi phiên.
+- Quản lý người dùng và phân vai trò `Admin`, `Staff`, `Customer`.
+- CRUD danh mục, sản phẩm và ảnh sản phẩm.
+- Tìm kiếm, lọc, sắp xếp và phân trang sản phẩm.
+- Giỏ hàng và checkout có `Idempotency-Key`.
+- Vòng đời đơn hàng, lịch sử trạng thái và tự động hết hạn đơn `Pending`.
+- Giữ/hoàn tồn kho có inventory ledger và bảo vệ oversell.
+- Payment state machine, COD và HMAC webhook chống replay.
+- Transactional outbox, retry, dead-letter và redrive.
+- Báo cáo doanh thu, trạng thái đơn, sản phẩm bán chạy và tồn kho thấp.
+- Audit trail cho các thao tác đặc quyền và đối soát file upload.
+
+## Kiến Trúc
+
+```text
+API request
+  -> Middleware / Authorization / Validation
+  -> Controller
+  -> Application Service
+  -> Domain Entity / Policy
+  -> Repository / DbContext / External Adapter
+  -> SQL Server / File Storage
+```
+
+```text
+API/                 Controllers, middleware, health checks, Swagger, DI
+Application/         DTOs, validators, interfaces, use-case services
+Domain/              Entities, enums, state transitions, business policies
+Infrastructure/      EF Core, SQL Server, migrations, background services
+ECommerceBackend.Tests/  Unit, contract và SQL Server integration tests
+```
+
+`Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case; Domain bảo vệ invariant; Infrastructure triển khai persistence, locking và external adapters.
+
+## Phân Quyền
+
+| Vai trò | Phạm vi chính |
+|---|---|
+| `Customer` | Giỏ hàng, checkout, xem và hủy đơn thuộc sở hữu |
+| `Staff` | Xử lý đơn hàng, xem tồn kho và inventory ledger |
+| `Admin` | Toàn bộ quyền Staff, quản lý catalog/user, báo cáo và operations |
+
+Các endpoint quản trị sử dụng permission policies. Riêng operations recovery và audit yêu cầu role `Admin`.
+
+## Chạy Local
+
+Yêu cầu:
 
 - .NET SDK 8.x
-- SQL Server local hoặc SQL Server Express
-- Visual Studio 2022 hoặc CLI `dotnet`
+- SQL Server
+- Visual Studio 2022 hoặc .NET CLI
 
-## Cấu Hình
+Tạo cấu hình local:
 
-Connection string mặc định nằm trong `appsettings.json`:
-
-```json
-"Default": "Server=.;Database=ECommerceDB;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
+```powershell
+Copy-Item appsettings.Local.example.json appsettings.Local.json
 ```
 
-Khi chạy trên máy khác, nên override bằng `appsettings.Local.json` hoặc environment variable. File `appsettings.Local.json` đã được đưa vào `.gitignore`.
+Đặt JWT key riêng tối thiểu 32 bytes trong `appsettings.Local.json`. Có thể thay connection string mặc định bằng:
 
-JWT signing key không được lưu trong `appsettings.json`. Sao chép `appsettings.Local.example.json` thành `appsettings.Local.json`, đặt một key ngẫu nhiên tối thiểu 32 bytes và không commit tệp đó. Có thể override bằng environment variable.
+```powershell
+$env:ConnectionStrings__Default = "Server=.;Database=ECommerceDB;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
+```
 
-Giới hạn ảnh sản phẩm được cấu hình bằng `Uploads:MaxImageSizeBytes` (mặc định 5MB). API chấp nhận JPEG, PNG và WebP khi extension, MIME type và nội dung file khớp nhau.
+Khởi tạo và chạy:
 
-## Chạy Dự Án
-
-Restore/build:
-
-```bash
+```powershell
 dotnet restore
-dotnet build
-```
-
-Áp dụng migration:
-
-```bash
 dotnet ef database update
-```
-
-Chạy API:
-
-```bash
 dotnet run
 ```
 
-Swagger:
+- API: `http://localhost:5171`
+- Swagger: `http://localhost:5171/swagger`
+- Health: `http://localhost:5171/health/ready`
 
-```text
-https://localhost:7100/swagger
-http://localhost:5171/swagger
-```
+### Tạo Admin Đầu Tiên
 
-## Bootstrap Admin
+Trong `appsettings.Local.json`, cấu hình thông tin riêng và đặt `AdminBootstrap:Enabled` thành `true`. Chạy ứng dụng một lần, sau đó tắt lại tùy chọn này. Không commit password hoặc JWT key.
 
-`AdminBootstrap` bị tắt mặc định. Với database local mới, sao chép
-`appsettings.Local.example.json` thành `appsettings.Local.json`, thiết lập password riêng,
-đặt `AdminBootstrap:Enabled` thành `true`, chạy ứng dụng một lần, sau đó đổi lại `false`.
+### Dữ Liệu Demo
 
-## Luồng Test Nhanh
-
-1. `POST /api/auth/login` bằng tài khoản admin.
-2. Copy token vào Swagger Authorize hoặc biến `@AdminToken` / `@CustomerToken` trong `ECommerceBackend.http`.
-3. Tạo category.
-4. Tạo product.
-5. Upload image cho product.
-6. Register/login customer.
-7. Customer thêm product vào cart.
-8. Customer đặt order.
-9. Admin/Staff cập nhật trạng thái order.
-
-## Trạng Thái Hiện Tại
-
-Core MVP đã có:
-
-- Auth register/login bằng JWT.
-- Refresh-token family, rotation nguyên tử, phát hiện token reuse, logout và logout-all.
-- Role `Admin`, `Staff`, `Customer`.
-- User management có lọc theo từ khóa/role và phân trang ổn định.
-- Category CRUD.
-- Product CRUD, search/filter/sort/paging.
-- Upload ảnh local qua `IUploadService`, lưu trong `Uploads/products`.
-- Mỗi sản phẩm có tối đa một ảnh chính; xóa ảnh chính sẽ tự chọn ảnh thay thế.
-- Cart CRUD, gộp item trùng và hiển thị giá/tồn kho hiện tại.
-- Checkout bắt buộc `Idempotency-Key`, khóa tồn kho chống oversell và rollback khi thất bại.
-- Đơn mới ở `Pending`, giữ tồn kho khi checkout, lưu snapshot/status history và hoàn kho đúng một lần khi hủy.
-- Payment state machine/history, public checkout capability endpoint, COD adapter và HMAC webhook giới hạn raw body, chống replay, lưu kết quả xử lý ổn định.
-- Transactional outbox gửi thông báo qua SMTP cấu hình được, có retry và dead-letter.
-- Inventory ledger, danh sách tồn kho thấp và lịch sử biến động theo sản phẩm.
-- Sales summary theo UTC cho order/payment breakdown, tiền thu/hoàn/doanh thu thuần, top sản phẩm đã giao và tồn kho thấp có ngưỡng.
-- Permission policy cho các endpoint quản trị; đổi password/role thu hồi phiên ngay.
-- Rate limit cho auth, refresh token và upload.
-- Validation bằng FluentValidation.
-- AutoMapper profile cho User, Category, Product, Cart và Order response.
-- Exception, validation, auth va rate-limit errors dung `application/problem+json`, co stable `code` va `traceId`.
-- Serilog console + rolling file log.
-- Swagger Bearer support.
-- Swagger default error responses va success response schemas.
-- `ECommerceBackend.http` request collection cho auth, product/category, cart va order.
-- 133 unit tests va 10 SQL Server integration flows co database tam cho checkout, session, payment/webhook, reporting, migration va outbox.
-- Health checks tai `/health/live`, `/health/ready`, `/health`.
-- Production config validation cho JWT/CORS va deployment guide.
-- Correlation ID va Serilog request logging de noi response `traceId` voi console/file log.
-
-Tài liệu kỹ thuật:
-
-- `docs/ARCHITECTURE.md`: module, transaction và luồng trạng thái.
-- `docs/AUTHORIZATION.md`: ma trận role/permission và phạm vi endpoint.
-- `docs/DATABASE.md`: quan hệ, constraint và chính sách migration.
-
-Additional backend hardening:
-
-- Money validation theo `decimal(18,2)`, tinh tong order co guard overflow, va paging on dinh cho product/order.
-- Cart fallback creation xu ly race khi request dau tien tao cart song song.
-- Reporting mac dinh dung UTC clock duoc inject, gioi han query co stable error code va duoc kiem thu boundary tren SQL Server.
-- Outbox enqueue/retry/readiness dung cung injected UTC clock; client-aborted requests khong bi ghi thanh loi `500`.
-
-## Final Quality Gate
-
-- OpenAPI security metadata follows the authenticated fallback policy and keeps reviewed public endpoints anonymous.
-- Payment webhook documents payload-limit and rate-limit responses.
-- Release publish excludes local settings and configuration templates.
-- CI runs release build, format verification, migration-model validation and NuGet vulnerability auditing.
-- CI runs both the non-SQL suite and dedicated SQL Server integration suite.
-- Coverage reports are uploaded by CI. The regression gate requires at least 75% line coverage and 60% branch coverage.
-
-## Auth Token Notes
-
-`POST /api/auth/register` và `POST /api/auth/login` trả về:
-
-- `accessToken`: JWT dùng trong header `Authorization: Bearer {accessToken}`.
-- `token`: alias giữ tương thích với response cũ.
-- `accessTokenExpiresAt`: thời điểm access token hết hạn.
-- `refreshToken`: token dùng để gọi `POST /api/auth/refresh`.
-- `refreshTokenExpiresAt`: thời điểm refresh token hết hạn.
-
-Refresh token được lưu dưới dạng hash và nhóm theo token family. Token cũ bị reuse sẽ thu hồi
-toàn bộ family. Access token chỉ hợp lệ khi user version và session trong database còn hiệu lực.
-
-## Verification
-
-```bash
-dotnet build --no-restore
-dotnet format ECommerceBackend.sln --no-restore --verify-no-changes
-dotnet test --no-restore
-dotnet test --settings coverage.runsettings --collect:"XPlat Code Coverage"
-```
-
-Chạy riêng integration test SQL Server:
+Sau khi áp dụng migration và tạo Admin, có thể seed dữ liệu local để chạy thử toàn bộ luồng web:
 
 ```powershell
-$env:RUN_SQL_INTEGRATION_TESTS="1"
-dotnet test --filter "Category=SqlServerIntegration"
+sqlcmd -S . -d ECommerceDB -E -C -f 65001 -i scripts/SeedDemoData.sql
 ```
 
-## Deployment
+Script có thể chạy lại an toàn và không ghi đè dữ liệu đã phát sinh:
 
-Xem [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) de cau hinh secrets, CORS, health checks va migration flow cho production.
+| Vai trò | Username | Password |
+|---|---|---|
+| `Staff` | `demo.staff` | `Staff@ECommerce2026!` |
+| `Customer` | `demo.customer` | `Customer@ECommerce2026!` |
+
+Các tài khoản và mật khẩu trên chỉ dùng cho database development local.
+
+## Kiểm Thử API
+
+- Swagger hỗ trợ Bearer authentication và mô tả success/error contracts.
+- [ECommerceBackend.http](ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
+- API error sử dụng `application/problem+json`, có `code` và `traceId` ổn định.
+
+## Chạy Test
+
+Unit và application tests:
+
+```powershell
+dotnet test ECommerceBackend.sln --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration"
+```
+
+SQL Server integration tests dùng database riêng:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildMigrationArtifacts.ps1 -OutputDirectory .\MigrationArtifacts
+$env:RUN_SQL_INTEGRATION_TESTS = "1"
+$env:ECOMMERCE_TEST_SQL_CONNECTION = "Server=.;Database=ECommerceBackendIntegration;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
+$env:ECOMMERCE_MIGRATION_ARTIFACTS_DIRECTORY = (Resolve-Path .\MigrationArtifacts)
+dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj --filter "Category=SqlServerIntegration"
+```
+
+Các test này tạo và xóa database tạm. `ECOMMERCE_TEST_SQL_CONNECTION` phải trỏ tới database
+riêng có tên chứa `Integration`; không dùng connection string của database ứng dụng.
+Chạy `scripts/BuildMigrationArtifacts.ps1` trước khi test để tạo thư mục artifact dùng cho
+kiểm tra nâng cấp, rollback và nâng cấp lại migration.
+
+CI còn chạy recovery drill với thư mục backup nằm trong SQL Server container. Khi chạy thủ công,
+đặt `ECOMMERCE_TEST_SQL_BACKUP_DIRECTORY` thành thư mục mà tài khoản dịch vụ SQL Server có quyền
+ghi, sau đó dùng filter `Category=SqlServerRecoveryIntegration`. Recovery drill tạo database
+riêng, kiểm tra checksum backup, thay đổi schema/dữ liệu, restore và xác minh dữ liệu đã phục hồi.
+
+Trước khi nâng cấp production: kiểm tra checksum artifact, tạo full backup, restore thử vào
+SQL Server cô lập, áp dụng `migrate-up.sql` trong maintenance window và chạy smoke test. Chỉ dùng
+`rollback-last.sql` khi thay đổi tương thích với dữ liệu cũ; nếu migration đã làm mất dữ liệu,
+phục hồi từ bản backup đã được kiểm chứng.
+
+CI thực hiện restore có vulnerability audit, format check, Release build, kiểm tra model/migration, coverage gate và SQL Server integration tests.
+
+## Đóng Gói Release
+
+Sau khi Release build và sinh migration artifact:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildReleasePackage.ps1 `
+  -OutputDirectory .\ReleasePackage `
+  -MigrationArtifactsDirectory .\MigrationArtifacts `
+  -SourceRevision local-working-tree
+```
+
+Output gồm ZIP triển khai backend, checksum SHA-256 và manifest liệt kê checksum từng file.
+Package chứa migration forward/rollback nhưng không chứa cấu hình Development, local hoặc template
+production. Secret production phải được cấp qua environment variable hoặc secret store lúc deploy.
+
+## Điểm Kỹ Thuật Nổi Bật
+
+- Checkout khóa cart và product theo thứ tự ổn định trong một transaction.
+- Idempotency ngăn tạo trùng order khi client retry.
+- Row version, unique constraints và SQL locks bảo vệ race condition.
+- Order detail lưu snapshot tên và giá để giữ lịch sử chính xác.
+- Payment webhook xác thực chữ ký, event ID và payload trước khi thay đổi trạng thái.
+- Outbox ghi cùng transaction với business data, xử lý retry/dead-letter ở background.
+- Mọi thay đổi tồn kho đều sinh ledger entry có balance sau giao dịch.
+- Correlation ID liên kết ProblemDetails, request log và audit event.
+
+## Bảo Mật Cấu Hình
+
+- `appsettings.Local.json`, logs, uploads và data-protection keys không được commit.
+- `appsettings.Production.example.json` chỉ là template, không chứa secret thật.
+- Production validation từ chối JWT key yếu, CORS không hợp lệ và cấu hình webhook thiếu an toàn.
+- Khi `OrderLifecycle:RequireExpirationProcessing=true`, worker hết hạn đơn phải được bật và không được chạy dry-run.

@@ -17,6 +17,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/TestRepositorySecrets.ps1
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -30,12 +32,17 @@ jobs:
       - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
       - run: dotnet tool install dotnet-ef --tool-path ./.tools --version 8.0.20
       - run: ./.tools/dotnet-ef migrations has-pending-model-changes --no-build --configuration Release
+      - shell: pwsh
+        run: >-
+          ./scripts/BuildMigrationArtifacts.ps1
+          -OutputDirectory ./MigrationArtifacts
+          -DotNetEfPath ./.tools/dotnet-ef
       - run: >-
           dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
           --configuration Release
           --no-build
           --settings coverage.runsettings
-          --filter "Category!=SqlServerIntegration"
+          --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration"
           --collect:"XPlat Code Coverage"
           --results-directory ./TestResults
           --logger "console;verbosity=normal"
@@ -45,11 +52,30 @@ jobs:
           -ReportDirectory ./TestResults
           -MinimumLineRate 75
           -MinimumBranchRate 60
+      - shell: pwsh
+        run: >-
+          ./scripts/BuildReleasePackage.ps1
+          -OutputDirectory ./ReleasePackage
+          -MigrationArtifactsDirectory ./MigrationArtifacts
+          -SourceRevision ${{ github.sha }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: unit-test-coverage
           path: TestResults/**/coverage.cobertura.xml
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: database-migration-artifacts
+          path: MigrationArtifacts/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-release-package
+          path: |
+            ReleasePackage/ECommerceBackend-release.zip
+            ReleasePackage/ECommerceBackend-release.sha256
+            ReleasePackage/release-manifest.json
           if-no-files-found: error
 
   sql-server-integration-tests:
@@ -57,6 +83,8 @@ jobs:
     env:
       RUN_SQL_INTEGRATION_TESTS: "1"
       ECOMMERCE_TEST_SQL_CONNECTION: "Server=localhost,1433;Database=ECommerceBackendIntegration;User Id=sa;Password=ECommerce!CiSql2026;TrustServerCertificate=True;Encrypt=False;"
+      ECOMMERCE_MIGRATION_ARTIFACTS_DIRECTORY: "${{ github.workspace }}/MigrationArtifacts"
+      ECOMMERCE_TEST_SQL_BACKUP_DIRECTORY: "/var/opt/mssql/data"
 
     services:
       sqlserver:
@@ -74,6 +102,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/TestRepositorySecrets.ps1
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -84,9 +114,15 @@ jobs:
           -p:NuGetAuditLevel=low
           -warnaserror:NU1901,NU1902,NU1903,NU1904
       - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
+      - run: dotnet tool install dotnet-ef --tool-path ./.tools --version 8.0.20
+      - shell: pwsh
+        run: >-
+          ./scripts/BuildMigrationArtifacts.ps1
+          -OutputDirectory ./MigrationArtifacts
+          -DotNetEfPath ./.tools/dotnet-ef
       - run: >-
           dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
           --configuration Release
           --no-build
-          --filter "Category=SqlServerIntegration"
+          --filter "Category=SqlServerIntegration|Category=SqlServerRecoveryIntegration"
           --logger "console;verbosity=normal"

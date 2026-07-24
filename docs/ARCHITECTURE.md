@@ -112,6 +112,10 @@ HMAC adapter verifies `HMAC_SHA256(secret, eventId + "." + rawBody)` from
 different content returns `409`. A replay returns the result stored for the original event,
 even if the payment has since moved to another state.
 
+Webhook processing retains the SHA-256 payload hash by default, not the raw body. Set
+`PaymentWebhooks:GenericHmac:RetainRawPayload=true` only for a time-bounded investigation after
+confirming that the provider payload contains no data that should be minimized.
+
 Payment transitions are `Pending -> Paid/Failed/Cancelled` and `Paid -> Refunded`. Every
 accepted event is audited; a new event that leaves the payment in the same state does not add
 another status-history row or notification. The generic adapter processes provider payments
@@ -132,6 +136,9 @@ the same database transaction as business data. The background dispatcher atomic
 messages, retries with exponential backoff and dead-letters after the configured attempt count.
 Delivery is at-least-once; notification adapters receive the outbox ID as an idempotency key.
 Enqueue, lease, completion, retry and backlog-health timestamps use the injected UTC clock.
+
+When `Outbox:RequireProcessing=true`, readiness also requires a recent dispatcher heartbeat. This
+detects a stopped dispatcher before its backlog reaches the age threshold.
 
 Admins can inspect dead letters without receiving their payload and re-drive one message at a
 time. Re-drive locks the message, rechecks terminal state, resets retry state and appends an audit
@@ -168,9 +175,11 @@ missing referenced files are reported and never removed from the database automa
 ## Reporting Semantics
 
 `GET /api/reports/sales-summary` uses the half-open UTC range `[From, To)` and limits a
-request to 366 days. Order and payment status breakdowns are cohorts by `OrderDate` and
-payment `CreatedAt`. Gross cash collected uses `PaidAt`; refunds use the `Refunded` payment
-history occurrence time; net revenue is gross collected minus refunds in the range.
+request to 366 days. `TotalOrders` and `OrdersByStatus` are cohorts of orders created in the
+range. `DeliveredOrders`, `CancelledOrders` and top products use the matching
+`OrderStatusHistory` transition time. Gross cash collected uses `PaidAt`; refunds use the
+`Refunded` payment history occurrence time; net revenue is gross collected minus refunds in the
+range.
 
 When the caller omits report dates, the service captures the injected UTC clock once and uses
 the deterministic window `[now - 30 days, now)`. Invalid ranges, excessive ranges, low-stock
@@ -178,9 +187,9 @@ thresholds and top-product limits expose stable business error codes. SQL Server
 tests lock the inclusion of `From`, exclusion of `To`, refund occurrence semantics and historical
 product-name snapshots.
 
-Top products include only `Delivered` orders created in the range, aggregate once per
-`ProductId`, and use the latest historical name snapshot in that cohort. Low-stock count is a
-current inventory snapshot using the requested threshold, not a historical value.
+Top products include only orders delivered in the range, aggregate once per `ProductId`, and use
+the latest historical name snapshot in that cohort. Low-stock count is a current inventory snapshot
+using the requested threshold, not a historical value.
 
 ## Authorization
 
@@ -207,6 +216,10 @@ uses the current activity trace ID or generates one. The same value becomes `tra
 responses and a Serilog property in request, console and rolling-file logs. Activity IDs use W3C
 format; `TraceId` and `SpanId` are separate structured log properties for cross-service tracing.
 
+All responses also carry `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer` and a restrictive permissions policy. These headers are added before
+static product images are served as well as before API middleware runs.
+
 Catalogue reads pass request cancellation into EF Core and split collection includes to avoid a
 cartesian product when products have multiple images. Query count, duration and returned item
 count are emitted without recording search text. The bounded `catalog.outcome` tag distinguishes
@@ -225,6 +238,11 @@ are rethrown because replacing a partially written response would corrupt the HT
 ## Deliberate Boundaries
 
 - Local image storage is retained behind `IUploadService` for the current deployment scope.
+- Static serving is limited to generated product images under `/uploads/products`; only JPG, PNG
+  and WEBP content types are exposed and responses disable MIME sniffing.
+- SQL command timeout is configured through `Database:CommandTimeoutSeconds`. EF Core retry is not
+  enabled globally because checkout, order lifecycle and webhooks own explicit transactions and
+  locks; retries must wrap each complete business operation before they are introduced.
 - COD is the only checkout method currently enabled. The generic HMAC webhook is provider
   neutral; a real gateway still needs its own Infrastructure adapter and credential mapping.
 - Payment adapters are validated before persistence: provider codes must be route-safe, checkout
