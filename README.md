@@ -99,9 +99,11 @@ Trong `appsettings.Local.json`, cấu hình thông tin riêng và đặt `AdminB
 Sau khi áp dụng migration và tạo Admin, có thể seed dữ liệu local để chạy thử toàn bộ luồng web:
 
 ```powershell
-sqlcmd -S . -d ECommerceDB -E -C -f 65001 -i scripts/SeedDemoData.sql
+sqlcmd -S . -d ECommerceDB -E -C -f 65001 -v EnvironmentName=Development -i scripts/SeedDemoData.sql
 ```
 
+Biến `EnvironmentName` là bắt buộc. Script chỉ chấp nhận `Development`, `Local`
+hoặc `Testing`, đồng thời từ chối database có tên chứa `Prod`/`Production`.
 Script có thể chạy lại an toàn và không ghi đè dữ liệu đã phát sinh:
 
 | Vai trò | Username | Password |

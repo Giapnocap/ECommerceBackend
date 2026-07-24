@@ -72,7 +72,9 @@ namespace ECommerceBackend.Application.Services
 
         private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
 
-        public async Task<AuthResponse> RegisterAsync(RegisterRequest request)
+        public async Task<AuthResponse> RegisterAsync(
+            RegisterRequest request,
+            CancellationToken cancellationToken = default)
         {
             var occurredAt = UtcNow;
             var userName = request.UserName.Trim();
@@ -80,16 +82,22 @@ namespace ECommerceBackend.Application.Services
             var normalizedUserName = Normalize(userName);
             var normalizedEmail = Normalize(email);
 
-            if (await _userRepo.Query().AnyAsync(user => user.NormalizedUserName == normalizedUserName))
+            if (await _userRepo.Query().AnyAsync(
+                user => user.NormalizedUserName == normalizedUserName,
+                cancellationToken))
                 throw new ConflictException("username_conflict", $"Tên đăng nhập '{userName}' đã tồn tại.");
 
-            if (await _userRepo.Query().AnyAsync(user => user.NormalizedEmail == normalizedEmail))
+            if (await _userRepo.Query().AnyAsync(
+                user => user.NormalizedEmail == normalizedEmail,
+                cancellationToken))
                 throw new ConflictException("email_conflict", $"Email '{email}' đã được sử dụng.");
 
             var customerRole = await _roleRepo.Query()
                 .Include(role => role.RolePermissions)
                     .ThenInclude(rolePermission => rolePermission.Permission)
-                .FirstOrDefaultAsync(role => role.Name == RoleNames.Customer)
+                .FirstOrDefaultAsync(
+                    role => role.Name == RoleNames.Customer,
+                    cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy vai trò khách hàng. Hãy áp dụng bản cập nhật cơ sở dữ liệu.");
 
             var user = new User
@@ -105,16 +113,20 @@ namespace ECommerceBackend.Application.Services
                 CreatedAt = occurredAt
             };
 
-            await _userRepo.AddAsync(user);
-            await _userRoleRepo.AddAsync(new UserRole { UserId = user.Id, RoleId = customerRole.Id });
-            await _cartRepo.AddAsync(new Cart { Id = Guid.NewGuid(), UserId = user.Id });
+            await _userRepo.AddAsync(user, cancellationToken);
+            await _userRoleRepo.AddAsync(
+                new UserRole { UserId = user.Id, RoleId = customerRole.Id },
+                cancellationToken);
+            await _cartRepo.AddAsync(
+                new Cart { Id = Guid.NewGuid(), UserId = user.Id },
+                cancellationToken);
 
             var refreshToken = CreateRefreshToken(user.Id, Guid.NewGuid(), occurredAt);
-            await _refreshTokenRepo.AddAsync(refreshToken.Entity);
+            await _refreshTokenRepo.AddAsync(refreshToken.Entity, cancellationToken);
 
             try
             {
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
@@ -136,22 +148,29 @@ namespace ECommerceBackend.Application.Services
                 occurredAt);
         }
 
-        public async Task<AuthResponse> LoginAsync(LoginRequest request)
+        public async Task<AuthResponse> LoginAsync(
+            LoginRequest request,
+            CancellationToken cancellationToken = default)
         {
             var normalizedUserName = Normalize(request.UserName);
             var userId = await _userRepo.Query()
                 .AsNoTracking()
                 .Where(user => !user.IsDeleted && user.NormalizedUserName == normalizedUserName)
                 .Select(user => (Guid?)user.Id)
-                .SingleOrDefaultAsync()
+                .SingleOrDefaultAsync(cancellationToken)
                 ?? throw Unauthorized();
 
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
             var transactionCompleted = false;
 
             try
             {
-                var user = await _consistency.LockUserAsync(userId, activeOnly: true)
+                var user = await _consistency.LockUserAsync(
+                    userId,
+                    activeOnly: true,
+                    cancellationToken)
                     ?? throw Unauthorized();
 
                 if (!IsBcryptHash(user.PasswordHash)
@@ -160,12 +179,12 @@ namespace ECommerceBackend.Application.Services
                     throw Unauthorized();
                 }
 
-                await LoadRolesAndPermissionsAsync(user);
+                await LoadRolesAndPermissionsAsync(user, cancellationToken);
                 var occurredAt = UtcNow;
                 var refreshToken = CreateRefreshToken(user.Id, Guid.NewGuid(), occurredAt);
-                await _refreshTokenRepo.AddAsync(refreshToken.Entity);
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                await _refreshTokenRepo.AddAsync(refreshToken.Entity, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
                 return BuildAuthResponse(
@@ -186,19 +205,26 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        public async Task<AuthResponse> RefreshAsync(RefreshTokenRequest request)
+        public async Task<AuthResponse> RefreshAsync(
+            RefreshTokenRequest request,
+            CancellationToken cancellationToken = default)
         {
             var tokenHash = HashRefreshToken(request.RefreshToken);
-            var tokenOwnerId = await FindRefreshTokenOwnerIdAsync(tokenHash)
+            var tokenOwnerId = await FindRefreshTokenOwnerIdAsync(tokenHash, cancellationToken)
                 ?? throw Unauthorized();
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
             var transactionCompleted = false;
 
             try
             {
-                var user = await _consistency.LockUserAsync(tokenOwnerId, activeOnly: true)
+                var user = await _consistency.LockUserAsync(
+                    tokenOwnerId,
+                    activeOnly: true,
+                    cancellationToken)
                     ?? throw Unauthorized();
-                var storedToken = await LoadRefreshTokenForUpdateAsync(tokenHash)
+                var storedToken = await LoadRefreshTokenForUpdateAsync(tokenHash, cancellationToken)
                     ?? throw Unauthorized();
                 if (storedToken.UserId != user.Id)
                     throw Unauthorized();
@@ -212,9 +238,10 @@ namespace ECommerceBackend.Application.Services
                             storedToken.UserId,
                             storedToken.FamilyId,
                             "Refresh token reuse detected",
-                            occurredAt);
-                        await _context.SaveChangesAsync();
-                        await transaction.CommitAsync();
+                            occurredAt,
+                            cancellationToken);
+                        await _context.SaveChangesAsync(cancellationToken);
+                        await transaction.CommitAsync(cancellationToken);
                         transactionCompleted = true;
                     }
 
@@ -224,14 +251,14 @@ namespace ECommerceBackend.Application.Services
                 if (storedToken.IsExpiredAt(occurredAt))
                     throw Unauthorized();
 
-                await LoadRolesAndPermissionsAsync(user);
+                await LoadRolesAndPermissionsAsync(user, cancellationToken);
                 var newRefreshToken = CreateRefreshToken(user.Id, storedToken.FamilyId, occurredAt);
                 DomainRuleGuard.AsConflict(() =>
                     storedToken.Rotate(occurredAt, newRefreshToken.Entity.TokenHash));
-                await _refreshTokenRepo.AddAsync(newRefreshToken.Entity);
-                await _context.SaveChangesAsync();
+                await _refreshTokenRepo.AddAsync(newRefreshToken.Entity, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
 
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
                 return BuildAuthResponse(
@@ -269,30 +296,41 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        public async Task LogoutAsync(Guid userId, LogoutRequest request)
+        public async Task LogoutAsync(
+            Guid userId,
+            LogoutRequest request,
+            CancellationToken cancellationToken = default)
         {
             var tokenHash = HashRefreshToken(request.RefreshToken);
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
             var transactionCompleted = false;
 
             try
             {
-                var user = await _consistency.LockUserAsync(userId, activeOnly: false);
+                var user = await _consistency.LockUserAsync(
+                    userId,
+                    activeOnly: false,
+                    cancellationToken);
                 if (user != null)
                 {
-                    var storedToken = await LoadRefreshTokenForUpdateAsync(tokenHash);
+                    var storedToken = await LoadRefreshTokenForUpdateAsync(
+                        tokenHash,
+                        cancellationToken);
                     if (storedToken != null && storedToken.UserId == user.Id)
                     {
                         await RevokeTokenFamilyAsync(
                             user.Id,
                             storedToken.FamilyId,
                             "Logout",
-                            UtcNow);
-                        await _context.SaveChangesAsync();
+                            UtcNow,
+                            cancellationToken);
+                        await _context.SaveChangesAsync(cancellationToken);
                     }
                 }
 
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
             }
             catch (Exception ex) when (_consistency.IsDeadlock(ex))
@@ -314,20 +352,31 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        public async Task LogoutAllAsync(Guid userId)
+        public async Task LogoutAllAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
             var transactionCompleted = false;
 
             try
             {
-                var user = await _consistency.LockUserAsync(userId, activeOnly: true)
+                var user = await _consistency.LockUserAsync(
+                    userId,
+                    activeOnly: true,
+                    cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy người dùng.");
                 var occurredAt = UtcNow;
-                await RevokeAllUserTokensAsync(user.Id, "Logout all", occurredAt);
+                await RevokeAllUserTokensAsync(
+                    user.Id,
+                    "Logout all",
+                    occurredAt,
+                    cancellationToken);
                 DomainRuleGuard.AsConflict(user.InvalidateSessions);
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
             }
             catch (DbUpdateConcurrencyException ex)
@@ -359,38 +408,44 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        private async Task<Guid?> FindRefreshTokenOwnerIdAsync(string tokenHash)
+        private async Task<Guid?> FindRefreshTokenOwnerIdAsync(
+            string tokenHash,
+            CancellationToken cancellationToken)
             => await _context.RefreshTokens
                 .AsNoTracking()
                 .Where(token => token.TokenHash == tokenHash)
                 .Select(token => (Guid?)token.UserId)
-                .SingleOrDefaultAsync();
+                .SingleOrDefaultAsync(cancellationToken);
 
-        private async Task<RefreshToken?> LoadRefreshTokenForUpdateAsync(string tokenHash)
-            => await _consistency.LockRefreshTokenAsync(tokenHash);
+        private async Task<RefreshToken?> LoadRefreshTokenForUpdateAsync(
+            string tokenHash,
+            CancellationToken cancellationToken)
+            => await _consistency.LockRefreshTokenAsync(tokenHash, cancellationToken);
 
         private async Task RevokeTokenFamilyAsync(
             Guid userId,
             Guid familyId,
             string reason,
-            DateTime occurredAt)
+            DateTime occurredAt,
+            CancellationToken cancellationToken)
         {
             var tokens = await _context.RefreshTokens
                 .Where(token => token.UserId == userId
                     && token.FamilyId == familyId
                     && token.RevokedAt == null)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             RevokeTokens(tokens, reason, occurredAt);
         }
 
         private async Task RevokeAllUserTokensAsync(
             Guid userId,
             string reason,
-            DateTime occurredAt)
+            DateTime occurredAt,
+            CancellationToken cancellationToken)
         {
             var tokens = await _context.RefreshTokens
                 .Where(token => token.UserId == userId && token.RevokedAt == null)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
             RevokeTokens(tokens, reason, occurredAt);
         }
 
@@ -405,14 +460,16 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        private async Task LoadRolesAndPermissionsAsync(User user)
+        private async Task LoadRolesAndPermissionsAsync(
+            User user,
+            CancellationToken cancellationToken)
             => await _context.Entry(user)
                 .Collection(candidate => candidate.UserRoles)
                 .Query()
                 .Include(userRole => userRole.Role)
                     .ThenInclude(role => role!.RolePermissions)
                         .ThenInclude(rolePermission => rolePermission.Permission)
-                .LoadAsync();
+                .LoadAsync(cancellationToken);
         private AuthResponse BuildAuthResponse(
             User user,
             IEnumerable<string> roles,

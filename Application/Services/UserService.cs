@@ -60,24 +60,33 @@ namespace ECommerceBackend.Application.Services
 
         private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
 
-        public async Task<UserResponse> GetProfileAsync(Guid userId)
+        public async Task<UserResponse> GetProfileAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
         {
             var user = await _userRepo.Query()
                 .AsNoTracking()
                 .Include(candidate => candidate.UserRoles)
                     .ThenInclude(userRole => userRole.Role)
-                .FirstOrDefaultAsync(candidate => !candidate.IsDeleted && candidate.Id == userId)
+                .FirstOrDefaultAsync(
+                    candidate => !candidate.IsDeleted && candidate.Id == userId,
+                    cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
             return _mapper.Map<UserResponse>(user);
         }
 
-        public async Task<UserResponse> UpdateProfileAsync(Guid userId, UpdateProfileRequest request)
+        public async Task<UserResponse> UpdateProfileAsync(
+            Guid userId,
+            UpdateProfileRequest request,
+            CancellationToken cancellationToken = default)
         {
             var user = await _userRepo.Query()
                 .Include(candidate => candidate.UserRoles)
                     .ThenInclude(userRole => userRole.Role)
-                .FirstOrDefaultAsync(candidate => !candidate.IsDeleted && candidate.Id == userId)
+                .FirstOrDefaultAsync(
+                    candidate => !candidate.IsDeleted && candidate.Id == userId,
+                    cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
             user.FullName = request.FullName.Trim();
@@ -85,7 +94,7 @@ namespace ECommerceBackend.Application.Services
 
             try
             {
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -95,13 +104,18 @@ namespace ECommerceBackend.Application.Services
             return _mapper.Map<UserResponse>(user);
         }
 
-        public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request)
+        public async Task ChangePasswordAsync(
+            Guid userId,
+            ChangePasswordRequest request,
+            CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
 
             try
             {
-                var user = await LoadUserForUpdateAsync(userId)
+                var user = await LoadUserForUpdateAsync(userId, cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
                 if (!user.PasswordHash.StartsWith("$2", StringComparison.Ordinal)
@@ -117,10 +131,14 @@ namespace ECommerceBackend.Application.Services
                 DomainRuleGuard.AsConflict(() => user.ChangePasswordHash(
                     BCrypt.Net.BCrypt.HashPassword(request.NewPassword),
                     occurredAt));
-                await RevokeAllRefreshTokensAsync(user.Id, "Password changed", occurredAt);
-                await _context.SaveChangesAsync();
+                await RevokeAllRefreshTokensAsync(
+                    user.Id,
+                    "Password changed",
+                    occurredAt,
+                    cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
 
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -188,28 +206,36 @@ namespace ECommerceBackend.Application.Services
                 paging.Size);
         }
 
-        public async Task AssignRoleAsync(Guid actorUserId, Guid userId, AssignRoleRequest request)
+        public async Task AssignRoleAsync(
+            Guid actorUserId,
+            Guid userId,
+            AssignRoleRequest request,
+            CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.Serializable);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken);
 
             try
             {
-                var user = await LoadUserForUpdateAsync(userId)
+                var user = await LoadUserForUpdateAsync(userId, cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy người dùng.");
                 await _context.Entry(user)
                     .Collection(candidate => candidate.UserRoles)
                     .Query()
                     .Include(userRole => userRole.Role)
-                    .LoadAsync();
+                    .LoadAsync(cancellationToken);
 
                 var role = await _roleRepo.Query()
-                    .FirstOrDefaultAsync(candidate => candidate.Name == request.RoleName)
+                    .FirstOrDefaultAsync(
+                        candidate => candidate.Name == request.RoleName,
+                        cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy vai trò được yêu cầu.");
                 var currentRoles = user.UserRoles.ToList();
 
                 if (currentRoles.Count == 1 && currentRoles[0].RoleId == role.Id)
                 {
-                    await transaction.CommitAsync();
+                    await transaction.CommitAsync(cancellationToken);
 
                     return;
                 }
@@ -224,7 +250,8 @@ namespace ECommerceBackend.Application.Services
                         .CountAsync(userRole => userRole.Role != null
                             && userRole.Role.Name == RoleNames.Admin
                             && userRole.User != null
-                            && !userRole.User.IsDeleted);
+                            && !userRole.User.IsDeleted,
+                            cancellationToken);
 
                     if (activeAdminCount <= 1)
                     {
@@ -238,10 +265,16 @@ namespace ECommerceBackend.Application.Services
                 foreach (var userRole in currentRoles)
                     _userRoleRepo.Delete(userRole);
 
-                await _userRoleRepo.AddAsync(new UserRole { UserId = userId, RoleId = role.Id });
+                await _userRoleRepo.AddAsync(
+                    new UserRole { UserId = userId, RoleId = role.Id },
+                    cancellationToken);
                 var occurredAt = UtcNow;
                 DomainRuleGuard.AsConflict(user.InvalidateSessions);
-                await RevokeAllRefreshTokensAsync(user.Id, "Role changed", occurredAt);
+                await RevokeAllRefreshTokensAsync(
+                    user.Id,
+                    "Role changed",
+                    occurredAt,
+                    cancellationToken);
                 _audit.Write(
                     "user.role.assign",
                     "User",
@@ -255,9 +288,9 @@ namespace ECommerceBackend.Application.Services
                             .ToArray(),
                         ["assignedRole"] = role.Name
                     });
-                await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync(cancellationToken);
 
-                await transaction.CommitAsync();
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -282,17 +315,23 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        private async Task<User?> LoadUserForUpdateAsync(Guid userId)
-            => await _consistency.LockUserAsync(userId, activeOnly: true);
+        private async Task<User?> LoadUserForUpdateAsync(
+            Guid userId,
+            CancellationToken cancellationToken)
+            => await _consistency.LockUserAsync(
+                userId,
+                activeOnly: true,
+                cancellationToken);
 
         private async Task RevokeAllRefreshTokensAsync(
             Guid userId,
             string reason,
-            DateTime occurredAt)
+            DateTime occurredAt,
+            CancellationToken cancellationToken)
         {
             var tokens = await _context.RefreshTokens
                 .Where(token => token.UserId == userId && token.RevokedAt == null)
-                .ToListAsync();
+                .ToListAsync(cancellationToken);
 
             foreach (var token in tokens)
             {

@@ -13,6 +13,16 @@ SET CONCAT_NULL_YIELDS_NULL ON;
 SET QUOTED_IDENTIFIER ON;
 SET NUMERIC_ROUNDABORT OFF;
 
+DECLARE @EnvironmentName nvarchar(50) =
+    UPPER(LTRIM(RTRIM(N'$(EnvironmentName)')));
+
+IF @EnvironmentName NOT IN (N'DEVELOPMENT', N'LOCAL', N'TESTING')
+    THROW 51020, 'Demo data can be seeded only in Development, Local, or Testing.', 1;
+
+IF UPPER(DB_NAME()) LIKE N'%PROD%'
+    OR UPPER(DB_NAME()) LIKE N'%PRODUCTION%'
+    THROW 51021, 'Demo data cannot be seeded into a production database.', 1;
+
 BEGIN TRY
     BEGIN TRANSACTION;
 

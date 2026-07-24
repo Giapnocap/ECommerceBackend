@@ -52,9 +52,14 @@ namespace ECommerceBackend.API.Controllers
         [HttpPost]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
-        public async Task<IActionResult> Create([FromBody] CreateProductRequest request)
+        public async Task<IActionResult> Create(
+            [FromBody] CreateProductRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _productService.CreateAsync(request, CurrentUserId);
+            var result = await _productService.CreateAsync(
+                request,
+                CurrentUserId,
+                cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
 
@@ -62,9 +67,16 @@ namespace ECommerceBackend.API.Controllers
         [HttpPut("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateProductRequest request)
+        public async Task<IActionResult> Update(
+            Guid id,
+            [FromBody] UpdateProductRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _productService.UpdateAsync(id, request, CurrentUserId);
+            var result = await _productService.UpdateAsync(
+                id,
+                request,
+                CurrentUserId,
+                cancellationToken);
             return Ok(result);
         }
 
@@ -72,9 +84,9 @@ namespace ECommerceBackend.API.Controllers
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Delete(Guid id)
+        public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
         {
-            await _productService.DeleteAsync(id, CurrentUserId);
+            await _productService.DeleteAsync(id, CurrentUserId, cancellationToken);
             return Ok(new { message = "Xóa sản phẩm thành công." });
         }
 

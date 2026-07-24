@@ -212,7 +212,7 @@ namespace ECommerceBackend.Application.Services
                     IsMain = imageIsMain
                 };
 
-                await _imageRepo.AddAsync(image);
+                await _imageRepo.AddAsync(image, cancellationToken);
                 _audit.Write(
                     "product.image.upload",
                     "ProductImage",

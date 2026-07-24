@@ -167,14 +167,21 @@ namespace ECommerceBackend.Application.Services
             return _mapper.Map<ProductResponse>(product);
         }
 
-        public async Task<ProductResponse> CreateAsync(CreateProductRequest request, Guid? actorUserId = null)
+        public async Task<ProductResponse> CreateAsync(
+            CreateProductRequest request,
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default)
         {
             Guid productId;
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
 
             try
             {
-                _ = await LoadCategoryForUpdateAsync(request.CategoryId)
+                _ = await LoadCategoryForUpdateAsync(
+                    request.CategoryId,
+                    cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy danh mục.");
 
                 var occurredAt = UtcNow;
@@ -192,7 +199,7 @@ namespace ECommerceBackend.Application.Services
                     InventoryPolicy.AdjustTo(product, request.StockQuantity));
                 productId = product.Id;
 
-                await _productRepo.AddAsync(product);
+                await _productRepo.AddAsync(product, cancellationToken);
                 if (inventoryMutation.QuantityChange != 0)
                 {
                     _context.InventoryTransactions.Add(new InventoryTransaction
@@ -217,8 +224,8 @@ namespace ECommerceBackend.Application.Services
                         ["categoryId"] = product.CategoryId,
                         ["initialStock"] = product.StockQuantity
                     });
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (Exception ex) when (_consistency.IsDeadlock(ex))
             {
@@ -233,21 +240,26 @@ namespace ECommerceBackend.Application.Services
                 throw;
             }
 
-            return await GetByIdAsync(productId);
+            return await GetByIdAsync(productId, cancellationToken);
         }
 
         public async Task<ProductResponse> UpdateAsync(
             Guid id,
             UpdateProductRequest request,
-            Guid? actorUserId = null)
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
 
             try
             {
-                _ = await LoadCategoryForUpdateAsync(request.CategoryId)
+                _ = await LoadCategoryForUpdateAsync(
+                    request.CategoryId,
+                    cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy danh mục.");
-                var product = await LoadProductForUpdateAsync(id)
+                var product = await LoadProductForUpdateAsync(id, cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
                 var occurredAt = UtcNow;
                 var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
@@ -285,8 +297,8 @@ namespace ECommerceBackend.Application.Services
                         ["stockBalance"] = inventoryMutation.BalanceAfter
                     });
 
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -307,22 +319,27 @@ namespace ECommerceBackend.Application.Services
                 throw;
             }
 
-            return await GetByIdAsync(id);
+            return await GetByIdAsync(id, cancellationToken);
         }
 
-        public async Task DeleteAsync(Guid id, Guid? actorUserId = null)
+        public async Task DeleteAsync(
+            Guid id,
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _consistency.BeginTransactionAsync(IsolationLevel.ReadCommitted);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
 
             try
             {
-                var product = await LoadProductForUpdateAsync(id)
+                var product = await LoadProductForUpdateAsync(id, cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
 
                 product.IsDeleted = true;
                 _audit.Write("product.delete", "Product", product.Id.ToString(), actorUserId);
-                await _context.SaveChangesAsync();
-                await transaction.CommitAsync();
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -357,10 +374,20 @@ namespace ECommerceBackend.Application.Services
             return $"{field}:{order}";
         }
 
-        private async Task<Category?> LoadCategoryForUpdateAsync(Guid categoryId)
-            => await _consistency.LockCategoryAsync(categoryId, activeOnly: true);
+        private async Task<Category?> LoadCategoryForUpdateAsync(
+            Guid categoryId,
+            CancellationToken cancellationToken)
+            => await _consistency.LockCategoryAsync(
+                categoryId,
+                activeOnly: true,
+                cancellationToken);
 
-        private async Task<Product?> LoadProductForUpdateAsync(Guid productId)
-            => await _consistency.LockProductAsync(productId, activeOnly: true);
+        private async Task<Product?> LoadProductForUpdateAsync(
+            Guid productId,
+            CancellationToken cancellationToken)
+            => await _consistency.LockProductAsync(
+                productId,
+                activeOnly: true,
+                cancellationToken);
     }
 }

@@ -21,9 +21,9 @@ namespace ECommerceBackend.API.Controllers
         [HttpGet]
         [AllowAnonymous]
         [ProducesResponseType(typeof(IEnumerable<CategoryResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
-            var result = await _categoryService.GetAllAsync();
+            var result = await _categoryService.GetAllAsync(cancellationToken);
             return Ok(result);
         }
 
@@ -31,9 +31,9 @@ namespace ECommerceBackend.API.Controllers
         [HttpGet("{id:guid}")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetById(Guid id)
+        public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
         {
-            var result = await _categoryService.GetByIdAsync(id);
+            var result = await _categoryService.GetByIdAsync(id, cancellationToken);
             return Ok(result);
         }
 
@@ -41,9 +41,14 @@ namespace ECommerceBackend.API.Controllers
         [HttpPost]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status201Created)]
-        public async Task<IActionResult> Create([FromBody] CreateCategoryRequest request)
+        public async Task<IActionResult> Create(
+            [FromBody] CreateCategoryRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _categoryService.CreateAsync(request, CurrentUserId);
+            var result = await _categoryService.CreateAsync(
+                request,
+                CurrentUserId,
+                cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
 
@@ -51,9 +56,16 @@ namespace ECommerceBackend.API.Controllers
         [HttpPut("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateCategoryRequest request)
+        public async Task<IActionResult> Update(
+            Guid id,
+            [FromBody] UpdateCategoryRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _categoryService.UpdateAsync(id, request, CurrentUserId);
+            var result = await _categoryService.UpdateAsync(
+                id,
+                request,
+                CurrentUserId,
+                cancellationToken);
             return Ok(result);
         }
 
@@ -61,9 +73,9 @@ namespace ECommerceBackend.API.Controllers
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Delete(Guid id)
+        public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
         {
-            await _categoryService.DeleteAsync(id, CurrentUserId);
+            await _categoryService.DeleteAsync(id, CurrentUserId, cancellationToken);
             return Ok(new { message = "Xóa danh mục thành công." });
         }
     }

@@ -77,7 +77,7 @@ namespace ECommerceBackend.Application.Services
                         ProductId = request.ProductId,
                         Quantity = request.Quantity,
                         UnitPrice = product.Price
-                    });
+                    }, cancellationToken);
                 }
 
                 await _context.SaveChangesAsync(cancellationToken);
@@ -267,7 +267,7 @@ namespace ECommerceBackend.Application.Services
                 return cart;
 
             cart = new Cart { Id = Guid.NewGuid(), UserId = userId };
-            await _cartRepo.AddAsync(cart);
+            await _cartRepo.AddAsync(cart, cancellationToken);
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);

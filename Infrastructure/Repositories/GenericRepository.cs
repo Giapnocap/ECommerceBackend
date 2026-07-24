@@ -15,12 +15,14 @@ namespace ECommerceBackend.Infrastructure.Repositories
 
         public IQueryable<T> Query() => _context.Set<T>();
 
-        public async Task<T?> GetByIdAsync(Guid id)
+        public async Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
             => await _context.Set<T>()
-                .FirstOrDefaultAsync(entity => EF.Property<Guid>(entity, "Id") == id);
+                .FirstOrDefaultAsync(
+                    entity => EF.Property<Guid>(entity, "Id") == id,
+                    cancellationToken);
 
-        public async Task AddAsync(T entity)
-            => await _context.Set<T>().AddAsync(entity);
+        public async Task AddAsync(T entity, CancellationToken cancellationToken = default)
+            => await _context.Set<T>().AddAsync(entity, cancellationToken);
 
         public void Update(T entity)
             => _context.Set<T>().Update(entity);
@@ -28,7 +30,7 @@ namespace ECommerceBackend.Infrastructure.Repositories
         public void Delete(T entity)
             => _context.Set<T>().Remove(entity);
 
-        public async Task SaveAsync()
-            => await _context.SaveChangesAsync();
+        public async Task SaveAsync(CancellationToken cancellationToken = default)
+            => await _context.SaveChangesAsync(cancellationToken);
     }
 }

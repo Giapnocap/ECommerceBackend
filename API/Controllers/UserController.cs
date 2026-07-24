@@ -22,27 +22,34 @@ namespace ECommerceBackend.API.Controllers
         /// <summary>Lấy thông tin profile của chính mình</summary>
         [HttpGet("me")]
         [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetMyProfile()
+        public async Task<IActionResult> GetMyProfile(CancellationToken cancellationToken)
         {
-            var result = await _userService.GetProfileAsync(CurrentUserId);
+            var result = await _userService.GetProfileAsync(CurrentUserId, cancellationToken);
             return Ok(result);
         }
 
         /// <summary>Cập nhật profile cá nhân</summary>
         [HttpPut("me")]
         [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> UpdateMyProfile([FromBody] UpdateProfileRequest request)
+        public async Task<IActionResult> UpdateMyProfile(
+            [FromBody] UpdateProfileRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _userService.UpdateProfileAsync(CurrentUserId, request);
+            var result = await _userService.UpdateProfileAsync(
+                CurrentUserId,
+                request,
+                cancellationToken);
             return Ok(result);
         }
 
         /// <summary>Đổi mật khẩu</summary>
         [HttpPut("me/change-password")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+        public async Task<IActionResult> ChangePassword(
+            [FromBody] ChangePasswordRequest request,
+            CancellationToken cancellationToken)
         {
-            await _userService.ChangePasswordAsync(CurrentUserId, request);
+            await _userService.ChangePasswordAsync(CurrentUserId, request, cancellationToken);
             return Ok(new { message = "Đổi mật khẩu thành công." });
         }
 
@@ -62,9 +69,16 @@ namespace ECommerceBackend.API.Controllers
         [HttpPut("{id:guid}/role")]
         [Authorize(Policy = PermissionNames.ManageUsers)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> AssignRole(Guid id, [FromBody] AssignRoleRequest request)
+        public async Task<IActionResult> AssignRole(
+            Guid id,
+            [FromBody] AssignRoleRequest request,
+            CancellationToken cancellationToken)
         {
-            await _userService.AssignRoleAsync(CurrentUserId, id, request);
+            await _userService.AssignRoleAsync(
+                CurrentUserId,
+                id,
+                request,
+                cancellationToken);
             return Ok(new { message = $"Đã gán role '{request.RoleName}' cho người dùng." });
         }
     }

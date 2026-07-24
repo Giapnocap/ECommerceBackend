@@ -23,9 +23,11 @@ namespace ECommerceBackend.API.Controllers
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        public async Task<IActionResult> Register(
+            [FromBody] RegisterRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _authService.RegisterAsync(request);
+            var result = await _authService.RegisterAsync(request, cancellationToken);
             return Ok(result);
         }
 
@@ -34,9 +36,11 @@ namespace ECommerceBackend.API.Controllers
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        public async Task<IActionResult> Login(
+            [FromBody] LoginRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _authService.LoginAsync(request);
+            var result = await _authService.LoginAsync(request, cancellationToken);
             return Ok(result);
         }
 
@@ -45,9 +49,11 @@ namespace ECommerceBackend.API.Controllers
         [AllowAnonymous]
         [EnableRateLimiting("refresh")]
         [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Refresh([FromBody] RefreshTokenRequest request)
+        public async Task<IActionResult> Refresh(
+            [FromBody] RefreshTokenRequest request,
+            CancellationToken cancellationToken)
         {
-            var result = await _authService.RefreshAsync(request);
+            var result = await _authService.RefreshAsync(request, cancellationToken);
             return Ok(result);
         }
 
@@ -55,9 +61,11 @@ namespace ECommerceBackend.API.Controllers
         [HttpPost("logout")]
         [Authorize]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Logout([FromBody] LogoutRequest request)
+        public async Task<IActionResult> Logout(
+            [FromBody] LogoutRequest request,
+            CancellationToken cancellationToken)
         {
-            await _authService.LogoutAsync(CurrentUserId, request);
+            await _authService.LogoutAsync(CurrentUserId, request, cancellationToken);
             return Ok(new { message = "Đăng xuất thành công." });
         }
 
@@ -66,9 +74,9 @@ namespace ECommerceBackend.API.Controllers
         [Authorize]
         [EnableRateLimiting("auth")]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> LogoutAll()
+        public async Task<IActionResult> LogoutAll(CancellationToken cancellationToken)
         {
-            await _authService.LogoutAllAsync(CurrentUserId);
+            await _authService.LogoutAllAsync(CurrentUserId, cancellationToken);
             return Ok(new { message = "Đã đăng xuất khỏi tất cả thiết bị." });
         }
     }

@@ -8,6 +8,18 @@ namespace ECommerceBackend.Tests;
 public class CategoryServiceTests
 {
     [Fact]
+    public async Task GetAllAsync_WhenRequestIsCancelled_StopsDatabaseQuery()
+    {
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateCategoryService(context);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.GetAllAsync(cancellation.Token));
+    }
+
+    [Fact]
     public async Task CreateAsync_NormalizesNameAndRejectsDuplicateInSameLevel()
     {
         await using var context = TestAppDbContext.Create();
