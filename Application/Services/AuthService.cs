@@ -7,6 +7,7 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -76,6 +77,7 @@ namespace ECommerceBackend.Application.Services
             RegisterRequest request,
             CancellationToken cancellationToken = default)
         {
+            using var telemetry = BusinessTelemetry.Start("auth.register", cancellationToken);
             var occurredAt = UtcNow;
             var userName = request.UserName.Trim();
             var email = request.Email.Trim();
@@ -136,7 +138,7 @@ namespace ECommerceBackend.Application.Services
                     ex);
             }
 
-            return BuildAuthResponse(
+            var response = BuildAuthResponse(
                 user,
                 [customerRole.Name],
                 customerRole.RolePermissions
@@ -146,12 +148,15 @@ namespace ECommerceBackend.Application.Services
                 refreshToken.Entity.ExpiresAt,
                 refreshToken.Entity.FamilyId,
                 occurredAt);
+            telemetry.Complete();
+            return response;
         }
 
         public async Task<AuthResponse> LoginAsync(
             LoginRequest request,
             CancellationToken cancellationToken = default)
         {
+            using var telemetry = BusinessTelemetry.Start("auth.login", cancellationToken);
             var normalizedUserName = Normalize(request.UserName);
             var userId = await _userRepo.Query()
                 .AsNoTracking()
@@ -187,7 +192,7 @@ namespace ECommerceBackend.Application.Services
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
-                return BuildAuthResponse(
+                var response = BuildAuthResponse(
                     user,
                     GetRoles(user),
                     GetPermissions(user),
@@ -195,6 +200,8 @@ namespace ECommerceBackend.Application.Services
                     refreshToken.Entity.ExpiresAt,
                     refreshToken.Entity.FamilyId,
                     occurredAt);
+                telemetry.Complete();
+                return response;
             }
             catch
             {
@@ -209,6 +216,7 @@ namespace ECommerceBackend.Application.Services
             RefreshTokenRequest request,
             CancellationToken cancellationToken = default)
         {
+            using var telemetry = BusinessTelemetry.Start("auth.refresh", cancellationToken);
             var tokenHash = HashRefreshToken(request.RefreshToken);
             var tokenOwnerId = await FindRefreshTokenOwnerIdAsync(tokenHash, cancellationToken)
                 ?? throw Unauthorized();
@@ -261,7 +269,7 @@ namespace ECommerceBackend.Application.Services
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
-                return BuildAuthResponse(
+                var response = BuildAuthResponse(
                     user,
                     GetRoles(user),
                     GetPermissions(user),
@@ -269,6 +277,8 @@ namespace ECommerceBackend.Application.Services
                     newRefreshToken.Entity.ExpiresAt,
                     newRefreshToken.Entity.FamilyId,
                     occurredAt);
+                telemetry.Complete();
+                return response;
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -301,6 +311,7 @@ namespace ECommerceBackend.Application.Services
             LogoutRequest request,
             CancellationToken cancellationToken = default)
         {
+            using var telemetry = BusinessTelemetry.Start("auth.logout", cancellationToken);
             var tokenHash = HashRefreshToken(request.RefreshToken);
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
@@ -332,6 +343,7 @@ namespace ECommerceBackend.Application.Services
 
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
+                telemetry.Complete();
             }
             catch (Exception ex) when (_consistency.IsDeadlock(ex))
             {
@@ -356,6 +368,7 @@ namespace ECommerceBackend.Application.Services
             Guid userId,
             CancellationToken cancellationToken = default)
         {
+            using var telemetry = BusinessTelemetry.Start("auth.logout_all", cancellationToken);
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
@@ -378,6 +391,7 @@ namespace ECommerceBackend.Application.Services
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
+                telemetry.Complete();
             }
             catch (DbUpdateConcurrencyException ex)
             {

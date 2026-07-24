@@ -1,6 +1,7 @@
 using ECommerceBackend.Application.Common;
 using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Observability;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Infrastructure.Notifications
@@ -67,6 +68,12 @@ namespace ECommerceBackend.Infrastructure.Notifications
                 using var processingCts =
                     CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 processingCts.CancelAfter(TimeSpan.FromSeconds(_options.ProcessingTimeoutSeconds));
+                using var telemetry = BusinessTelemetry.Start(
+                    "outbox.dispatch",
+                    processingCts.Token,
+                    new KeyValuePair<string, object?>(
+                        "messaging.message.type",
+                        message.Type));
 
                 try
                 {
@@ -85,6 +92,7 @@ namespace ECommerceBackend.Infrastructure.Notifications
                     else
                     {
                         ProcessedCounter.Add(1, new KeyValuePair<string, object?>("message.type", message.Type));
+                        telemetry.Complete();
                     }
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -129,7 +137,10 @@ namespace ECommerceBackend.Infrastructure.Notifications
                     {
                         FailedCounter.Add(1, new KeyValuePair<string, object?>("message.type", message.Type));
                         if (deadLetteredAt.HasValue)
+                        {
                             DeadLetterCounter.Add(1, new KeyValuePair<string, object?>("message.type", message.Type));
+                            telemetry.SetTag("outbox.dead_lettered", true);
+                        }
                     }
 
                     _logger.LogError(

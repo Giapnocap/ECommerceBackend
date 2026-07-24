@@ -160,10 +160,14 @@ public class ProductServiceTests
             PageSize = 10
         });
 
-        var tags = Assert.Single(observations);
-        Assert.Contains(tags, tag => tag.Key == "catalog.has_search" && Equals(tag.Value, true));
-        Assert.Contains(tags, tag => tag.Key == "catalog.outcome" && Equals(tag.Value, "success"));
-        Assert.DoesNotContain(tags, tag => tag.Value?.ToString()?.Contains(searchText) == true);
+        Assert.Contains(observations, tags =>
+            tags.Any(tag => tag.Key == "catalog.has_search" && Equals(tag.Value, true))
+            && tags.Any(tag => tag.Key == "catalog.outcome" && Equals(tag.Value, "success")));
+        Assert.All(observations, tags =>
+            Assert.DoesNotContain(tags, tag =>
+                tag.Value?.ToString()?.Contains(
+                    searchText,
+                    StringComparison.Ordinal) == true));
     }
 
     [Fact]

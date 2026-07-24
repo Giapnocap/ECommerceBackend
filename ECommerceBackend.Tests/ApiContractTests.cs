@@ -20,6 +20,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace ECommerceBackend.Tests;
 
+[Collection(ApiContractTestCollection.Name)]
 public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 {
     private readonly TestApiFactory _factory;
@@ -297,6 +298,12 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.True(parameter.GetProperty("required").GetBoolean());
         Assert.False(string.IsNullOrWhiteSpace(parameter.GetProperty("description").GetString()));
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public sealed class ApiContractTestCollection
+{
+    public const string Name = "API contract host";
 }
 
 public sealed class TestApiFactory : WebApplicationFactory<Program>

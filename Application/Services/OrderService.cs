@@ -6,6 +6,7 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Enums;
@@ -96,6 +97,15 @@ namespace ECommerceBackend.Application.Services
             string idempotencyKey,
             CancellationToken cancellationToken = default)
         {
+            var paymentMethod = Enum.IsDefined(request.PaymentMethod)
+                ? request.PaymentMethod.ToString()
+                : "unknown";
+            using var telemetry = BusinessTelemetry.Start(
+                "checkout.place_order",
+                cancellationToken,
+                new KeyValuePair<string, object?>(
+                    "payment.method",
+                    paymentMethod));
             var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
             var requestHash = HashCheckoutRequest(request);
             var existingOrder = await FindIdempotentOrderAsync(
@@ -106,7 +116,14 @@ namespace ECommerceBackend.Application.Services
             if (existingOrder != null)
             {
                 EnsureSameIdempotencyRequest(existingOrder, requestHash);
-                return await GetByIdAsync(existingOrder.Id, userId, true, cancellationToken);
+                telemetry.SetTag("checkout.idempotency.replay", true);
+                var response = await GetByIdAsync(
+                    existingOrder.Id,
+                    userId,
+                    true,
+                    cancellationToken);
+                telemetry.Complete();
+                return response;
             }
 
             Guid orderId;
@@ -130,7 +147,14 @@ namespace ECommerceBackend.Application.Services
                     orderId = existingOrder.Id;
                     await transaction.CommitAsync(cancellationToken);
                     transactionCompleted = true;
-                    return await GetByIdAsync(orderId, userId, true, cancellationToken);
+                    telemetry.SetTag("checkout.idempotency.replay", true);
+                    var response = await GetByIdAsync(
+                        orderId,
+                        userId,
+                        true,
+                        cancellationToken);
+                    telemetry.Complete();
+                    return response;
                 }
 
                 var pendingOrderCount = await _context.Orders
@@ -308,7 +332,14 @@ namespace ECommerceBackend.Application.Services
                 if (savedOrder != null)
                 {
                     EnsureSameIdempotencyRequest(savedOrder, requestHash);
-                    return await GetByIdAsync(savedOrder.Id, userId, true, cancellationToken);
+                    telemetry.SetTag("checkout.idempotency.replay", true);
+                    var response = await GetByIdAsync(
+                        savedOrder.Id,
+                        userId,
+                        true,
+                        cancellationToken);
+                    telemetry.Complete();
+                    return response;
                 }
 
                 throw new ConflictException("Không thể tạo đơn hàng do dữ liệu vừa được cập nhật.", ex);
@@ -330,7 +361,13 @@ namespace ECommerceBackend.Application.Services
                 throw;
             }
 
-            return await GetByIdAsync(orderId, userId, true, cancellationToken);
+            var orderResponse = await GetByIdAsync(
+                orderId,
+                userId,
+                true,
+                cancellationToken);
+            telemetry.Complete();
+            return orderResponse;
         }
 
         public async Task<PagedResult<OrderResponse>> GetMyOrdersAsync(

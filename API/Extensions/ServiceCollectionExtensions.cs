@@ -15,6 +15,7 @@ using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Maintenance;
+using ECommerceBackend.Infrastructure.Observability;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Repositories;
 using FluentValidation;
@@ -27,6 +28,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.Data.SqlClient;
@@ -242,10 +244,15 @@ namespace ECommerceBackend.API.Extensions
                 .GetSection(DatabaseOptions.SectionName)
                 .Get<DatabaseOptions>() ?? new DatabaseOptions();
 
-            services.AddDbContext<AppDbContext>(options =>
+            services.TryAddSingleton<DatabaseTelemetryInterceptor>();
+            services.AddDbContext<AppDbContext>((provider, options) =>
+            {
                 options.UseSqlServer(
                     configuration.GetConnectionString("Default"),
-                    sqlServer => sqlServer.CommandTimeout(databaseOptions.CommandTimeoutSeconds)));
+                    sqlServer => sqlServer.CommandTimeout(databaseOptions.CommandTimeoutSeconds));
+                options.AddInterceptors(
+                    provider.GetRequiredService<DatabaseTelemetryInterceptor>());
+            });
             services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
             services.AddScoped<IDataConsistencyService, EfDataConsistencyService>();
 

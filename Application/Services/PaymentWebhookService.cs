@@ -5,6 +5,7 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -63,12 +64,18 @@ namespace ECommerceBackend.Application.Services
             ValidateRequest(providerCode, request);
             var receivedAt = UtcNow;
             var provider = _providers.GetWebhookProvider(providerCode);
+            var normalizedProvider = provider.Code.Trim().ToLowerInvariant();
+            using var telemetry = BusinessTelemetry.Start(
+                "payment.webhook.process",
+                cancellationToken,
+                new KeyValuePair<string, object?>(
+                    "payment.provider",
+                    normalizedProvider));
             var normalizedEventId = request.EventId.Trim();
             var verified = await provider.VerifyWebhookAsync(
                 request with { EventId = normalizedEventId },
                 cancellationToken);
             ValidateOccurrenceTime(verified.OccurredAt, receivedAt);
-            var normalizedProvider = provider.Code.Trim().ToLowerInvariant();
             var payloadHash = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(request.Payload)));
 
@@ -77,7 +84,12 @@ namespace ECommerceBackend.Application.Services
                 normalizedEventId,
                 cancellationToken);
             if (existing != null)
-                return BuildDuplicateResponse(existing, payloadHash);
+            {
+                var response = BuildDuplicateResponse(existing, payloadHash);
+                telemetry.SetTag("webhook.duplicate", true);
+                telemetry.Complete();
+                return response;
+            }
 
             var paymentOrderId = await FindPaymentOrderIdAsync(
                 normalizedProvider,
@@ -98,10 +110,12 @@ namespace ECommerceBackend.Application.Services
                     cancellationToken);
                 if (existing != null)
                 {
-                    var response = BuildDuplicateResponse(existing, payloadHash);
+                    var duplicateResponse = BuildDuplicateResponse(existing, payloadHash);
                     await transaction.CommitAsync(cancellationToken);
                     transactionCompleted = true;
-                    return response;
+                    telemetry.SetTag("webhook.duplicate", true);
+                    telemetry.Complete();
+                    return duplicateResponse;
                 }
 
                 var order = await _consistency.LockOrderAsync(paymentOrderId, cancellationToken)
@@ -164,13 +178,17 @@ namespace ECommerceBackend.Application.Services
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
-                return new PaymentWebhookResponse
+                var response = new PaymentWebhookResponse
                 {
                     EventId = normalizedEventId,
                     PaymentId = payment.Id,
                     Status = payment.Status.ToString(),
                     Duplicate = false
                 };
+                telemetry.SetTag("webhook.duplicate", false);
+                telemetry.SetTag("payment.status", response.Status);
+                telemetry.Complete();
+                return response;
             }
             catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
@@ -182,7 +200,12 @@ namespace ECommerceBackend.Application.Services
                     normalizedEventId,
                     cancellationToken);
                 if (savedEvent != null)
-                    return BuildDuplicateResponse(savedEvent, payloadHash);
+                {
+                    var response = BuildDuplicateResponse(savedEvent, payloadHash);
+                    telemetry.SetTag("webhook.duplicate", true);
+                    telemetry.Complete();
+                    return response;
+                }
 
                 throw new ConflictException("Thông báo từ cổng thanh toán đang được xử lý bởi một yêu cầu khác.", ex);
             }
