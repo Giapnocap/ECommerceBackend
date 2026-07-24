@@ -26,14 +26,14 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "inventory_product_unavailable",
-                    $"Product '{product.Name}' is no longer available.");
+                    $"Sản phẩm '{product.Name}' không còn khả dụng.");
             }
 
             if (product.StockQuantity < quantity)
             {
                 throw new DomainRuleViolationException(
                     "inventory_insufficient",
-                    $"Product '{product.Name}' has insufficient stock. Available: {product.StockQuantity}, requested: {quantity}.");
+                    $"Sản phẩm '{product.Name}' không đủ tồn kho. Hiện có: {product.StockQuantity}, yêu cầu: {quantity}.");
             }
         }
 
@@ -50,7 +50,7 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "inventory_balance_exceeded",
-                    $"Inventory balance for '{product.Name}' exceeds the supported value.");
+                    $"Tồn kho của sản phẩm '{product.Name}' vượt quá giới hạn cho phép.");
             }
 
             return new InventoryMutation(quantity, product.StockQuantity);
@@ -63,7 +63,7 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "inventory_balance_invalid",
-                    "Inventory balance cannot be negative.");
+                    "Tồn kho không được là số âm.");
             }
 
             var quantityChange = targetBalance - product.StockQuantity;
@@ -77,7 +77,7 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "inventory_quantity_invalid",
-                    "Inventory quantity must be greater than zero.");
+                    "Số lượng tồn kho phải lớn hơn 0.");
             }
         }
     }

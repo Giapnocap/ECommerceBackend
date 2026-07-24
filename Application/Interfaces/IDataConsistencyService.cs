@@ -9,6 +9,8 @@ namespace ECommerceBackend.Application.Interfaces
             IsolationLevel isolationLevel,
             CancellationToken cancellationToken = default);
 
+        Task<bool> TryAcquireDataRetentionLockAsync(CancellationToken cancellationToken = default);
+
         Task<Cart?> LockCartByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
         Task<Category?> LockCategoryAsync(Guid categoryId, bool activeOnly, CancellationToken cancellationToken = default);
         Task<Order?> LockOrderAsync(Guid orderId, CancellationToken cancellationToken = default);

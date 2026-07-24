@@ -204,7 +204,7 @@ namespace ECommerceBackend.Application.Services
 
                 var role = await _roleRepo.Query()
                     .FirstOrDefaultAsync(candidate => candidate.Name == request.RoleName)
-                    ?? throw new NotFoundException($"Không tìm thấy role '{request.RoleName}'.");
+                    ?? throw new NotFoundException("Không tìm thấy vai trò được yêu cầu.");
                 var currentRoles = user.UserRoles.ToList();
 
                 if (currentRoles.Count == 1 && currentRoles[0].RoleId == role.Id)

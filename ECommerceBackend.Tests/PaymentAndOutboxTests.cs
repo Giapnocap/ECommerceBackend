@@ -56,8 +56,35 @@ public class PaymentAndOutboxTests
         Assert.Equal(DateTime.Parse("2026-07-17T10:00:00Z").ToUniversalTime(), savedEvent.OccurredAt);
         Assert.Equal(receivedAt.UtcDateTime, savedEvent.ReceivedAt);
         Assert.Equal(receivedAt.UtcDateTime, savedEvent.ProcessedAt);
+        Assert.Equal(string.Empty, savedEvent.Payload);
         Assert.Equal(2, await context.PaymentStatusHistories.CountAsync());
         Assert.Equal(1, await context.OutboxMessages.CountAsync());
+    }
+
+    [Fact]
+    public async Task PaymentWebhook_RetainsRawPayloadOnlyWhenExplicitlyEnabled()
+    {
+        await using var context = TestAppDbContext.Create();
+        var (payment, _) = await SeedPaymentAsync(context, "generic-hmac", "txn-retain-payload");
+        var options = PaymentOptions(retainRawPayload: true);
+        var service = new PaymentWebhookService(
+            context,
+            new EfDataConsistencyService(context),
+            new PaymentProviderResolver([new GenericHmacPaymentProvider(options)]),
+            new OutboxWriter(context),
+            options);
+        const string payload = "{\"providerTransactionId\":\"txn-retain-payload\",\"status\":\"paid\",\"amount\":100}";
+
+        _ = await service.HandleAsync(
+            "generic-hmac",
+            new PaymentWebhookRequest("evt-retain-payload", Sign("evt-retain-payload", payload), payload));
+
+        var savedEvent = await context.PaymentWebhookEvents.SingleAsync();
+        Assert.Equal(payload, savedEvent.Payload);
+        Assert.Equal(
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload))),
+            savedEvent.PayloadHash);
+        Assert.Equal(payment.Id, savedEvent.PaymentId);
     }
 
     [Fact]
@@ -576,7 +603,8 @@ public class PaymentAndOutboxTests
                 MaxPendingAgeMinutes = 1
             }),
             NullLogger<OutboxHealthCheck>.Instance,
-            clock);
+            clock,
+            new OutboxWorkerStatus());
 
         var staleResult = await healthCheck.CheckHealthAsync(new HealthCheckContext());
         Assert.Equal(HealthStatus.Unhealthy, staleResult.Status);
@@ -610,14 +638,15 @@ public class PaymentAndOutboxTests
                 PollIntervalSeconds = 1
             }),
             NullLogger<OutboxProcessor>.Instance);
-    private static IOptions<PaymentWebhookOptions> PaymentOptions()
+    private static IOptions<PaymentWebhookOptions> PaymentOptions(bool retainRawPayload = false)
         => Options.Create(new PaymentWebhookOptions
         {
             Enabled = true,
             ProviderCode = "generic-hmac",
             Secret = WebhookSecret,
             MaxPayloadBytes = 65_536,
-            MaxFutureSkewMinutes = 5
+            MaxFutureSkewMinutes = 5,
+            RetainRawPayload = retainRawPayload
         });
 
     private static string Sign(string eventId, string payload)

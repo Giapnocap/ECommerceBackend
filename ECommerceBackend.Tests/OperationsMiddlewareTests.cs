@@ -92,7 +92,7 @@ public sealed class OperationsMiddlewareTests
         Assert.Equal(StatusCodes.Status400BadRequest, context.Response.StatusCode);
         Assert.StartsWith(ApiProblemDetails.ContentType, context.Response.ContentType);
         Assert.Equal(400, response.RootElement.GetProperty("status").GetInt32());
-        Assert.Equal("Bad Request", response.RootElement.GetProperty("title").GetString());
+        Assert.Equal("Yêu cầu không hợp lệ", response.RootElement.GetProperty("title").GetString());
         Assert.Equal("https://httpstatuses.com/400", response.RootElement.GetProperty("type").GetString());
         Assert.Equal("Invalid operation.", response.RootElement.GetProperty("detail").GetString());
         Assert.Equal("/api/test", response.RootElement.GetProperty("instance").GetString());
@@ -135,7 +135,7 @@ public sealed class OperationsMiddlewareTests
         Assert.Equal("validation-trace-001", problem.Extensions["traceId"]);
         var errors = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string[]>>(
             problem.Extensions["errors"]);
-        Assert.Equal("Email is required.", Assert.Single(errors["Email"]));
+        Assert.Equal("Giá trị không hợp lệ hoặc không đúng định dạng.", Assert.Single(errors["Email"]));
         await result.ExecuteResultAsync(actionContext);
         Assert.StartsWith(ApiProblemDetails.ContentType, httpContext.Response.ContentType);
     }

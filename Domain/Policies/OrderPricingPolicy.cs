@@ -27,19 +27,19 @@ namespace ECommerceBackend.Domain.Policies
             foreach (var line in lines)
             {
                 hasLines = true;
-                EnsureMoney(line.UnitPrice, "order_unit_price_invalid", "Unit price");
+                EnsureMoney(line.UnitPrice, "order_unit_price_invalid", "Đơn giá");
                 if (line.UnitPrice <= 0)
                 {
                     throw new DomainRuleViolationException(
                         "order_unit_price_invalid",
-                        $"Unit price for '{line.ItemName}' must be greater than zero.");
+                        $"Đơn giá của sản phẩm '{line.ItemName}' phải lớn hơn 0.");
                 }
 
                 if (line.Quantity <= 0)
                 {
                     throw new DomainRuleViolationException(
                         "order_quantity_invalid",
-                        $"Quantity for '{line.ItemName}' must be greater than zero.");
+                        $"Số lượng của sản phẩm '{line.ItemName}' phải lớn hơn 0.");
                 }
 
                 decimal lineTotal;
@@ -51,7 +51,7 @@ namespace ECommerceBackend.Domain.Policies
                 {
                     throw new DomainRuleViolationException(
                         "order_line_total_exceeded",
-                        $"Line total for '{line.ItemName}' exceeds the supported amount.");
+                        $"Thành tiền của sản phẩm '{line.ItemName}' vượt quá giới hạn cho phép.");
                 }
 
                 if (lineTotal > MaxMoneyAmount
@@ -59,7 +59,7 @@ namespace ECommerceBackend.Domain.Policies
                 {
                     throw new DomainRuleViolationException(
                         "order_total_exceeded",
-                        "Order total exceeds the supported amount.");
+                        "Tổng tiền đơn hàng vượt quá giới hạn cho phép.");
                 }
 
                 subtotal += lineTotal;
@@ -69,7 +69,7 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "order_empty",
-                    "An order must contain at least one item.");
+                    "Đơn hàng phải có ít nhất một sản phẩm.");
             }
 
             return subtotal;
@@ -81,30 +81,30 @@ namespace ECommerceBackend.Domain.Policies
             decimal shipping,
             decimal tax)
         {
-            EnsureMoney(subtotal, "order_subtotal_invalid", "Subtotal");
-            EnsureMoney(discount, "order_discount_invalid", "Discount");
-            EnsureMoney(shipping, "order_shipping_invalid", "Shipping fee");
-            EnsureMoney(tax, "order_tax_invalid", "Tax");
+            EnsureMoney(subtotal, "order_subtotal_invalid", "Tạm tính");
+            EnsureMoney(discount, "order_discount_invalid", "Khoản giảm giá");
+            EnsureMoney(shipping, "order_shipping_invalid", "Phí giao hàng");
+            EnsureMoney(tax, "order_tax_invalid", "Thuế");
 
             if (subtotal <= 0)
             {
                 throw new DomainRuleViolationException(
                     "order_subtotal_invalid",
-                    "Order subtotal must be greater than zero.");
+                    "Tiền tạm tính của đơn hàng phải lớn hơn 0.");
             }
 
             if (discount < 0 || discount > subtotal)
             {
                 throw new DomainRuleViolationException(
                     "order_discount_invalid",
-                    "Order discount must be between zero and the subtotal.");
+                    "Khoản giảm giá phải nằm trong khoảng từ 0 đến tiền tạm tính.");
             }
 
             if (shipping < 0 || tax < 0)
             {
                 throw new DomainRuleViolationException(
                     "order_charge_invalid",
-                    "Shipping fee and tax cannot be negative.");
+                    "Phí giao hàng và thuế không được là số âm.");
             }
 
             decimal total;
@@ -116,14 +116,14 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "order_total_exceeded",
-                    "Order total exceeds the supported amount.");
+                    "Tổng tiền đơn hàng vượt quá giới hạn cho phép.");
             }
 
             if (total <= 0 || total > MaxMoneyAmount)
             {
                 throw new DomainRuleViolationException(
                     "order_total_invalid",
-                    "Order total must be positive and within the supported amount.");
+                    "Tổng tiền đơn hàng phải lớn hơn 0 và không vượt quá giới hạn cho phép.");
             }
 
             return new OrderAmounts(subtotal, discount, shipping, tax, total);
@@ -137,7 +137,7 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     code,
-                    $"{fieldName} must be a non-negative decimal with at most two fractional digits.");
+                    $"{fieldName} phải là số không âm và có tối đa 2 chữ số thập phân.");
             }
         }
     }

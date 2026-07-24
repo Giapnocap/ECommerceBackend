@@ -59,6 +59,17 @@ namespace ECommerceBackend.Application.Services
                 })
                 .ToList();
 
+            var deliveredOrders = await _context.OrderStatusHistories
+                .AsNoTracking()
+                .CountAsync(history => history.ToStatus == OrderStatus.Delivered
+                    && history.CreatedAt >= from
+                    && history.CreatedAt < to, cancellationToken);
+            var cancelledOrders = await _context.OrderStatusHistories
+                .AsNoTracking()
+                .CountAsync(history => history.ToStatus == OrderStatus.Cancelled
+                    && history.CreatedAt >= from
+                    && history.CreatedAt < to, cancellationToken);
+
             var paymentStatusRows = await _context.Payments
                 .AsNoTracking()
                 .Where(payment => payment.CreatedAt >= from && payment.CreatedAt < to)
@@ -104,18 +115,31 @@ namespace ECommerceBackend.Application.Services
                 .CountAsync(product => !product.IsDeleted
                     && product.StockQuantity <= query.LowStockThreshold,
                     cancellationToken);
-            var topProducts = await _context.OrderDetails
-                .AsNoTracking()
-                .Where(detail => detail.Order != null
-                    && detail.Order.OrderDate >= from
-                    && detail.Order.OrderDate < to
-                    && detail.Order.Status == OrderStatus.Delivered)
+            var eventFrom = from;
+            var eventTo = to;
+            var deliveredDetails =
+                from detail in _context.OrderDetails.AsNoTracking()
+                join deliveredHistory in _context.OrderStatusHistories.AsNoTracking()
+                    on detail.OrderId equals deliveredHistory.OrderId
+                where deliveredHistory.ToStatus == OrderStatus.Delivered
+                    && deliveredHistory.CreatedAt >= eventFrom
+                    && deliveredHistory.CreatedAt < eventTo
+                select new
+                {
+                    detail.ProductId,
+                    detail.ProductNameSnapshot,
+                    detail.Quantity,
+                    detail.UnitPrice,
+                    DeliveredAt = deliveredHistory.CreatedAt,
+                    detail.Id
+                };
+            var topProducts = await deliveredDetails
                 .GroupBy(detail => detail.ProductId)
                 .Select(group => new TopSellingProductResponse
                 {
                     ProductId = group.Key,
                     ProductName = group
-                        .OrderByDescending(detail => detail.Order!.OrderDate)
+                        .OrderByDescending(detail => detail.DeliveredAt)
                         .ThenByDescending(detail => detail.Id)
                         .Select(detail => detail.ProductNameSnapshot)
                         .First(),
@@ -128,8 +152,6 @@ namespace ECommerceBackend.Application.Services
                 .Take(query.TopProductLimit)
                 .ToListAsync(cancellationToken);
 
-            var delivered = ordersByStatus.Single(item => item.Status == nameof(OrderStatus.Delivered));
-            var cancelled = ordersByStatus.Single(item => item.Status == nameof(OrderStatus.Cancelled));
             var pendingPayment = paymentsByStatus.Single(item => item.Status == nameof(PaymentStatus.Pending));
 
             return new SalesSummaryResponse
@@ -137,8 +159,8 @@ namespace ECommerceBackend.Application.Services
                 From = from,
                 To = to,
                 TotalOrders = ordersByStatus.Sum(item => item.Count),
-                DeliveredOrders = delivered.Count,
-                CancelledOrders = cancelled.Count,
+                DeliveredOrders = deliveredOrders,
+                CancelledOrders = cancelledOrders,
                 GrossPaidAmount = grossPaidAmount,
                 RefundedAmount = refundedAmount,
                 NetRevenue = netRevenue,

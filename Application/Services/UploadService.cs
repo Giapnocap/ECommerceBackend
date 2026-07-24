@@ -237,17 +237,17 @@ namespace ECommerceBackend.Application.Services
         private async Task<string> ValidateImageAsync(IFormFile file, CancellationToken cancellationToken)
         {
             if (file == null || file.Length == 0)
-                throw new BusinessException("Vui lòng chọn file ảnh để upload.");
+                throw new BusinessException("Vui lòng chọn tệp ảnh để tải lên.");
 
             if (file.Length > _maxImageSizeBytes)
             {
                 var maxSizeMb = _maxImageSizeBytes / (1024d * 1024d);
-                throw new BusinessException($"Kích thước ảnh không được vượt quá {maxSizeMb:0.##}MB.");
+                throw new BusinessException($"Kích thước ảnh không được vượt quá {maxSizeMb:0.##} MB.");
             }
 
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(extension) || !AllowedExtensions.Contains(extension))
-                throw new BusinessException("Chỉ chấp nhận file ảnh: jpg, jpeg, png, webp.");
+                throw new BusinessException("Chỉ chấp nhận tệp ảnh định dạng JPG, JPEG, PNG hoặc WEBP.");
 
             var expectedContentType = extension switch
             {
@@ -258,7 +258,7 @@ namespace ECommerceBackend.Application.Services
             };
 
             if (!string.Equals(file.ContentType, expectedContentType, StringComparison.OrdinalIgnoreCase))
-                throw new BusinessException("Phần mở rộng và kiểu nội dung của file ảnh không khớp.");
+                throw new BusinessException("Phần mở rộng và kiểu nội dung của tệp ảnh không khớp.");
 
             var header = new byte[12];
             var bytesRead = 0;
@@ -273,7 +273,7 @@ namespace ECommerceBackend.Application.Services
             }
 
             if (!HasValidSignature(extension, header, bytesRead))
-                throw new BusinessException("Nội dung file không đúng định dạng ảnh được khai báo.");
+                throw new BusinessException("Nội dung tệp không đúng định dạng ảnh được khai báo.");
 
             return extension;
         }

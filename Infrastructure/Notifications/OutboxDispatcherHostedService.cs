@@ -7,16 +7,22 @@ namespace ECommerceBackend.Infrastructure.Notifications
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly OutboxOptions _options;
+        private readonly TimeProvider _timeProvider;
         private readonly ILogger<OutboxDispatcherHostedService> _logger;
+        private readonly OutboxWorkerStatus _status;
 
         public OutboxDispatcherHostedService(
             IServiceScopeFactory scopeFactory,
             IOptions<OutboxOptions> options,
-            ILogger<OutboxDispatcherHostedService> logger)
+            TimeProvider timeProvider,
+            ILogger<OutboxDispatcherHostedService> logger,
+            OutboxWorkerStatus status)
         {
             _scopeFactory = scopeFactory;
             _options = options.Value;
+            _timeProvider = timeProvider;
             _logger = logger;
+            _status = status;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -27,6 +33,7 @@ namespace ECommerceBackend.Infrastructure.Notifications
                 return;
             }
 
+            _status.MarkStarted(_timeProvider.GetUtcNow().UtcDateTime);
             _logger.LogInformation("Outbox dispatcher started.");
 
             while (!stoppingToken.IsCancellationRequested)
@@ -36,6 +43,7 @@ namespace ECommerceBackend.Infrastructure.Notifications
                     await using var scope = _scopeFactory.CreateAsyncScope();
                     var processor = scope.ServiceProvider.GetRequiredService<OutboxProcessor>();
                     var handled = await processor.ProcessBatchAsync(stoppingToken);
+                    _status.MarkSuccessfulCycle(_timeProvider.GetUtcNow().UtcDateTime);
                     if (handled > 0)
                         continue;
 
@@ -49,6 +57,7 @@ namespace ECommerceBackend.Infrastructure.Notifications
                 }
                 catch (Exception ex)
                 {
+                    _status.MarkFailure(_timeProvider.GetUtcNow().UtcDateTime);
                     _logger.LogError(ex, "Outbox dispatcher cycle failed.");
 
                     try

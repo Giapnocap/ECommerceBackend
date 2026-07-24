@@ -20,7 +20,12 @@ namespace ECommerceBackend.API.Controllers
             _reportService = reportService;
         }
 
-        /// <summary>Lấy báo cáo tổng quan doanh thu, đơn hàng và sản phẩm bán chạy</summary>
+        /// <summary>Lấy báo cáo tổng quan theo khoảng thời gian [From, To)</summary>
+        /// <remarks>
+        /// TotalOrders và OrdersByStatus tính theo thời điểm tạo đơn.
+        /// DeliveredOrders, CancelledOrders và TopSellingProducts tính theo thời điểm chuyển trạng thái tương ứng.
+        /// Doanh thu tính theo thời điểm thanh toán và hoàn tiền.
+        /// </remarks>
         [HttpGet("sales-summary")]
         [ProducesResponseType(typeof(SalesSummaryResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetSalesSummary(

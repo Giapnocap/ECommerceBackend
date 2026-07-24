@@ -73,6 +73,8 @@ public sealed class ValidationContractTests
             }));
         yield return Case("upload reconciliation", () => new UploadReconciliationRequestValidator().Validate(
             new UploadReconciliationRequest { MaxDeletes = 0 }));
+        yield return Case("data retention", () => new DataRetentionRequestValidator().Validate(
+            new DataRetentionRequest { MaxBatchSize = 0 }));
         yield return Case("product query", () => new ProductQueryParamsValidator().Validate(
             new ProductQueryParams
             {

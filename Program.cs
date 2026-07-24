@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using ECommerceBackend.API.Extensions;
 using ECommerceBackend.API.Middlewares;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 
@@ -66,16 +65,9 @@ try
 
     app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseSerilogRequestLogging();
+    app.UseMiddleware<SecurityHeadersMiddleware>();
 
-    var uploadsPath = Path.Combine(builder.Environment.ContentRootPath, "Uploads");
-    Directory.CreateDirectory(uploadsPath);
-
-    app.UseStaticFiles();
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new PhysicalFileProvider(uploadsPath),
-        RequestPath = "/uploads"
-    });
+    app.UseProductImageStaticFiles(builder.Environment.ContentRootPath);
 
     app.UseCors();
     app.UseMiddleware<ExceptionMiddleware>();

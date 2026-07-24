@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Administrative recovery, audit and reconciliation operations</summary>
+    /// <summary>Các thao tác khôi phục, nhật ký và đối soát dành cho quản trị viên</summary>
     [ApiController]
     [Route("api/operations")]
     [Authorize(Roles = RoleNames.Admin)]
@@ -43,7 +43,7 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.RedriveDeadLetterAsync(id, CurrentUserId, cancellationToken));
 
-        /// <summary>Search security and business audit events</summary>
+        /// <summary>Tra cứu nhật ký bảo mật và nghiệp vụ</summary>
         [HttpGet("audit-events")]
         [ProducesResponseType(typeof(PagedResult<AuditEventResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAuditEvents(
@@ -51,13 +51,24 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.GetAuditEventsAsync(query, cancellationToken));
 
-        /// <summary>Detect or repair inconsistencies between uploaded files and database records</summary>
+        /// <summary>Phát hiện hoặc xử lý chênh lệch giữa tệp tải lên và dữ liệu trong cơ sở dữ liệu</summary>
         [HttpPost("uploads/reconcile")]
         [ProducesResponseType(typeof(UploadReconciliationResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ReconcileUploads(
             [FromBody] UploadReconciliationRequest request,
             CancellationToken cancellationToken)
             => Ok(await _uploadReconciliation.ReconcileAsync(
+                request,
+                CurrentUserId,
+                cancellationToken));
+
+        /// <summary>Xem trước hoặc áp dụng chính sách lưu giữ dữ liệu vận hành</summary>
+        [HttpPost("data-retention")]
+        [ProducesResponseType(typeof(DataRetentionResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> RunDataRetention(
+            [FromBody] DataRetentionRequest request,
+            CancellationToken cancellationToken)
+            => Ok(await _operations.RunDataRetentionAsync(
                 request,
                 CurrentUserId,
                 cancellationToken));

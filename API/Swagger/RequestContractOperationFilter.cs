@@ -37,7 +37,7 @@ namespace ECommerceBackend.API.Swagger
             operation.RequestBody = new OpenApiRequestBody
             {
                 Required = true,
-                Description = "Provider-specific JSON payload. The exact UTF-8 request bytes are used for signature verification.",
+                Description = "Nội dung JSON của cổng thanh toán. Chuỗi byte UTF-8 chính xác của yêu cầu được dùng để xác minh chữ ký.",
                 Content = new Dictionary<string, OpenApiMediaType>
                 {
                     ["application/json"] = new()

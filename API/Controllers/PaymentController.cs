@@ -35,7 +35,7 @@ namespace ECommerceBackend.API.Controllers
             _maxPayloadBytes = options.Value.MaxPayloadBytes;
         }
 
-        /// <summary>List payment methods currently available for checkout</summary>
+        /// <summary>Liệt kê các phương thức thanh toán đang khả dụng khi đặt hàng</summary>
         [HttpGet("methods")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(IReadOnlyList<PaymentMethodResponse>), StatusCodes.Status200OK)]
@@ -54,7 +54,7 @@ namespace ECommerceBackend.API.Controllers
         }
 
         /// <summary>Process a signed payment provider webhook</summary>
-        /// <remarks>The signature is verified against the exact UTF-8 JSON request body.</remarks>
+        /// <remarks>Chữ ký được xác minh bằng chính xác nội dung JSON UTF-8 của yêu cầu.</remarks>
         [HttpPost("webhooks/{providerCode}")]
         [AllowAnonymous]
         [EnableRateLimiting("webhook")]
@@ -109,7 +109,7 @@ namespace ECommerceBackend.API.Controllers
                     throw new ApiException(
                         400,
                         "invalid_webhook_encoding",
-                        "Payment webhook phải sử dụng UTF-8 hợp lệ.",
+                        "Thông báo từ cổng thanh toán phải sử dụng mã hóa UTF-8 hợp lệ.",
                         innerException: ex);
                 }
             }
@@ -123,6 +123,6 @@ namespace ECommerceBackend.API.Controllers
             => new(
                 StatusCodes.Status413PayloadTooLarge,
                 "webhook_payload_too_large",
-                "Payment webhook payload vượt quá giới hạn cho phép.");
+                "Nội dung thông báo từ cổng thanh toán vượt quá giới hạn cho phép.");
     }
 }

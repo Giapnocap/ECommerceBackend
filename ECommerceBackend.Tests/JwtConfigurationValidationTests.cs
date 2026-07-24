@@ -126,6 +126,89 @@ public sealed class JwtConfigurationValidationTests
         Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IOptions<OutboxOptions>>().Value);
     }
+
+    [Fact]
+    public void RequiredOutboxProcessing_FailsWhenDispatcherIsDisabled()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Outbox:RequireProcessing"] = "true",
+            ["Outbox:Enabled"] = "false"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<OutboxOptions>>().Value);
+    }
+
+    [Fact]
+    public void DatabaseCommandTimeout_MustBeWithinSupportedRange()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Database:CommandTimeoutSeconds"] = "4"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
+    }
+
+    [Fact]
+    public void RequiredExpirationProcessing_FailsWhenWorkerIsDryRun()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["OrderLifecycle:RequireExpirationProcessing"] = "true",
+            ["OrderLifecycle:ExpirationEnabled"] = "true",
+            ["OrderLifecycle:ExpirationDryRun"] = "true"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<OrderLifecycleOptions>>().Value);
+    }
+
+    [Fact]
+    public void RequiredExpirationProcessing_FailsWhenWorkerIsDisabled()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["OrderLifecycle:RequireExpirationProcessing"] = "true",
+            ["OrderLifecycle:ExpirationEnabled"] = "false",
+            ["OrderLifecycle:ExpirationDryRun"] = "false"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<OrderLifecycleOptions>>().Value);
+    }
+
+    [Fact]
+    public void RequiredExpirationProcessing_AcceptsLiveWorker()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["OrderLifecycle:RequireExpirationProcessing"] = "true",
+            ["OrderLifecycle:ExpirationEnabled"] = "true",
+            ["OrderLifecycle:ExpirationDryRun"] = "false"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.True(provider.GetRequiredService<IOptions<OrderLifecycleOptions>>().Value
+            .RequireExpirationProcessing);
+    }
+
     private static ServiceProvider CreateProvider(
         string? key,
         string environmentName = "Development",

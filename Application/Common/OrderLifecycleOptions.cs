@@ -6,6 +6,7 @@ namespace ECommerceBackend.Application.Common
 
         public int PendingCodHoldMinutes { get; set; } = 30;
         public int MaxPendingOrdersPerCustomer { get; set; } = 3;
+        public bool RequireExpirationProcessing { get; set; }
         public bool ExpirationEnabled { get; set; }
         public bool ExpirationDryRun { get; set; } = true;
         public int ExpirationPollIntervalSeconds { get; set; } = 30;

@@ -41,7 +41,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "refresh_token_not_active",
-                    "Only an active refresh token can be rotated.");
+                    "Chỉ mã làm mới phiên còn hiệu lực mới có thể được luân chuyển.");
             }
 
             ValidateRevocation(occurredAt, "Rotated");
@@ -51,7 +51,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "refresh_token_replacement_invalid",
-                    "A valid and different replacement token hash is required.");
+                    "Giá trị băm của mã thay thế phải hợp lệ và khác mã hiện tại.");
             }
 
             RevokedAt = occurredAt;
@@ -65,14 +65,14 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "refresh_token_revocation_time_invalid",
-                    "Refresh token revocation cannot occur before token creation.");
+                    "Thời điểm thu hồi mã làm mới phiên không được trước thời điểm tạo mã.");
             }
 
             if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 100)
             {
                 throw new DomainRuleViolationException(
                     "refresh_token_revocation_reason_invalid",
-                    "Refresh token revocation reason must contain between 1 and 100 characters.");
+                    "Lý do thu hồi mã làm mới phiên phải có từ 1 đến 100 ký tự.");
             }
         }
     }

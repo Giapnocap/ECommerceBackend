@@ -594,7 +594,9 @@ public sealed class SqlServerCommerceFlowTests
                     context,
                     new EfDataConsistencyService(context),
                     audit,
-                    clock);
+                    clock,
+                    Options.Create(new DataRetentionOptions()),
+                    NullLogger<OperationsService>.Instance);
                 return await service.RedriveDeadLetterAsync(messageId, actorUserId);
             }
 
@@ -611,6 +613,73 @@ public sealed class SqlServerCommerceFlowTests
             Assert.Equal(1, await verificationContext.AuditEvents.CountAsync(item =>
                 item.Action == "outbox.dead_letter.redrive"
                 && item.EntityId == messageId.ToString()));
+        }
+        finally
+        {
+            await using var cleanupContext = new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task ConcurrentDataRetentionRuns_DeleteEligibleOutboxExactlyOnce()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName = $"ECommerceBackendRetention_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        var messageId = Guid.NewGuid();
+        var actorUserId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 7, 23, 12, 0, 0, TimeSpan.Zero);
+
+        try
+        {
+            await using (var seedContext = new AppDbContext(options))
+            {
+                await seedContext.Database.MigrateAsync();
+                seedContext.OutboxMessages.Add(new OutboxMessage
+                {
+                    Id = messageId,
+                    Type = OutboxMessageTypes.NotificationRequested,
+                    Payload = "{}",
+                    OccurredAt = now.UtcDateTime.AddDays(-31),
+                    NextAttemptAt = now.UtcDateTime.AddDays(-31),
+                    ProcessedAt = now.UtcDateTime.AddDays(-31)
+                });
+                await seedContext.SaveChangesAsync();
+            }
+
+            async Task<DataRetentionResponse> RunAsync()
+            {
+                await using var context = new AppDbContext(options);
+                var clock = new FixedTimeProvider(now);
+                var service = new OperationsService(
+                    context,
+                    new EfDataConsistencyService(context),
+                    new AuditWriter(context, new HttpContextAccessor(), clock),
+                    clock,
+                    Options.Create(new DataRetentionOptions
+                    {
+                        Enabled = true,
+                        ProcessedOutboxRetentionDays = 30
+                    }),
+                    NullLogger<OperationsService>.Instance);
+                return await service.RunDataRetentionAsync(
+                    new DataRetentionRequest { ApplyChanges = true, MaxBatchSize = 10 },
+                    actorUserId);
+            }
+
+            var outcomes = await Task.WhenAll(RunAsync(), RunAsync());
+
+            Assert.Equal(1, outcomes.Sum(outcome => outcome.ProcessedOutboxDeletedCount));
+            await using var verificationContext = new AppDbContext(options);
+            Assert.False(await verificationContext.OutboxMessages.AnyAsync(item => item.Id == messageId));
+            Assert.Equal(1, await verificationContext.AuditEvents.CountAsync(item =>
+                item.Action == "operations.data_retention.apply"));
         }
         finally
         {
@@ -1271,6 +1340,27 @@ public sealed class SqlServerCommerceFlowTests
                     UnitPrice = 50m,
                     Quantity = 4
                 },
+                new OrderStatusHistory
+                {
+                    Id = Guid.NewGuid(),
+                    OrderId = includedOrder.Id,
+                    ToStatus = OrderStatus.Delivered,
+                    CreatedAt = from
+                },
+                new OrderStatusHistory
+                {
+                    Id = Guid.NewGuid(),
+                    OrderId = excludedAtToOrder.Id,
+                    ToStatus = OrderStatus.Delivered,
+                    CreatedAt = to
+                },
+                new OrderStatusHistory
+                {
+                    Id = Guid.NewGuid(),
+                    OrderId = refundedOrder.Id,
+                    ToStatus = OrderStatus.Delivered,
+                    CreatedAt = refundedOrder.OrderDate
+                },
                 new PaymentStatusHistory
                 {
                     Id = Guid.NewGuid(),
@@ -1333,14 +1423,7 @@ public sealed class SqlServerCommerceFlowTests
     }
 
     private static string BuildConnectionString(string databaseName)
-    {
-        var configured = SqlServerIntegrationTestGate.GetConnectionString();
-        var builder = new SqlConnectionStringBuilder(configured)
-        {
-            InitialCatalog = databaseName
-        };
-        return builder.ConnectionString;
-    }
+        => SqlServerIntegrationTestGate.CreateTestDatabaseConnectionString(databaseName);
 
     private sealed class ConcurrentRecordingNotificationSender : INotificationSender
     {

@@ -427,6 +427,9 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .IsUnique()
                         .HasDatabaseName("UX_OrderStatusHistories_OrderId_ToStatus");
 
+                    b.HasIndex("ToStatus", "CreatedAt", "OrderId")
+                        .HasDatabaseName("IX_OrderStatusHistories_ToStatus_CreatedAt_OrderId");
+
                     b.ToTable("OrderStatusHistories", t =>
                         {
                             t.HasCheckConstraint("CK_OrderStatusHistories_Status_Changed", "[FromStatus] IS NULL OR [FromStatus] <> [ToStatus]");
@@ -483,6 +486,10 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.HasIndex("DeadLetteredAt")
                         .HasDatabaseName("IX_OutboxMessages_DeadLetteredAt")
                         .HasFilter("[DeadLetteredAt] IS NOT NULL");
+
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("IX_OutboxMessages_ProcessedAt")
+                        .HasFilter("[ProcessedAt] IS NOT NULL");
 
                     b.HasIndex("NextAttemptAt", "LockedAt", "OccurredAt")
                         .HasDatabaseName("IX_OutboxMessages_Ready")
@@ -662,6 +669,9 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt")
+                        .HasDatabaseName("IX_PaymentWebhookEvents_ReceivedAt");
 
                     b.HasIndex("PaymentId", "ReceivedAt");
 
@@ -851,6 +861,9 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("IX_RefreshTokens_ExpiresAt");
 
                     b.HasIndex("TokenHash")
                         .IsUnique();

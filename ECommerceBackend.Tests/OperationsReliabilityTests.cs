@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Services;
@@ -32,7 +33,9 @@ public sealed class OperationsReliabilityTests
             context,
             new EfDataConsistencyService(context),
             CreateAuditWriter(context, actorUserId),
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            RetentionOptions(),
+            NullLogger<OperationsService>.Instance);
 
         var result = await service.GetAuditEventsAsync(new AuditQueryParams
         {
@@ -73,7 +76,9 @@ public sealed class OperationsReliabilityTests
             context,
             new EfDataConsistencyService(context),
             audit,
-            new FixedTimeProvider(Now));
+            new FixedTimeProvider(Now),
+            RetentionOptions(),
+            NullLogger<OperationsService>.Instance);
 
         var listed = await service.GetDeadLettersAsync(new DeadLetterQueryParams());
         var first = await service.RedriveDeadLetterAsync(message.Id, actorUserId);
@@ -183,6 +188,163 @@ public sealed class OperationsReliabilityTests
         }
     }
 
+    [Fact]
+    public async Task DataRetention_PreviewsThenAppliesOnlySafeRecords()
+    {
+        var measurements = new List<RetentionMetricMeasurement>();
+        using var meterListener = new MeterListener();
+        meterListener.InstrumentPublished = (instrument, listener) =>
+        {
+            if (instrument.Meter.Name == "ECommerceBackend.Operations"
+                && instrument.Name.StartsWith("data_retention.", StringComparison.Ordinal))
+            {
+                listener.EnableMeasurementEvents(instrument);
+            }
+        };
+        meterListener.SetMeasurementEventCallback<long>((instrument, measurement, tags, _) =>
+            measurements.Add(new RetentionMetricMeasurement(
+                instrument.Name,
+                measurement,
+                FindTag(tags, "mode"),
+                FindTag(tags, "result"),
+                FindTag(tags, "record.type"))));
+        meterListener.Start();
+
+        await using var context = TestAppDbContext.Create();
+        var actorUserId = Guid.NewGuid();
+        var old = Now.UtcDateTime.AddDays(-31);
+        var recent = Now.UtcDateTime.AddDays(-29);
+        var processedOutbox = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            Type = "notification.requested",
+            Payload = "{}",
+            OccurredAt = old,
+            NextAttemptAt = old,
+            ProcessedAt = old
+        };
+        var deadLetter = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            Type = "notification.requested",
+            Payload = "{}",
+            OccurredAt = old,
+            NextAttemptAt = old,
+            DeadLetteredAt = old
+        };
+        var activeBoundaryToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            FamilyId = Guid.NewGuid(),
+            TokenHash = "recent-token",
+            CreatedAt = old,
+            ExpiresAt = recent
+        };
+        var expiredToken = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            FamilyId = Guid.NewGuid(),
+            TokenHash = "expired-token",
+            CreatedAt = old,
+            ExpiresAt = old
+        };
+        var oldWebhook = new PaymentWebhookEvent
+        {
+            Id = Guid.NewGuid(),
+            PaymentId = Guid.NewGuid(),
+            Provider = "generic-hmac",
+            ProviderEventId = "old-event",
+            PayloadHash = new string('a', 64),
+            Payload = "{\"sensitive\":true}",
+            ReceivedAt = old,
+            OccurredAt = old,
+            ProcessedAt = old
+        };
+        var recentWebhook = new PaymentWebhookEvent
+        {
+            Id = Guid.NewGuid(),
+            PaymentId = Guid.NewGuid(),
+            Provider = "generic-hmac",
+            ProviderEventId = "recent-event",
+            PayloadHash = new string('b', 64),
+            Payload = "{\"recent\":true}",
+            ReceivedAt = recent,
+            OccurredAt = recent,
+            ProcessedAt = recent
+        };
+        context.OutboxMessages.AddRange(processedOutbox, deadLetter);
+        context.RefreshTokens.AddRange(activeBoundaryToken, expiredToken);
+        context.PaymentWebhookEvents.AddRange(oldWebhook, recentWebhook);
+        await context.SaveChangesAsync();
+
+        var service = new OperationsService(
+            context,
+            new EfDataConsistencyService(context),
+            CreateAuditWriter(context, actorUserId),
+            new FixedTimeProvider(Now),
+            RetentionOptions(),
+            NullLogger<OperationsService>.Instance);
+
+        var preview = await service.RunDataRetentionAsync(
+            new DataRetentionRequest { MaxBatchSize = 10 }, actorUserId);
+
+        Assert.True(preview.DryRun);
+        Assert.Equal(1, preview.ProcessedOutboxCandidateCount);
+        Assert.Equal(1, preview.ExpiredRefreshTokenCandidateCount);
+        Assert.Equal(1, preview.WebhookPayloadCandidateCount);
+        Assert.NotEmpty(oldWebhook.Payload);
+        Assert.Equal(2, await context.OutboxMessages.CountAsync());
+
+        var applied = await service.RunDataRetentionAsync(
+            new DataRetentionRequest { ApplyChanges = true, MaxBatchSize = 10 }, actorUserId);
+
+        Assert.False(applied.DryRun);
+        Assert.Equal(1, applied.ProcessedOutboxDeletedCount);
+        Assert.Equal(1, applied.ExpiredRefreshTokenDeletedCount);
+        Assert.Equal(1, applied.WebhookPayloadRedactedCount);
+        Assert.Null(await context.OutboxMessages.FindAsync(processedOutbox.Id));
+        Assert.NotNull(await context.OutboxMessages.FindAsync(deadLetter.Id));
+        Assert.Null(await context.RefreshTokens.FindAsync(expiredToken.Id));
+        Assert.NotNull(await context.RefreshTokens.FindAsync(activeBoundaryToken.Id));
+        Assert.Equal(string.Empty, (await context.PaymentWebhookEvents.FindAsync(oldWebhook.Id))!.Payload);
+        Assert.NotEmpty((await context.PaymentWebhookEvents.FindAsync(recentWebhook.Id))!.Payload);
+        var auditEvents = await context.AuditEvents
+            .Where(item => item.Action == "operations.data_retention.apply")
+            .ToListAsync();
+        Assert.Single(auditEvents);
+
+        var noOp = await service.RunDataRetentionAsync(
+            new DataRetentionRequest { ApplyChanges = true, MaxBatchSize = 10 }, actorUserId);
+        Assert.Equal(0, noOp.ProcessedOutboxDeletedCount);
+        Assert.Equal(0, noOp.ExpiredRefreshTokenDeletedCount);
+        Assert.Equal(0, noOp.WebhookPayloadRedactedCount);
+        Assert.Single(await context.AuditEvents
+            .Where(item => item.Action == "operations.data_retention.apply")
+            .ToListAsync());
+        Assert.Contains(measurements, item =>
+            item.Name == "data_retention.runs"
+            && item.Mode == "preview"
+            && item.Result == "success");
+        Assert.Contains(measurements, item =>
+            item.Name == "data_retention.runs"
+            && item.Mode == "apply"
+            && item.Result == "success");
+        Assert.Contains(measurements, item =>
+            item.Name == "data_retention.records.changed"
+            && item.RecordType == "processed_outbox"
+            && item.Value == 1);
+        Assert.Contains(measurements, item =>
+            item.Name == "data_retention.records.changed"
+            && item.RecordType == "expired_refresh_token"
+            && item.Value == 1);
+        Assert.Contains(measurements, item =>
+            item.Name == "data_retention.records.changed"
+            && item.RecordType == "webhook_payload"
+            && item.Value == 1);
+    }
+
     private static AuditWriter CreateAuditWriter(AppDbContext context, Guid actorUserId)
     {
         var httpContext = new DefaultHttpContext
@@ -199,6 +361,36 @@ public sealed class OperationsReliabilityTests
             new HttpContextAccessor { HttpContext = httpContext },
             new FixedTimeProvider(Now));
     }
+
+    private static IOptions<DataRetentionOptions> RetentionOptions()
+        => Options.Create(new DataRetentionOptions
+        {
+            Enabled = true,
+            ProcessedOutboxRetentionDays = 30,
+            ExpiredRefreshTokenRetentionDays = 30,
+            WebhookPayloadRetentionDays = 30,
+            MaxBatchSize = 100
+        });
+
+    private static string? FindTag(
+        ReadOnlySpan<KeyValuePair<string, object?>> tags,
+        string name)
+    {
+        foreach (var tag in tags)
+        {
+            if (tag.Key == name)
+                return tag.Value?.ToString();
+        }
+
+        return null;
+    }
+
+    private sealed record RetentionMetricMeasurement(
+        string Name,
+        long Value,
+        string? Mode,
+        string? Result,
+        string? RecordType);
 
     private static AuditEvent Audit(
         Guid actorUserId,

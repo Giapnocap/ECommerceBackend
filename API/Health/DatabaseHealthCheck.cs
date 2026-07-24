@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ECommerceBackend.Infrastructure.Data;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
@@ -20,17 +21,27 @@ namespace ECommerceBackend.API.Health
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            var startedAt = Stopwatch.GetTimestamp();
             try
             {
                 var canConnect = await _context.Database.CanConnectAsync(cancellationToken);
-                return canConnect
-                    ? HealthCheckResult.Healthy("Database connection is available.")
-                    : HealthCheckResult.Unhealthy("Database connection is not available.");
+                if (!canConnect)
+                    return HealthCheckResult.Unhealthy("Không thể kết nối cơ sở dữ liệu.");
+
+                return HealthCheckResult.Healthy(
+                    "Kết nối cơ sở dữ liệu đang hoạt động.",
+                    new Dictionary<string, object>
+                    {
+                        ["provider"] = _context.Database.ProviderName ?? "unknown",
+                        ["durationMs"] = Math.Round(
+                            Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+                            2)
+                    });
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Database health check failed.");
-                return HealthCheckResult.Unhealthy("Database connection check failed.", ex);
+                return HealthCheckResult.Unhealthy("Kiểm tra kết nối cơ sở dữ liệu thất bại.", ex);
             }
         }
     }

@@ -73,7 +73,7 @@ namespace ECommerceBackend.API.Middlewares
             {
                 ApiException api => (api.StatusCode, api.Code, api.Message, api.Errors),
                 BadHttpRequestException bad when bad.Message.Contains("Request body too large", StringComparison.OrdinalIgnoreCase)
-                    => (413, "request_too_large", "File vượt quá giới hạn cho phép.", (IReadOnlyDictionary<string, string[]>?)null),
+                    => (413, "request_too_large", "Tệp vượt quá giới hạn cho phép.", (IReadOnlyDictionary<string, string[]>?)null),
                 ArgumentException arg
                     => (400, "bad_request", arg.Message, (IReadOnlyDictionary<string, string[]>?)null),
                 _ => (500, "internal_server_error", "Lỗi hệ thống. Vui lòng thử lại sau.", (IReadOnlyDictionary<string, string[]>?)null)

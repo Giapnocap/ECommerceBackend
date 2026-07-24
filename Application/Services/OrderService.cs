@@ -165,7 +165,7 @@ namespace ECommerceBackend.Application.Services
                     if (!products.TryGetValue(item.ProductId, out var product))
                     {
                         throw new BusinessException(
-                            "Cart product data is no longer available.");
+                            "Dữ liệu sản phẩm trong giỏ hàng không còn khả dụng.");
                     }
 
                     item.Product = product;
@@ -246,7 +246,7 @@ namespace ECommerceBackend.Application.Services
                     ChangedByUserId = userId,
                     FromStatus = null,
                     ToStatus = order.Status,
-                    Note = "Order placed; inventory reserved",
+                    Note = "Đã đặt hàng và giữ tồn kho",
                     CreatedAt = orderOccurredAt
                 });
 
@@ -274,7 +274,7 @@ namespace ECommerceBackend.Application.Services
                         Type = InventoryTransactionType.OrderPlaced,
                         QuantityChange = inventoryMutation.QuantityChange,
                         BalanceAfter = inventoryMutation.BalanceAfter,
-                        Reason = $"Order {order.OrderNumber}",
+                        Reason = $"Đặt đơn {order.OrderNumber}",
                         CreatedAt = orderOccurredAt
                     });
                     _context.CartItems.Remove(item);
@@ -458,7 +458,7 @@ namespace ECommerceBackend.Application.Services
                     _outbox.EnqueueNotification(
                         order.UserId,
                         "Cập nhật trạng thái đơn hàng",
-                        $"Đơn hàng {order.OrderNumber} đã chuyển sang trạng thái {request.Status}.",
+                        $"Đơn hàng {order.OrderNumber} đã chuyển sang trạng thái {GetOrderStatusLabel(request.Status)}.",
                         order.Id,
                         payment?.Id);
 
@@ -544,7 +544,7 @@ namespace ECommerceBackend.Application.Services
                 var statusChange = DomainRuleGuard.AsConflict(() => order.Cancel(
                     occurredAt,
                     payment?.Status,
-                    NormalizeOptional(request.Reason) ?? "CancelledByCustomer"));
+                    NormalizeOptional(request.Reason) ?? "Khách hàng yêu cầu hủy"));
 
                 await RestoreOrderStockAsync(order, customerUserId, occurredAt, cancellationToken);
                 UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, customerUserId, occurredAt);
@@ -718,7 +718,7 @@ namespace ECommerceBackend.Application.Services
                     Type = InventoryTransactionType.OrderCancelled,
                     QuantityChange = inventoryMutation.QuantityChange,
                     BalanceAfter = inventoryMutation.BalanceAfter,
-                    Reason = $"Cancelled order {order.OrderNumber}",
+                    Reason = $"Hoàn kho do hủy đơn {order.OrderNumber}",
                     CreatedAt = occurredAt
                 });
             }
@@ -755,7 +755,7 @@ namespace ECommerceBackend.Application.Services
                 FromStatus = statusChange.Previous,
                 ToStatus = nextStatus.Value,
                 Source = PaymentStatusChangeSource.OrderLifecycle,
-                Reference = orderStatus.ToString(),
+                Reference = GetOrderStatusLabel(orderStatus),
                 OccurredAt = occurredAt,
                 CreatedAt = occurredAt
             });
@@ -796,11 +796,11 @@ namespace ECommerceBackend.Application.Services
         private static string NormalizeIdempotencyKey(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
-                throw new BusinessException("Header Idempotency-Key là bắt buộc khi đặt hàng.");
+                throw new BusinessException("Trường Idempotency-Key trong tiêu đề yêu cầu là bắt buộc khi đặt hàng.");
 
             var normalized = value.Trim();
             if (normalized.Length > 100)
-                throw new BusinessException("Header Idempotency-Key không được vượt quá 100 ký tự.");
+                throw new BusinessException("Trường Idempotency-Key trong tiêu đề yêu cầu không được vượt quá 100 ký tự.");
 
             return normalized;
         }
@@ -825,6 +825,17 @@ namespace ECommerceBackend.Application.Services
 
         private static string CreateOrderNumber(DateTime occurredAt)
             => $"ORD-{occurredAt:yyyyMMdd}-{Guid.NewGuid():N}"[..32].ToUpperInvariant();
+
+        private static string GetOrderStatusLabel(OrderStatus status)
+            => status switch
+            {
+                OrderStatus.Pending => "Chờ xác nhận",
+                OrderStatus.Confirmed => "Đã xác nhận",
+                OrderStatus.Shipping => "Đang giao",
+                OrderStatus.Delivered => "Đã giao",
+                OrderStatus.Cancelled => "Đã hủy",
+                _ => status.ToString()
+            };
 
         private static string? NormalizeOptional(string? value)
             => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

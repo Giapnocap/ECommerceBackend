@@ -90,7 +90,7 @@ namespace ECommerceBackend.Application.Services
                 .Include(role => role.RolePermissions)
                     .ThenInclude(rolePermission => rolePermission.Permission)
                 .FirstOrDefaultAsync(role => role.Name == RoleNames.Customer)
-                ?? throw new NotFoundException("Không tìm thấy role Customer. Hãy áp dụng database migration.");
+                ?? throw new NotFoundException("Không tìm thấy vai trò khách hàng. Hãy áp dụng bản cập nhật cơ sở dữ liệu.");
 
             var user = new User
             {
@@ -257,7 +257,7 @@ namespace ECommerceBackend.Application.Services
 
                 throw new ConflictException(
                     "session_concurrency_conflict",
-                    "The session was changed by another request. Please retry.",
+                    "Phiên đăng nhập vừa được thay đổi bởi một yêu cầu khác. Vui lòng thử lại.",
                     ex);
             }
             catch
@@ -302,7 +302,7 @@ namespace ECommerceBackend.Application.Services
 
                 throw new ConflictException(
                     "session_concurrency_conflict",
-                    "The session was changed by another request. Please retry.",
+                    "Phiên đăng nhập vừa được thay đổi bởi một yêu cầu khác. Vui lòng thử lại.",
                     ex);
             }
             catch
@@ -337,7 +337,7 @@ namespace ECommerceBackend.Application.Services
 
                 throw new ConflictException(
                     "session_concurrency_conflict",
-                    "The session was changed by another request. Please retry.",
+                    "Phiên đăng nhập vừa được thay đổi bởi một yêu cầu khác. Vui lòng thử lại.",
                     ex);
             }
             catch (Exception ex) when (_consistency.IsDeadlock(ex))
@@ -347,7 +347,7 @@ namespace ECommerceBackend.Application.Services
 
                 throw new ConflictException(
                     "session_concurrency_conflict",
-                    "The session was changed by another request. Please retry.",
+                    "Phiên đăng nhập vừa được thay đổi bởi một yêu cầu khác. Vui lòng thử lại.",
                     ex);
             }
             catch

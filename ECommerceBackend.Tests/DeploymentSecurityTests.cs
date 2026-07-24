@@ -94,6 +94,21 @@ public sealed class DeploymentSecurityTests
             provider.GetRequiredService<IOptions<ReverseProxyOptions>>().Value);
     }
 
+    [Fact]
+    public void DataRetention_AutomaticProcessingRequiresDeletionToBeEnabled()
+    {
+        using var provider = CreateProvider(
+            Environments.Development,
+            new Dictionary<string, string?>
+            {
+                ["DataRetention:Enabled"] = "false",
+                ["DataRetention:AutomaticProcessingEnabled"] = "true"
+            });
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<DataRetentionOptions>>().Value);
+    }
+
     [Theory]
     [InlineData("0.0.0.0/0")]
     [InlineData("::/0")]

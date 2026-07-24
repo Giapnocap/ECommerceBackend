@@ -52,7 +52,7 @@ namespace ECommerceBackend.Infrastructure.Payments
         {
             var normalizedCode = providerCode.Trim();
             if (!_providersByCode.TryGetValue(normalizedCode, out var provider) || !provider.SupportsWebhooks)
-                throw new NotFoundException("Không tìm thấy payment webhook provider đang hoạt động.");
+                throw new NotFoundException("Không tìm thấy cổng nhận thông báo thanh toán đang hoạt động.");
 
             return provider;
         }

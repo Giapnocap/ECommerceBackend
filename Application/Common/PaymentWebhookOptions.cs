@@ -10,5 +10,6 @@ namespace ECommerceBackend.Application.Common
         public string Secret { get; set; } = string.Empty;
         public int MaxPayloadBytes { get; set; } = 65_536;
         public int MaxFutureSkewMinutes { get; set; } = 5;
+        public bool RetainRawPayload { get; set; }
     }
 }

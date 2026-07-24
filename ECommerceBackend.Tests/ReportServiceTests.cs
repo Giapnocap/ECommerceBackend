@@ -34,17 +34,23 @@ public class ReportServiceTests
         var user = CreateUser("report_customer");
         var firstDelivered = CreateOrder(user.Id, now.AddHours(-2), OrderStatus.Delivered, 50m);
         var latestDelivered = CreateOrder(user.Id, now.AddHours(-1), OrderStatus.Delivered, 75m);
+        var deliveredAfterDelay = CreateOrder(user.Id, now.AddDays(-5), OrderStatus.Delivered, 100m);
         var pending = CreateOrder(user.Id, now.AddMinutes(-30), OrderStatus.Pending, 2_500m);
 
-        context.AddRange(category, product, user, firstDelivered, latestDelivered, pending);
+        context.AddRange(category, product, user, firstDelivered, latestDelivered, deliveredAfterDelay, pending);
         context.OrderDetails.AddRange(
             CreateDetail(firstDelivered.Id, product.Id, "Original product", 2, 25m),
             CreateDetail(latestDelivered.Id, product.Id, "Renamed snapshot", 3, 25m),
+            CreateDetail(deliveredAfterDelay.Id, product.Id, "Later delivery snapshot", 4, 25m),
             CreateDetail(pending.Id, product.Id, "Pending snapshot", 100, 25m));
         context.Payments.AddRange(
             CreatePayment(firstDelivered, PaymentStatus.Paid, firstDelivered.OrderDate.AddMinutes(10)),
             CreatePayment(latestDelivered, PaymentStatus.Paid, latestDelivered.OrderDate.AddMinutes(10)),
             CreatePayment(pending, PaymentStatus.Pending));
+        context.OrderStatusHistories.AddRange(
+            CreateStatusHistory(firstDelivered.Id, OrderStatus.Delivered, firstDelivered.OrderDate),
+            CreateStatusHistory(latestDelivered.Id, OrderStatus.Delivered, latestDelivered.OrderDate),
+            CreateStatusHistory(deliveredAfterDelay.Id, OrderStatus.Delivered, now.AddMinutes(-30)));
         await context.SaveChangesAsync();
 
         var result = await new ReportService(context).GetSalesSummaryAsync(new SalesSummaryQuery
@@ -56,7 +62,7 @@ public class ReportServiceTests
         });
 
         Assert.Equal(3, result.TotalOrders);
-        Assert.Equal(2, result.DeliveredOrders);
+        Assert.Equal(3, result.DeliveredOrders);
         Assert.Equal(0, result.CancelledOrders);
         Assert.Equal(125m, result.GrossPaidAmount);
         Assert.Equal(0m, result.RefundedAmount);
@@ -72,9 +78,9 @@ public class ReportServiceTests
 
         var topProduct = Assert.Single(result.TopSellingProducts);
         Assert.Equal(product.Id, topProduct.ProductId);
-        Assert.Equal("Renamed snapshot", topProduct.ProductName);
-        Assert.Equal(5, topProduct.QuantitySold);
-        Assert.Equal(125m, topProduct.Revenue);
+        Assert.Equal("Later delivery snapshot", topProduct.ProductName);
+        Assert.Equal(9, topProduct.QuantitySold);
+        Assert.Equal(225m, topProduct.Revenue);
     }
 
     [Fact]
@@ -249,6 +255,18 @@ public class ReportServiceTests
             ProductNameSnapshot = productName,
             UnitPrice = unitPrice,
             Quantity = quantity
+        };
+
+    private static OrderStatusHistory CreateStatusHistory(
+        Guid orderId,
+        OrderStatus status,
+        DateTime createdAt)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            OrderId = orderId,
+            ToStatus = status,
+            CreatedAt = createdAt
         };
 
     private static Payment CreatePayment(

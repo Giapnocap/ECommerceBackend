@@ -34,11 +34,11 @@ namespace ECommerceBackend.Application.Services
             Guid? paymentId = null)
         {
             if (userId == Guid.Empty)
-                throw new ArgumentException("Notification user ID is required.", nameof(userId));
+                throw new ArgumentException("ID người nhận thông báo là bắt buộc.", nameof(userId));
             if (string.IsNullOrWhiteSpace(subject) || subject.Length > MaxSubjectLength)
-                throw new ArgumentException($"Notification subject must be 1-{MaxSubjectLength} characters.", nameof(subject));
+                throw new ArgumentException($"Tiêu đề thông báo phải có từ 1 đến {MaxSubjectLength} ký tự.", nameof(subject));
             if (string.IsNullOrWhiteSpace(message) || message.Length > MaxMessageLength)
-                throw new ArgumentException($"Notification message must be 1-{MaxMessageLength} characters.", nameof(message));
+                throw new ArgumentException($"Nội dung thông báo phải có từ 1 đến {MaxMessageLength} ký tự.", nameof(message));
 
             var now = UtcNow;
             var payload = new NotificationRequestedPayload(

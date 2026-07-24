@@ -304,13 +304,13 @@ namespace ECommerceBackend.Application.Services
         private static void EnsurePositiveQuantity(int quantity)
         {
             if (quantity <= 0)
-                throw new BusinessException("cart_quantity_invalid", "Cart quantity must be greater than zero.");
+                throw new BusinessException("cart_quantity_invalid", "Số lượng sản phẩm trong giỏ hàng phải lớn hơn 0.");
         }
 
         private static void EnsureNonNegativeQuantity(int quantity)
         {
             if (quantity < 0)
-                throw new BusinessException("cart_quantity_invalid", "Cart quantity cannot be negative.");
+                throw new BusinessException("cart_quantity_invalid", "Số lượng sản phẩm trong giỏ hàng không được là số âm.");
         }
 
     }

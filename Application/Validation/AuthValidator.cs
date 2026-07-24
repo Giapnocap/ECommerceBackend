@@ -51,8 +51,8 @@ namespace ECommerceBackend.Application.Validation
         public RefreshTokenRequestValidator()
         {
             RuleFor(x => x.RefreshToken)
-                .NotEmpty().WithMessage("Refresh token không được để trống.")
-                .MaximumLength(256).WithMessage("Refresh token không hợp lệ.");
+                .NotEmpty().WithMessage("Mã làm mới phiên không được để trống.")
+                .MaximumLength(256).WithMessage("Mã làm mới phiên không hợp lệ.");
         }
     }
 
@@ -61,8 +61,8 @@ namespace ECommerceBackend.Application.Validation
         public LogoutRequestValidator()
         {
             RuleFor(x => x.RefreshToken)
-                .NotEmpty().WithMessage("Refresh token không được để trống.")
-                .MaximumLength(256).WithMessage("Refresh token không hợp lệ.");
+                .NotEmpty().WithMessage("Mã làm mới phiên không được để trống.")
+                .MaximumLength(256).WithMessage("Mã làm mới phiên không hợp lệ.");
         }
     }
 }

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
 
 namespace ECommerceBackend.API.Errors
 {
@@ -18,7 +17,7 @@ namespace ECommerceBackend.API.Errors
             var problem = new ProblemDetails
             {
                 Type = $"https://httpstatuses.com/{statusCode}",
-                Title = ReasonPhrases.GetReasonPhrase(statusCode),
+                Title = GetTitle(statusCode),
                 Status = statusCode,
                 Detail = message,
                 Instance = context.Request.Path.HasValue
@@ -32,6 +31,20 @@ namespace ECommerceBackend.API.Errors
             problem.Extensions["errors"] = errors;
             return problem;
         }
+
+        private static string GetTitle(int statusCode)
+            => statusCode switch
+            {
+                StatusCodes.Status400BadRequest => "Yêu cầu không hợp lệ",
+                StatusCodes.Status401Unauthorized => "Chưa xác thực",
+                StatusCodes.Status403Forbidden => "Không có quyền truy cập",
+                StatusCodes.Status404NotFound => "Không tìm thấy",
+                StatusCodes.Status409Conflict => "Xung đột dữ liệu",
+                StatusCodes.Status413PayloadTooLarge => "Dữ liệu gửi lên quá lớn",
+                StatusCodes.Status429TooManyRequests => "Quá nhiều yêu cầu",
+                StatusCodes.Status500InternalServerError => "Lỗi máy chủ",
+                _ => "Lỗi xử lý yêu cầu"
+            };
 
         public static Task WriteAsync(
             HttpContext context,
@@ -68,7 +81,7 @@ namespace ECommerceBackend.API.Errors
                 context.HttpContext,
                 Problem.Status ?? StatusCodes.Status500InternalServerError,
                 Problem.Extensions["code"]?.ToString() ?? "internal_server_error",
-                Problem.Detail ?? Problem.Title ?? "Request failed.",
+                Problem.Detail ?? Problem.Title ?? "Yêu cầu xử lý thất bại.",
                 Problem.Extensions["errors"] as IReadOnlyDictionary<string, string[]>,
                 Problem.Extensions["details"]?.ToString() ?? string.Empty,
                 context.HttpContext.RequestAborted);

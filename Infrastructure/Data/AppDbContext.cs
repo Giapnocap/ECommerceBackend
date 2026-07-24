@@ -87,6 +87,9 @@ namespace ECommerceBackend.Infrastructure.Data
                 .HasFilter("[IsMain] = 1")
                 .IsUnique();
             modelBuilder.Entity<RefreshToken>().HasIndex(rt => rt.TokenHash).IsUnique();
+            modelBuilder.Entity<RefreshToken>()
+                .HasIndex(rt => rt.ExpiresAt)
+                .HasDatabaseName("IX_RefreshTokens_ExpiresAt");
             modelBuilder.Entity<RefreshToken>().HasIndex(rt => new { rt.UserId, rt.ExpiresAt });
             modelBuilder.Entity<RefreshToken>().HasIndex(rt => new { rt.UserId, rt.FamilyId, rt.ExpiresAt });
             modelBuilder.Entity<Order>().HasIndex(order => order.OrderNumber).IsUnique();
@@ -107,6 +110,9 @@ namespace ECommerceBackend.Infrastructure.Data
                 .IsUnique();
             modelBuilder.Entity<OrderStatusHistory>().HasIndex(history => new { history.OrderId, history.CreatedAt });
             modelBuilder.Entity<OrderStatusHistory>()
+                .HasIndex(history => new { history.ToStatus, history.CreatedAt, history.OrderId })
+                .HasDatabaseName("IX_OrderStatusHistories_ToStatus_CreatedAt_OrderId");
+            modelBuilder.Entity<OrderStatusHistory>()
                 .HasIndex(history => new { history.OrderId, history.ToStatus })
                 .HasDatabaseName("UX_OrderStatusHistories_OrderId_ToStatus")
                 .IsUnique();
@@ -124,6 +130,9 @@ namespace ECommerceBackend.Infrastructure.Data
                 .IsUnique();
             modelBuilder.Entity<PaymentWebhookEvent>()
                 .HasIndex(webhook => new { webhook.PaymentId, webhook.ReceivedAt });
+            modelBuilder.Entity<PaymentWebhookEvent>()
+                .HasIndex(webhook => webhook.ReceivedAt)
+                .HasDatabaseName("IX_PaymentWebhookEvents_ReceivedAt");
             modelBuilder.Entity<PaymentStatusHistory>()
                 .HasIndex(history => new { history.PaymentId, history.CreatedAt });
             modelBuilder.Entity<PaymentStatusHistory>()
@@ -153,6 +162,10 @@ namespace ECommerceBackend.Infrastructure.Data
                 .HasIndex(message => message.DeadLetteredAt)
                 .HasDatabaseName("IX_OutboxMessages_DeadLetteredAt")
                 .HasFilter("[DeadLetteredAt] IS NOT NULL");
+            modelBuilder.Entity<OutboxMessage>()
+                .HasIndex(message => message.ProcessedAt)
+                .HasDatabaseName("IX_OutboxMessages_ProcessedAt")
+                .HasFilter("[ProcessedAt] IS NOT NULL");
             modelBuilder.Entity<AuditEvent>()
                 .HasIndex(audit => new { audit.CreatedAt, audit.Id });
             modelBuilder.Entity<AuditEvent>()

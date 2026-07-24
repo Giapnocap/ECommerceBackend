@@ -29,6 +29,33 @@ namespace ECommerceBackend.Infrastructure.Data
             return new EfAppTransaction(transaction);
         }
 
+        public async Task<bool> TryAcquireDataRetentionLockAsync(CancellationToken cancellationToken = default)
+        {
+            if (!_context.Database.IsSqlServer())
+                return true;
+
+            var currentTransaction = _context.Database.CurrentTransaction
+                ?? throw new InvalidOperationException("Data retention lock requires an active transaction.");
+            var connection = _context.Database.GetDbConnection();
+            await using var command = connection.CreateCommand();
+            command.Transaction = currentTransaction.GetDbTransaction();
+            command.CommandTimeout = 15;
+            command.CommandText = """
+                DECLARE @result int;
+                EXEC @result = sys.sp_getapplock
+                    @Resource = N'ECommerceBackend.DataRetention',
+                    @LockMode = N'Exclusive',
+                    @LockOwner = N'Transaction',
+                    @LockTimeout = 10000;
+                SELECT @result;
+                """;
+
+            var result = Convert.ToInt32(
+                await command.ExecuteScalarAsync(cancellationToken),
+                System.Globalization.CultureInfo.InvariantCulture);
+            return result >= 0;
+        }
+
         public async Task<Cart?> LockCartByUserIdAsync(
             Guid userId,
             CancellationToken cancellationToken = default)

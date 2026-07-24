@@ -66,4 +66,25 @@ namespace ECommerceBackend.Application.DTOs
         public IReadOnlyList<string> MissingFiles { get; set; } = [];
         public IReadOnlyList<string> OrphanFiles { get; set; } = [];
     }
+
+    public sealed class DataRetentionRequest
+    {
+        public bool ApplyChanges { get; set; }
+        public int MaxBatchSize { get; set; } = 100;
+    }
+
+    public sealed class DataRetentionResponse
+    {
+        public bool DryRun { get; set; }
+        public bool ApplyChangesEnabled { get; set; }
+        public int ProcessedOutboxCandidateCount { get; set; }
+        public int ProcessedOutboxDeletedCount { get; set; }
+        public int ExpiredRefreshTokenCandidateCount { get; set; }
+        public int ExpiredRefreshTokenDeletedCount { get; set; }
+        public int WebhookPayloadCandidateCount { get; set; }
+        public int WebhookPayloadRedactedCount { get; set; }
+        public DateTime ProcessedOutboxCutoff { get; set; }
+        public DateTime ExpiredRefreshTokenCutoff { get; set; }
+        public DateTime WebhookPayloadCutoff { get; set; }
+    }
 }

@@ -83,7 +83,7 @@ namespace ECommerceBackend.Application.Services
                 normalizedProvider,
                 verified.ProviderTransactionId,
                 cancellationToken)
-                ?? throw new NotFoundException("Không tìm thấy payment tương ứng với webhook.");
+                ?? throw new NotFoundException("Không tìm thấy giao dịch thanh toán tương ứng với thông báo từ cổng thanh toán.");
 
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
@@ -105,17 +105,17 @@ namespace ECommerceBackend.Application.Services
                 }
 
                 var order = await _consistency.LockOrderAsync(paymentOrderId, cancellationToken)
-                    ?? throw new NotFoundException("Không tìm thấy đơn hàng tương ứng với payment.");
+                    ?? throw new NotFoundException("Không tìm thấy đơn hàng tương ứng với giao dịch thanh toán.");
                 var payment = await _consistency.LockPaymentAsync(
                     normalizedProvider,
                     verified.ProviderTransactionId,
                     cancellationToken)
-                    ?? throw new NotFoundException("Không tìm thấy payment tương ứng với webhook.");
+                    ?? throw new NotFoundException("Không tìm thấy giao dịch thanh toán tương ứng với thông báo từ cổng thanh toán.");
                 if (payment.OrderId != order.Id)
                 {
                     throw new ConflictException(
                         "payment_order_mismatch",
-                        "Payment không còn thuộc đơn hàng đã được xác định.");
+                        "Giao dịch thanh toán không còn thuộc đơn hàng đã được xác định.");
                 }
 
                 ValidatePaymentAmount(payment, verified);
@@ -129,7 +129,7 @@ namespace ECommerceBackend.Application.Services
                     Provider = normalizedProvider,
                     ProviderEventId = normalizedEventId,
                     PayloadHash = payloadHash,
-                    Payload = request.Payload,
+                    Payload = _options.RetainRawPayload ? request.Payload : string.Empty,
                     ResultingStatus = payment.Status,
                     StatusChanged = statusChanged,
                     OccurredAt = verified.OccurredAt,
@@ -155,7 +155,7 @@ namespace ECommerceBackend.Application.Services
                     _outbox.EnqueueNotification(
                         order.UserId,
                         "Cập nhật thanh toán",
-                        $"Thanh toán của đơn hàng đã chuyển sang trạng thái {payment.Status}.",
+                        $"Thanh toán của đơn hàng đã chuyển sang trạng thái {GetPaymentStatusLabel(payment.Status)}.",
                         payment.OrderId,
                         payment.Id);
                 }
@@ -184,7 +184,7 @@ namespace ECommerceBackend.Application.Services
                 if (savedEvent != null)
                     return BuildDuplicateResponse(savedEvent, payloadHash);
 
-                throw new ConflictException("Payment webhook đang được xử lý bởi yêu cầu khác.", ex);
+                throw new ConflictException("Thông báo từ cổng thanh toán đang được xử lý bởi một yêu cầu khác.", ex);
             }
             catch (Exception ex) when (_consistency.IsDeadlock(ex))
             {
@@ -193,7 +193,7 @@ namespace ECommerceBackend.Application.Services
 
                 throw new ConflictException(
                     "payment_concurrency_conflict",
-                    "Payment hoặc đơn hàng đang được cập nhật bởi yêu cầu khác. Vui lòng thử lại.",
+                    "Giao dịch thanh toán hoặc đơn hàng đang được cập nhật bởi yêu cầu khác. Vui lòng thử lại.",
                     ex);
             }
             catch
@@ -232,7 +232,7 @@ namespace ECommerceBackend.Application.Services
             if (!string.Equals(webhook.PayloadHash, payloadHash, StringComparison.Ordinal))
             {
                 throw new ConflictException(
-                    "Provider event ID đã được dùng với payload khác.");
+                    "Mã sự kiện của cổng thanh toán đã được dùng với nội dung khác.");
             }
 
             return new PaymentWebhookResponse
@@ -251,7 +251,7 @@ namespace ECommerceBackend.Application.Services
                 throw new ApiException(
                     400,
                     "webhook_occurrence_in_future",
-                    "Payment webhook occurrence time is too far in the future.");
+                    "Thời điểm xảy ra giao dịch từ cổng thanh toán vượt quá giới hạn thời gian trong tương lai.");
             }
         }
 
@@ -265,14 +265,14 @@ namespace ECommerceBackend.Application.Services
                 throw new ApiException(
                     400,
                     "invalid_webhook_amount",
-                    "Paid and refunded webhooks must include amount.");
+                    "Thông báo đã thanh toán hoặc đã hoàn tiền phải có số tiền.");
             }
 
             if (webhook.Amount.HasValue && webhook.Amount.Value != payment.Amount)
             {
                 throw new ConflictException(
                     "payment_amount_mismatch",
-                    "Webhook amount does not match the expected payment amount.");
+                    "Số tiền từ cổng thanh toán không khớp với số tiền cần thanh toán.");
             }
         }
 
@@ -282,7 +282,7 @@ namespace ECommerceBackend.Application.Services
         private void ValidateRequest(string providerCode, PaymentWebhookRequest request)
         {
             if (string.IsNullOrWhiteSpace(providerCode) || providerCode.Trim().Length > 100)
-                throw new ApiException(400, "invalid_webhook", "Payment provider không hợp lệ.");
+                throw new ApiException(400, "invalid_webhook", "Cổng thanh toán không hợp lệ.");
 
             if (string.IsNullOrWhiteSpace(request.EventId) || request.EventId.Trim().Length > 200)
                 throw new ApiException(400, "invalid_webhook", "X-Payment-Event-Id không hợp lệ.");
@@ -293,8 +293,19 @@ namespace ECommerceBackend.Application.Services
             if (string.IsNullOrWhiteSpace(request.Payload)
                 || Encoding.UTF8.GetByteCount(request.Payload) > _options.MaxPayloadBytes)
             {
-                throw new ApiException(400, "invalid_webhook", "Payment webhook payload không hợp lệ hoặc quá lớn.");
+                throw new ApiException(400, "invalid_webhook", "Nội dung thông báo từ cổng thanh toán không hợp lệ hoặc quá lớn.");
             }
         }
+
+        private static string GetPaymentStatusLabel(PaymentStatus status)
+            => status switch
+            {
+                PaymentStatus.Pending => "Chờ thanh toán",
+                PaymentStatus.Paid => "Đã thanh toán",
+                PaymentStatus.Failed => "Thất bại",
+                PaymentStatus.Cancelled => "Đã hủy",
+                PaymentStatus.Refunded => "Đã hoàn tiền",
+                _ => status.ToString()
+            };
     }
 }

@@ -32,7 +32,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "user_password_hash_unchanged",
-                    "The new password hash must differ from the current hash.");
+                    "Giá trị băm của mật khẩu mới phải khác mật khẩu hiện tại.");
             }
 
             PasswordHash = normalizedHash;
@@ -50,7 +50,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "user_token_version_exceeded",
-                    "The user token version exceeds the supported value.");
+                    "Phiên bản mã xác thực của người dùng vượt quá giới hạn cho phép.");
             }
         }
 
@@ -60,7 +60,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "user_password_hash_invalid",
-                    "A password hash between 1 and 200 characters is required.");
+                    "Giá trị băm của mật khẩu phải có từ 1 đến 200 ký tự.");
             }
 
             return passwordHash;

@@ -16,9 +16,9 @@ namespace ECommerceBackend.Application.Validation
                 .GreaterThan(0).WithMessage("Giá sản phẩm phải lớn hơn 0.");
 
             RuleFor(x => x.Price)
-                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Gia san pham vuot gioi han cho phep.")
+                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Giá sản phẩm vượt quá giới hạn cho phép.")
                 .PrecisionScale(CommerceLimits.MoneyPrecision, CommerceLimits.MoneyScale, true)
-                .WithMessage("Gia san pham chi duoc co toi da 2 chu so thap phan.");
+                .WithMessage("Giá sản phẩm chỉ được có tối đa 2 chữ số thập phân.");
 
             RuleFor(x => x.StockQuantity)
                 .GreaterThanOrEqualTo(0).WithMessage("Số lượng tồn kho không được âm.");
@@ -43,9 +43,9 @@ namespace ECommerceBackend.Application.Validation
                 .GreaterThan(0).WithMessage("Giá sản phẩm phải lớn hơn 0.");
 
             RuleFor(x => x.Price)
-                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Gia san pham vuot gioi han cho phep.")
+                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Giá sản phẩm vượt quá giới hạn cho phép.")
                 .PrecisionScale(CommerceLimits.MoneyPrecision, CommerceLimits.MoneyScale, true)
-                .WithMessage("Gia san pham chi duoc co toi da 2 chu so thap phan.");
+                .WithMessage("Giá sản phẩm chỉ được có tối đa 2 chữ số thập phân.");
 
             RuleFor(x => x.StockQuantity)
                 .GreaterThanOrEqualTo(0).WithMessage("Số lượng tồn kho không được âm.");
@@ -66,7 +66,7 @@ namespace ECommerceBackend.Application.Validation
         public ProductQueryParamsValidator()
         {
             RuleFor(x => x.Keyword)
-                .MaximumLength(100).WithMessage("Tu khoa khong duoc vuot qua 100 ky tu.")
+                .MaximumLength(100).WithMessage("Từ khóa không được vượt quá 100 ký tự.")
                 .When(x => x.Keyword != null);
 
             RuleFor(x => x.MinPrice)
@@ -74,16 +74,16 @@ namespace ECommerceBackend.Application.Validation
                 .When(x => x.MinPrice.HasValue);
 
             RuleFor(x => x.MinPrice)
-                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Gia toi thieu vuot gioi han cho phep.")
+                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Giá tối thiểu vượt quá giới hạn cho phép.")
                 .PrecisionScale(CommerceLimits.MoneyPrecision, CommerceLimits.MoneyScale, true)
-                .WithMessage("Gia toi thieu chi duoc co toi da 2 chu so thap phan.")
+                .WithMessage("Giá tối thiểu chỉ được có tối đa 2 chữ số thập phân.")
                 .When(x => x.MinPrice.HasValue);
 
             RuleFor(x => x.MaxPrice)
-                .GreaterThanOrEqualTo(0).WithMessage("Gia toi da khong duoc am.")
-                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Gia toi da vuot gioi han cho phep.")
+                .GreaterThanOrEqualTo(0).WithMessage("Giá tối đa không được âm.")
+                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount).WithMessage("Giá tối đa vượt quá giới hạn cho phép.")
                 .PrecisionScale(CommerceLimits.MoneyPrecision, CommerceLimits.MoneyScale, true)
-                .WithMessage("Gia toi da chi duoc co toi da 2 chu so thap phan.")
+                .WithMessage("Giá tối đa chỉ được có tối đa 2 chữ số thập phân.")
                 .When(x => x.MaxPrice.HasValue);
 
             RuleFor(x => x.MaxPrice)
@@ -94,20 +94,20 @@ namespace ECommerceBackend.Application.Validation
 
             RuleFor(x => x.SortBy)
                 .Must(value => value == null || AllowedSortFields.Contains(value.ToLowerInvariant()))
-                .WithMessage("SortBy chỉ chấp nhận: name, price, createdAt.");
+                .WithMessage("Tiêu chí sắp xếp chỉ chấp nhận: tên, giá hoặc ngày tạo.");
 
             RuleFor(x => x.SortOrder)
                 .Must(value => value == null || AllowedSortOrders.Contains(value.ToLowerInvariant()))
-                .WithMessage("SortOrder chỉ chấp nhận: asc, desc.");
+                .WithMessage("Thứ tự sắp xếp chỉ chấp nhận tăng dần hoặc giảm dần.");
 
             RuleFor(x => x.Page)
-                .GreaterThan(0).WithMessage("Page phải lớn hơn 0.");
+                .GreaterThan(0).WithMessage("Số trang phải lớn hơn 0.");
 
             RuleFor(x => x.Page)
-                .LessThanOrEqualTo(CommerceLimits.MaxPage).WithMessage($"Page phai tu 1 den {CommerceLimits.MaxPage}.");
+                .LessThanOrEqualTo(CommerceLimits.MaxPage).WithMessage($"Số trang phải từ 1 đến {CommerceLimits.MaxPage}.");
 
             RuleFor(x => x.PageSize)
-                .InclusiveBetween(1, 100).WithMessage("PageSize phải từ 1 đến 100.");
+                .InclusiveBetween(1, 100).WithMessage("Số bản ghi mỗi trang phải từ 1 đến 100.");
         }
     }
 }

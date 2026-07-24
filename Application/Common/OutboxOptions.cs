@@ -5,6 +5,7 @@ namespace ECommerceBackend.Application.Common
         public const string SectionName = "Outbox";
 
         public bool Enabled { get; set; } = true;
+        public bool RequireProcessing { get; set; }
         public int PollIntervalSeconds { get; set; } = 5;
         public int BatchSize { get; set; } = 20;
         public int MaxAttempts { get; set; } = 5;

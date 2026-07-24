@@ -28,7 +28,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "payment_occurrence_before_creation",
-                    "Payment status occurrence cannot be earlier than payment creation.");
+                    "Thời điểm thay đổi trạng thái thanh toán không được trước thời điểm tạo giao dịch.");
             }
 
             if (nextStatus == PaymentStatus.Refunded
@@ -37,7 +37,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "payment_refund_before_paid",
-                    "Payment refund cannot occur before the payment was paid.");
+                    "Không thể hoàn tiền trước thời điểm giao dịch được thanh toán.");
             }
 
             var previousStatus = Status;
@@ -48,14 +48,14 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "payment_status_transition_invalid",
-                    $"Cannot transition payment from '{previousStatus}' to '{nextStatus}'.");
+                    $"Không thể chuyển giao dịch thanh toán từ trạng thái '{GetStatusLabel(previousStatus)}' sang '{GetStatusLabel(nextStatus)}'.");
             }
 
             if (nextStatus == PaymentStatus.Refunded && !PaidAt.HasValue)
             {
                 throw new DomainRuleViolationException(
                     "payment_paid_at_missing",
-                    "A payment cannot be refunded without a paid timestamp.");
+                    "Không thể hoàn tiền cho giao dịch chưa ghi nhận thời điểm thanh toán.");
             }
 
             Status = nextStatus;
@@ -66,5 +66,16 @@ namespace ECommerceBackend.Domain.Entities
 
             return new StatusChange<PaymentStatus>(previousStatus, nextStatus, true);
         }
+
+        private static string GetStatusLabel(PaymentStatus status)
+            => status switch
+            {
+                PaymentStatus.Pending => "Chờ thanh toán",
+                PaymentStatus.Paid => "Đã thanh toán",
+                PaymentStatus.Failed => "Thất bại",
+                PaymentStatus.Cancelled => "Đã hủy",
+                PaymentStatus.Refunded => "Đã hoàn tiền",
+                _ => status.ToString()
+            };
     }
 }

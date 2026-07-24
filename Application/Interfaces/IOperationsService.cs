@@ -27,6 +27,11 @@ namespace ECommerceBackend.Application.Interfaces
         Task<PagedResult<AuditEventResponse>> GetAuditEventsAsync(
             AuditQueryParams query,
             CancellationToken cancellationToken = default);
+
+        Task<DataRetentionResponse> RunDataRetentionAsync(
+            DataRetentionRequest request,
+            Guid? actorUserId,
+            CancellationToken cancellationToken = default);
     }
 
     public interface IUploadReconciliationService

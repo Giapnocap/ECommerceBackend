@@ -19,7 +19,7 @@ namespace ECommerceBackend.API.Swagger
             if (SwaggerAuthorizationMetadata.RequiresAuthorization(context.MethodInfo)
                 || IsPaymentWebhook(context))
             {
-                AddErrorResponse(operation, "401", "Unauthorized - access token is missing or invalid.", errorSchema);
+                AddErrorResponse(operation, "401", "Chưa xác thực - mã truy cập bị thiếu hoặc không hợp lệ.", errorSchema);
             }
 
             if (SwaggerAuthorizationMetadata.RequiresAuthorization(context.MethodInfo))
@@ -28,16 +28,16 @@ namespace ECommerceBackend.API.Swagger
             }
 
             if (CanReturnNotFound(context))
-                AddErrorResponse(operation, "404", "Not Found - requested resource does not exist.", errorSchema);
+                AddErrorResponse(operation, "404", "Không tìm thấy tài nguyên được yêu cầu.", errorSchema);
 
             if (CanReturnConflict(context))
                 AddErrorResponse(operation, "409", "Conflict - resource was modified by another operation.", errorSchema);
 
             if (CanReturnPayloadTooLarge(context))
-                AddErrorResponse(operation, "413", "Payload Too Large - request exceeds the configured limit.", errorSchema);
+                AddErrorResponse(operation, "413", "Dữ liệu gửi lên vượt quá giới hạn cấu hình.", errorSchema);
 
             if (HasAttribute<EnableRateLimitingAttribute>(context))
-                AddErrorResponse(operation, "429", "Too Many Requests - endpoint rate limit was exceeded.", errorSchema);
+                AddErrorResponse(operation, "429", "Quá nhiều yêu cầu - đã vượt giới hạn truy cập.", errorSchema);
         }
 
         private static void AddErrorResponse(

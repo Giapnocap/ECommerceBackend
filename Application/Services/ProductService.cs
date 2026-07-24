@@ -203,7 +203,7 @@ namespace ECommerceBackend.Application.Services
                         Type = Domain.Enums.InventoryTransactionType.InitialStock,
                         QuantityChange = inventoryMutation.QuantityChange,
                         BalanceAfter = inventoryMutation.BalanceAfter,
-                        Reason = "Initial product stock",
+                        Reason = "Tồn kho ban đầu",
                         CreatedAt = occurredAt
                     });
                 }
@@ -268,7 +268,7 @@ namespace ECommerceBackend.Application.Services
                         Type = Domain.Enums.InventoryTransactionType.ManualAdjustment,
                         QuantityChange = inventoryMutation.QuantityChange,
                         BalanceAfter = inventoryMutation.BalanceAfter,
-                        Reason = "Product stock updated",
+                        Reason = "Cập nhật tồn kho sản phẩm",
                         CreatedAt = occurredAt
                     });
                 }

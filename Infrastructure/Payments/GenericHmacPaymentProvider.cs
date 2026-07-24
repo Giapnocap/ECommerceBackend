@@ -33,14 +33,14 @@ namespace ECommerceBackend.Infrastructure.Payments
         public bool SupportsWebhooks => _options.Enabled;
 
         public PaymentInitializationResult Initialize(PaymentInitializationRequest request)
-            => throw new BusinessException("Provider HMAC chung chỉ xử lý webhook và không khởi tạo thanh toán.");
+            => throw new BusinessException("Cổng HMAC chung chỉ xử lý thông báo thanh toán và không khởi tạo giao dịch.");
 
         public Task<VerifiedPaymentWebhook> VerifyWebhookAsync(
             PaymentWebhookRequest request,
             CancellationToken cancellationToken = default)
         {
             if (!_options.Enabled)
-                throw new NotFoundException("Payment webhook provider chưa được bật.");
+                throw new NotFoundException("Cổng nhận thông báo thanh toán chưa được bật.");
 
             cancellationToken.ThrowIfCancellationRequested();
             VerifySignature(request.EventId, request.Payload, request.Signature);
@@ -55,7 +55,7 @@ namespace ECommerceBackend.Infrastructure.Payments
             }
             catch (JsonException ex)
             {
-                throw new ApiException(400, "invalid_webhook_payload", "Payment webhook payload không hợp lệ.", innerException: ex);
+                throw new ApiException(400, "invalid_webhook_payload", "Nội dung thông báo từ cổng thanh toán không hợp lệ.", innerException: ex);
             }
 
             if (payload == null
@@ -65,7 +65,7 @@ namespace ECommerceBackend.Infrastructure.Payments
                 throw new ApiException(
                     400,
                     "invalid_webhook_payload",
-                    "Payment webhook thiếu providerTransactionId hợp lệ.");
+                    "Thông báo từ cổng thanh toán thiếu mã giao dịch hợp lệ.");
             }
 
             var status = payload.Status?.Trim().ToLowerInvariant() switch
@@ -77,13 +77,13 @@ namespace ECommerceBackend.Infrastructure.Payments
                 _ => throw new ApiException(
                     400,
                     "invalid_webhook_payload",
-                    "Payment webhook status chỉ chấp nhận paid, failed, cancelled hoặc refunded.")
+                    "Trạng thái từ cổng thanh toán chỉ chấp nhận: đã thanh toán, thất bại, đã hủy hoặc đã hoàn tiền.")
             };
 
             if (status is PaymentStatus.Paid or PaymentStatus.Refunded
                 && !payload.Amount.HasValue)
             {
-                throw InvalidAmount("Paid and refunded webhooks must include amount.");
+                throw InvalidAmount("Thông báo đã thanh toán hoặc đã hoàn tiền phải có số tiền.");
             }
 
             if (payload.Amount.HasValue
@@ -91,7 +91,7 @@ namespace ECommerceBackend.Infrastructure.Payments
                     || payload.Amount.Value > OrderPricingPolicy.MaxMoneyAmount
                     || decimal.Round(payload.Amount.Value, 2, MidpointRounding.ToEven) != payload.Amount.Value))
             {
-                throw InvalidAmount("Webhook amount must be positive and contain at most two fractional digits.");
+                throw InvalidAmount("Số tiền từ cổng thanh toán phải lớn hơn 0 và có tối đa 2 chữ số thập phân.");
             }
 
             return Task.FromResult(new VerifiedPaymentWebhook(
@@ -131,7 +131,7 @@ namespace ECommerceBackend.Infrastructure.Payments
         }
 
         private static ApiException InvalidSignature()
-            => new(401, "invalid_webhook_signature", "Payment webhook signature không hợp lệ.");
+            => new(401, "invalid_webhook_signature", "Chữ ký của thông báo thanh toán không hợp lệ.");
 
         private sealed class GenericWebhookPayload
         {

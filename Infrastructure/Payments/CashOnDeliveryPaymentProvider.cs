@@ -16,6 +16,6 @@ namespace ECommerceBackend.Infrastructure.Payments
         public Task<VerifiedPaymentWebhook> VerifyWebhookAsync(
             PaymentWebhookRequest request,
             CancellationToken cancellationToken = default)
-            => throw new BusinessException("Thanh toán COD không hỗ trợ payment webhook.");
+            => throw new BusinessException("Thanh toán khi nhận hàng không hỗ trợ thông báo từ cổng thanh toán.");
     }
 }

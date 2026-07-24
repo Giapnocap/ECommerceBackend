@@ -15,17 +15,20 @@ namespace ECommerceBackend.Infrastructure.Orders
         private readonly OrderLifecycleOptions _options;
         private readonly TimeProvider _timeProvider;
         private readonly ILogger<OrderExpirationHostedService> _logger;
+        private readonly OrderExpirationWorkerStatus _status;
 
         public OrderExpirationHostedService(
             IServiceScopeFactory scopeFactory,
             IOptions<OrderLifecycleOptions> options,
             TimeProvider timeProvider,
-            ILogger<OrderExpirationHostedService> logger)
+            ILogger<OrderExpirationHostedService> logger,
+            OrderExpirationWorkerStatus status)
         {
             _scopeFactory = scopeFactory;
             _options = options.Value;
             _timeProvider = timeProvider;
             _logger = logger;
+            _status = status;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,6 +39,7 @@ namespace ECommerceBackend.Infrastructure.Orders
                 return;
             }
 
+            _status.MarkStarted(_timeProvider.GetUtcNow().UtcDateTime);
             _logger.LogInformation(
                 "Order expiration worker started. DryRun={DryRun} BatchSize={BatchSize}",
                 _options.ExpirationDryRun,
@@ -46,6 +50,7 @@ namespace ECommerceBackend.Infrastructure.Orders
                 try
                 {
                     var handled = await ProcessBatchAsync(stoppingToken);
+                    _status.MarkSuccessfulCycle(_timeProvider.GetUtcNow().UtcDateTime);
                     if (handled > 0 && !_options.ExpirationDryRun)
                         continue;
                 }
@@ -55,6 +60,7 @@ namespace ECommerceBackend.Infrastructure.Orders
                 }
                 catch (Exception ex)
                 {
+                    _status.MarkFailure(_timeProvider.GetUtcNow().UtcDateTime);
                     FailedCounter.Add(1);
                     _logger.LogError(ex, "Order expiration cycle failed.");
                 }

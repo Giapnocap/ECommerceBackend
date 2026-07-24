@@ -151,9 +151,11 @@ namespace ECommerceBackend.Infrastructure.Notifications
         }
 
         private static string GetErrorMessage(Exception exception)
-            => string.IsNullOrWhiteSpace(exception.Message)
-                ? exception.GetType().Name
-                : exception.Message;
+            => exception switch
+            {
+                TimeoutException => "Quá thời gian xử lý thông báo.",
+                _ => "Không thể xử lý thông báo. Xem nhật ký máy chủ để biết chi tiết."
+            };
 
         private static string Truncate(string value, int maxLength)
             => value.Length <= maxLength ? value : value[..maxLength];

@@ -63,7 +63,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "order_status_transition_invalid",
-                    $"Cannot transition order from '{previousStatus}' to '{nextStatus}'.");
+                    $"Không thể chuyển đơn hàng từ trạng thái '{GetStatusLabel(previousStatus)}' sang '{GetStatusLabel(nextStatus)}'.");
             }
 
             if (nextStatus == OrderStatus.Cancelled
@@ -71,7 +71,7 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "order_paid_cancellation_forbidden",
-                    "A paid order cannot be cancelled before its payment is refunded.");
+                    "Không thể hủy đơn hàng đã thanh toán trước khi hoàn tiền.");
             }
 
             Status = nextStatus;
@@ -84,14 +84,14 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "order_expiration_requires_pending",
-                    "Only a pending order can receive an expiration time.");
+                    "Chỉ đơn hàng đang chờ xác nhận mới có thể đặt thời hạn xử lý.");
             }
 
             if (expiresAt <= OrderDate)
             {
                 throw new DomainRuleViolationException(
                     "order_expiration_invalid",
-                    "Order expiration must be later than the order date.");
+                    "Thời hạn xử lý đơn hàng phải sau thời điểm đặt hàng.");
             }
 
             ExpiresAt = expiresAt;
@@ -107,21 +107,21 @@ namespace ECommerceBackend.Domain.Entities
             {
                 throw new DomainRuleViolationException(
                     "order_cancellation_reason_invalid",
-                    "Cancellation reason must contain between 1 and 200 characters.");
+                    "Lý do hủy phải có từ 1 đến 200 ký tự.");
             }
 
             if (occurredAt < OrderDate)
             {
                 throw new DomainRuleViolationException(
                     "order_cancellation_time_invalid",
-                    "Cancellation time cannot be earlier than the order date.");
+                    "Thời điểm hủy không được trước thời điểm đặt hàng.");
             }
 
             if (isExpiration && (!ExpiresAt.HasValue || occurredAt < ExpiresAt.Value))
             {
                 throw new DomainRuleViolationException(
                     "order_not_expired",
-                    "The order has not reached its expiration time.");
+                    "Đơn hàng chưa đến thời điểm hết hạn.");
             }
 
             var statusChange = ChangeStatus(OrderStatus.Cancelled, paymentStatus);
@@ -133,5 +133,16 @@ namespace ECommerceBackend.Domain.Entities
             ExpiredAt = isExpiration ? occurredAt : null;
             return statusChange;
         }
+
+        private static string GetStatusLabel(OrderStatus status)
+            => status switch
+            {
+                OrderStatus.Pending => "Chờ xác nhận",
+                OrderStatus.Confirmed => "Đã xác nhận",
+                OrderStatus.Shipping => "Đang giao",
+                OrderStatus.Delivered => "Đã giao",
+                OrderStatus.Cancelled => "Đã hủy",
+                _ => status.ToString()
+            };
     }
 }

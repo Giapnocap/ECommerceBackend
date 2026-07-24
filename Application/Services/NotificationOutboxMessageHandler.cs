@@ -32,13 +32,13 @@ namespace ECommerceBackend.Application.Services
                 OutboxMessageTypes.NotificationRequested,
                 StringComparison.Ordinal))
             {
-                throw new InvalidOperationException($"Unsupported outbox message type '{message.Type}'.");
+                throw new InvalidOperationException($"Loại thông báo trong hàng đợi '{message.Type}' không được hỗ trợ.");
             }
 
             var payload = JsonSerializer.Deserialize<NotificationRequestedPayload>(
                 message.Payload,
                 SerializerOptions)
-                ?? throw new InvalidOperationException("Outbox notification payload is invalid.");
+                ?? throw new InvalidOperationException("Nội dung thông báo trong hàng đợi không hợp lệ.");
             var recipientEmail = await _context.Users
                 .AsNoTracking()
                 .Where(user => user.Id == payload.UserId && !user.IsDeleted)

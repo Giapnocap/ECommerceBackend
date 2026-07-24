@@ -14,6 +14,7 @@ using ECommerceBackend.Application.Validation;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Orders;
+using ECommerceBackend.Infrastructure.Maintenance;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Repositories;
 using FluentValidation;
@@ -122,6 +123,16 @@ namespace ECommerceBackend.API.Extensions
                 .Validate(IsValidOutboxOptions, "Outbox config is invalid.")
                 .ValidateOnStart();
 
+            services.AddOptions<DatabaseOptions>()
+                .Bind(configuration.GetSection(DatabaseOptions.SectionName))
+                .Validate(IsValidDatabaseOptions, "Database config is invalid.")
+                .ValidateOnStart();
+
+            services.AddOptions<DataRetentionOptions>()
+                .Bind(configuration.GetSection(DataRetentionOptions.SectionName))
+                .Validate(IsValidDataRetentionOptions, "Data retention config is invalid.")
+                .ValidateOnStart();
+
             services.AddOptions<OrderLifecycleOptions>()
                 .Bind(configuration.GetSection(OrderLifecycleOptions.SectionName))
                 .Validate(IsValidOrderLifecycleOptions, "Order lifecycle config is invalid.")
@@ -183,9 +194,7 @@ namespace ECommerceBackend.API.Extensions
                         .ToDictionary(
                             e => e.Key,
                             e => e.Value!.Errors.Select(err =>
-                                string.IsNullOrWhiteSpace(err.ErrorMessage)
-                                    ? "Giá trị không hợp lệ."
-                                    : err.ErrorMessage).ToArray());
+                                GetModelErrorMessage(err.ErrorMessage)).ToArray());
 
                     return new ApiProblemDetailsResult(ApiProblemDetails.Create(
                         context.HttpContext,
@@ -229,8 +238,14 @@ namespace ECommerceBackend.API.Extensions
             this IServiceCollection services,
             IConfiguration configuration)
         {
+            var databaseOptions = configuration
+                .GetSection(DatabaseOptions.SectionName)
+                .Get<DatabaseOptions>() ?? new DatabaseOptions();
+
             services.AddDbContext<AppDbContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("Default")));
+                options.UseSqlServer(
+                    configuration.GetConnectionString("Default"),
+                    sqlServer => sqlServer.CommandTimeout(databaseOptions.CommandTimeoutSeconds)));
             services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
             services.AddScoped<IDataConsistencyService, EfDataConsistencyService>();
 
@@ -263,10 +278,14 @@ namespace ECommerceBackend.API.Extensions
             services.AddSingleton<IPaymentProvider, CashOnDeliveryPaymentProvider>();
             services.AddSingleton<IPaymentProvider, GenericHmacPaymentProvider>();
             services.AddSingleton<IPaymentProviderResolver, PaymentProviderResolver>();
+            services.AddSingleton<OrderExpirationWorkerStatus>();
+            services.AddSingleton<OutboxWorkerStatus>();
+            services.AddSingleton<DataRetentionWorkerStatus>();
             services.AddScoped<AdminBootstrapper>();
             services.AddHostedService<AdminBootstrapHostedService>();
             services.AddHostedService<OutboxDispatcherHostedService>();
             services.AddHostedService<OrderExpirationHostedService>();
+            services.AddHostedService<DataRetentionHostedService>();
 
             return services;
         }
@@ -362,13 +381,13 @@ namespace ECommerceBackend.API.Extensions
                                 context.HttpContext,
                                 StatusCodes.Status401Unauthorized,
                                 "unauthorized",
-                                "Access token is missing, invalid, expired, or no longer active.");
+                                "Mã truy cập bị thiếu, không hợp lệ, đã hết hạn hoặc không còn hiệu lực.");
                         },
                         OnForbidden = context => WriteAuthenticationErrorAsync(
                             context.HttpContext,
                             StatusCodes.Status403Forbidden,
                             "forbidden",
-                            "You do not have permission to perform this action.")
+                            "Bạn không có quyền thực hiện thao tác này.")
                     };
                 });
 
@@ -476,7 +495,8 @@ namespace ECommerceBackend.API.Extensions
                 .AddCheck("self", () => HealthCheckResult.Healthy("Application is running."), tags: ["live"])
                 .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
                 .AddCheck<OutboxHealthCheck>("outbox", tags: ["ready"])
-                .AddCheck<OrderExpirationHealthCheck>("order-expiration", tags: ["ready"]);
+                .AddCheck<OrderExpirationHealthCheck>("order-expiration", tags: ["ready"])
+                .AddCheck<DataRetentionHealthCheck>("data-retention", tags: ["ready"]);
 
             return services;
         }
@@ -642,13 +662,28 @@ namespace ECommerceBackend.API.Extensions
         }
 
         private static bool IsValidOutboxOptions(OutboxOptions options)
-            => options.PollIntervalSeconds is >= 1 and <= 300
+            => (!options.RequireProcessing || options.Enabled)
+                && options.PollIntervalSeconds is >= 1 and <= 300
                 && options.BatchSize is >= 1 and <= 500
                 && options.MaxAttempts is >= 1 and <= 100
                 && options.LockTimeoutMinutes is >= 1 and <= 1440
                 && options.ProcessingTimeoutSeconds is >= 5 and <= 300
                 && options.MaxPendingAgeMinutes is >= 1 and <= 1440
                 && options.LockTimeoutMinutes * 60 > options.ProcessingTimeoutSeconds;
+
+        private static bool IsValidDatabaseOptions(DatabaseOptions options)
+            => options.CommandTimeoutSeconds is >= 5 and <= 300;
+
+        private static bool IsValidDataRetentionOptions(DataRetentionOptions options)
+            => (!options.RequireAutomaticProcessing || options.AutomaticProcessingEnabled)
+                && (!options.AutomaticProcessingEnabled || options.Enabled)
+                && options.ProcessedOutboxRetentionDays is >= 1 and <= 3650
+                && options.ExpiredRefreshTokenRetentionDays is >= 1 and <= 3650
+                && options.WebhookPayloadRetentionDays is >= 1 and <= 3650
+                && options.MaxBatchSize is >= 1 and <= 500
+                && options.ProcessingIntervalMinutes is >= 5 and <= 10080
+                && options.FailureRetryMinutes is >= 1 and <= 1440
+                && options.MaxBatchesPerCycle is >= 1 and <= 100;
 
         private static bool IsValidReverseProxyOptions(ReverseProxyOptions options)
         {
@@ -792,7 +827,9 @@ namespace ECommerceBackend.API.Extensions
                 && options.MaxPendingOrdersPerCustomer is >= 1 and <= 100
                 && options.ExpirationPollIntervalSeconds is >= 1 and <= 300
                 && options.ExpirationBatchSize is >= 1 and <= 500
-                && options.MaxOverdueMinutes is >= 1 and <= 1440;
+                && options.MaxOverdueMinutes is >= 1 and <= 1440
+                && (!options.RequireExpirationProcessing
+                    || options.ExpirationEnabled && !options.ExpirationDryRun);
 
         private static bool IsValidSmtpOptions(
             SmtpOptions options,
@@ -841,7 +878,7 @@ namespace ECommerceBackend.API.Extensions
                 || !int.TryParse(tokenVersionValue, out var tokenVersion)
                 || !Guid.TryParse(sessionIdValue, out var sessionId))
             {
-                context.Fail("Token session claims are invalid.");
+                context.Fail("Thông tin phiên đăng nhập trong mã xác thực không hợp lệ.");
                 return;
             }
 
@@ -861,13 +898,24 @@ namespace ECommerceBackend.API.Extensions
                 .SingleOrDefaultAsync(context.HttpContext.RequestAborted);
 
             if (session == null || session.TokenVersion != tokenVersion || !session.HasActiveSession)
-                context.Fail("Token session is no longer active.");
+                context.Fail("Phiên đăng nhập không còn hiệu lực.");
         }
 
         private static string GetRateLimitPartitionKey(HttpContext context)
             => context.User.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? context.Connection.RemoteIpAddress?.ToString()
                 ?? "unknown";
+
+        private static string GetModelErrorMessage(string? message)
+        {
+            if (string.IsNullOrWhiteSpace(message)
+                || message.All(character => character <= sbyte.MaxValue))
+            {
+                return "Giá trị không hợp lệ hoặc không đúng định dạng.";
+            }
+
+            return message;
+        }
 
         private static Task WriteAuthenticationErrorAsync(
             HttpContext context,
