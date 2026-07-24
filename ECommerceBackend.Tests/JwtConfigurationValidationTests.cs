@@ -209,6 +209,58 @@ public sealed class JwtConfigurationValidationTests
             .RequireExpirationProcessing);
     }
 
+    [Fact]
+    public void AuthSecurity_WithInvalidLockoutPolicy_FailsValidation()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["AuthSecurity:MaxFailedLoginAttempts"] = "1"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<AuthSecurityOptions>>().Value);
+    }
+
+    [Fact]
+    public void ProductionPasswordResetUrl_MustUsePublicHttps()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["AuthSecurity:PasswordResetUrl"] = "http://localhost:3000/reset-password"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Production,
+            values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<AuthSecurityOptions>>().Value);
+    }
+
+    [Fact]
+    public void ProductionPasswordResetUrl_AcceptsPublicHttpsWithoutQuery()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["AuthSecurity:PasswordResetUrl"] = "https://shop.example.com/reset-password"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Production,
+            values);
+
+        var options = provider
+            .GetRequiredService<IOptions<AuthSecurityOptions>>()
+            .Value;
+
+        Assert.Equal(
+            "https://shop.example.com/reset-password",
+            options.PasswordResetUrl);
+    }
+
     private static ServiceProvider CreateProvider(
         string? key,
         string environmentName = "Development",

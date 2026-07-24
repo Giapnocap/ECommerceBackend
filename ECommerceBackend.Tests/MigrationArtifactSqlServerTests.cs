@@ -48,16 +48,19 @@ public sealed class MigrationArtifactSqlServerTests
             await ExecuteScriptAsync(connectionString, forwardScript);
             Assert.True(await HasMigrationAsync(connectionString, manifest.LatestMigration));
             Assert.Equal(RetentionIndexes.Length, await CountIndexesAsync(connectionString));
+            Assert.Equal(7, await CountAuthenticationSchemaObjectsAsync(connectionString));
 
             await ExecuteScriptAsync(connectionString, rollbackScript);
             Assert.False(await HasMigrationAsync(connectionString, manifest.LatestMigration));
             Assert.True(await HasMigrationAsync(connectionString, manifest.PreviousMigration));
-            Assert.Equal(0, await CountIndexesAsync(connectionString));
+            Assert.Equal(RetentionIndexes.Length, await CountIndexesAsync(connectionString));
+            Assert.Equal(0, await CountAuthenticationSchemaObjectsAsync(connectionString));
 
             await ExecuteScriptAsync(connectionString, forwardScript);
             await ExecuteScriptAsync(connectionString, forwardScript);
             Assert.True(await HasMigrationAsync(connectionString, manifest.LatestMigration));
             Assert.Equal(RetentionIndexes.Length, await CountIndexesAsync(connectionString));
+            Assert.Equal(7, await CountAuthenticationSchemaObjectsAsync(connectionString));
         }
         finally
         {
@@ -367,6 +370,37 @@ public sealed class MigrationArtifactSqlServerTests
                 N'IX_RefreshTokens_ExpiresAt',
                 N'IX_PaymentWebhookEvents_ReceivedAt',
                 N'IX_OutboxMessages_ProcessedAt')
+            """;
+        return Convert.ToInt32(await command.ExecuteScalarAsync());
+    }
+
+    private static async Task<int> CountAuthenticationSchemaObjectsAsync(
+        string connectionString)
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT
+                (SELECT COUNT(1)
+                 FROM sys.tables
+                 WHERE [name] = N'PasswordResetTokens'
+                   AND [schema_id] = SCHEMA_ID(N'dbo'))
+              + (SELECT COUNT(1)
+                 FROM sys.columns
+                 WHERE [object_id] = OBJECT_ID(N'dbo.Users')
+                   AND [name] IN (N'FailedLoginCount', N'LockoutEndAt'))
+              + (SELECT COUNT(1)
+                 FROM sys.indexes
+                 WHERE [object_id] = OBJECT_ID(N'dbo.PasswordResetTokens')
+                   AND [name] IN (
+                       N'IX_PasswordResetTokens_ExpiresAt',
+                       N'IX_PasswordResetTokens_TokenHash',
+                       N'UX_PasswordResetTokens_UserId_Active'))
+              + (SELECT COUNT(1)
+                 FROM sys.check_constraints
+                 WHERE [parent_object_id] = OBJECT_ID(N'dbo.Users')
+                   AND [name] = N'CK_Users_FailedLoginCount_NonNegative');
             """;
         return Convert.ToInt32(await command.ExecuteScalarAsync());
     }

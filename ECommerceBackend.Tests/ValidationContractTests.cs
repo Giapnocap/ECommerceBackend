@@ -35,6 +35,10 @@ public sealed class ValidationContractTests
             new UpdateProfileRequest { FullName = string.Empty, Phone = "invalid" }));
         yield return Case("password", () => new ChangePasswordRequestValidator().Validate(
             new ChangePasswordRequest { CurrentPassword = string.Empty, NewPassword = "short" }));
+        yield return Case("forgot password", () => new ForgotPasswordRequestValidator().Validate(
+            new ForgotPasswordRequest { Email = "invalid-email" }));
+        yield return Case("reset password", () => new ResetPasswordRequestValidator().Validate(
+            new ResetPasswordRequest { Token = string.Empty, NewPassword = "short" }));
         yield return Case("role", () => new AssignRoleRequestValidator().Validate(
             new AssignRoleRequest { RoleName = "owner" }));
         yield return Case("users", () => new UserQueryParamsValidator().Validate(

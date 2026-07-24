@@ -78,7 +78,7 @@ namespace ECommerceBackend.API.Swagger
                 "ProductController" => methodName is "Update" or "Delete" or "UploadImage" or "DeleteImage",
                 "CategoryController" => methodName is "Create" or "Update" or "Delete",
                 "UserController" => methodName is "AssignRole" or "ChangePassword",
-                "AuthController" => methodName is "Register" or "Refresh",
+                "AuthController" => methodName is "Register" or "Refresh" or "ResetPassword",
                 "PaymentController" => methodName == "HandleWebhook",
                 _ => false
             };

@@ -24,7 +24,11 @@ namespace ECommerceBackend.Application.Services
         private readonly IGenericRepository<RefreshToken> _refreshTokenRepo;
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
+        private readonly IPasswordHasher _passwordHasher;
+        private readonly IOutboxWriter _outbox;
+        private readonly IAuditWriter _audit;
         private readonly JwtOptions _jwtOptions;
+        private readonly AuthSecurityOptions _securityOptions;
         private readonly TimeProvider _timeProvider;
 
         public AuthService(
@@ -35,29 +39,11 @@ namespace ECommerceBackend.Application.Services
             IGenericRepository<RefreshToken> refreshTokenRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
-            IOptions<JwtOptions> jwtOptions)
-            : this(
-                userRepo,
-                roleRepo,
-                userRoleRepo,
-                cartRepo,
-                refreshTokenRepo,
-                context,
-                consistency,
-                jwtOptions,
-                TimeProvider.System)
-        {
-        }
-
-        public AuthService(
-            IGenericRepository<User> userRepo,
-            IGenericRepository<Role> roleRepo,
-            IGenericRepository<UserRole> userRoleRepo,
-            IGenericRepository<Cart> cartRepo,
-            IGenericRepository<RefreshToken> refreshTokenRepo,
-            IAppDbContext context,
-            IDataConsistencyService consistency,
             IOptions<JwtOptions> jwtOptions,
+            IOptions<AuthSecurityOptions> securityOptions,
+            IPasswordHasher passwordHasher,
+            IOutboxWriter outbox,
+            IAuditWriter audit,
             TimeProvider timeProvider)
         {
             _userRepo = userRepo;
@@ -67,7 +53,11 @@ namespace ECommerceBackend.Application.Services
             _refreshTokenRepo = refreshTokenRepo;
             _context = context;
             _consistency = consistency;
+            _passwordHasher = passwordHasher;
+            _outbox = outbox;
+            _audit = audit;
             _jwtOptions = jwtOptions.Value;
+            _securityOptions = securityOptions.Value;
             _timeProvider = timeProvider;
         }
 
@@ -111,7 +101,7 @@ namespace ECommerceBackend.Application.Services
                 NormalizedEmail = normalizedEmail,
                 FullName = request.FullName.Trim(),
                 Phone = NormalizeOptional(request.Phone),
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                PasswordHash = _passwordHasher.Hash(request.Password),
                 CreatedAt = occurredAt
             };
 
@@ -162,8 +152,12 @@ namespace ECommerceBackend.Application.Services
                 .AsNoTracking()
                 .Where(user => !user.IsDeleted && user.NormalizedUserName == normalizedUserName)
                 .Select(user => (Guid?)user.Id)
-                .SingleOrDefaultAsync(cancellationToken)
-                ?? throw Unauthorized();
+                .SingleOrDefaultAsync(cancellationToken);
+            if (!userId.HasValue)
+            {
+                _ = _passwordHasher.Verify(request.Password, null);
+                throw Unauthorized();
+            }
 
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
@@ -173,19 +167,50 @@ namespace ECommerceBackend.Application.Services
             try
             {
                 var user = await _consistency.LockUserAsync(
-                    userId,
+                    userId.Value,
                     activeOnly: true,
                     cancellationToken)
                     ?? throw Unauthorized();
 
-                if (!IsBcryptHash(user.PasswordHash)
-                    || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                var occurredAt = UtcNow;
+                var passwordValid = _passwordHasher.Verify(
+                    request.Password,
+                    user.PasswordHash);
+                if (user.IsLockedOutAt(occurredAt))
                 {
+                    telemetry.SetTag("auth.account.locked", true);
                     throw Unauthorized();
                 }
 
+                if (!passwordValid)
+                {
+                    var locked = DomainRuleGuard.AsConflict(() =>
+                        user.RecordFailedLogin(
+                            occurredAt,
+                            _securityOptions.MaxFailedLoginAttempts,
+                            TimeSpan.FromMinutes(_securityOptions.LockoutMinutes)));
+                    if (locked)
+                    {
+                        telemetry.SetTag("auth.account.locked", true);
+                        _audit.Write(
+                            "auth.account.locked",
+                            nameof(User),
+                            user.Id.ToString(),
+                            metadata: new Dictionary<string, object?>
+                            {
+                                ["lockoutMinutes"] = _securityOptions.LockoutMinutes,
+                                ["failedAttempts"] = user.FailedLoginCount
+                            });
+                    }
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    transactionCompleted = true;
+                    throw Unauthorized();
+                }
+
+                user.ClearLoginFailures();
                 await LoadRolesAndPermissionsAsync(user, cancellationToken);
-                var occurredAt = UtcNow;
                 var refreshToken = CreateRefreshToken(user.Id, Guid.NewGuid(), occurredAt);
                 await _refreshTokenRepo.AddAsync(refreshToken.Entity, cancellationToken);
                 await _context.SaveChangesAsync(cancellationToken);
@@ -202,6 +227,181 @@ namespace ECommerceBackend.Application.Services
                     occurredAt);
                 telemetry.Complete();
                 return response;
+            }
+            catch
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+        }
+
+        public async Task RequestPasswordResetAsync(
+            ForgotPasswordRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            using var telemetry = BusinessTelemetry.Start(
+                "auth.password_reset.request",
+                cancellationToken);
+            var normalizedEmail = Normalize(request.Email);
+            var userId = await _userRepo.Query()
+                .AsNoTracking()
+                .Where(user => !user.IsDeleted && user.NormalizedEmail == normalizedEmail)
+                .Select(user => (Guid?)user.Id)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (!userId.HasValue)
+            {
+                telemetry.Complete();
+                return;
+            }
+
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var transactionCompleted = false;
+
+            try
+            {
+                var user = await _consistency.LockUserAsync(
+                    userId.Value,
+                    activeOnly: true,
+                    cancellationToken);
+                if (user == null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    transactionCompleted = true;
+                    telemetry.Complete();
+                    return;
+                }
+
+                var occurredAt = UtcNow;
+                await RevokePasswordResetTokensAsync(
+                    user.Id,
+                    exceptTokenId: null,
+                    occurredAt,
+                    cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+
+                var rawToken = Convert.ToBase64String(
+                    RandomNumberGenerator.GetBytes(48));
+                _context.PasswordResetTokens.Add(new PasswordResetToken
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    TokenHash = HashPasswordResetToken(rawToken),
+                    CreatedAt = occurredAt,
+                    ExpiresAt = occurredAt.AddMinutes(
+                        _securityOptions.PasswordResetTokenMinutes)
+                });
+                _outbox.EnqueueSensitiveNotification(
+                    user.Id,
+                    "Đặt lại mật khẩu",
+                    BuildPasswordResetMessage(rawToken));
+                _audit.Write(
+                    "auth.password_reset.requested",
+                    nameof(User),
+                    user.Id.ToString());
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                transactionCompleted = true;
+                telemetry.Complete();
+            }
+            catch
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+        }
+
+        public async Task ResetPasswordAsync(
+            ResetPasswordRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            using var telemetry = BusinessTelemetry.Start(
+                "auth.password_reset.complete",
+                cancellationToken);
+            var tokenHash = HashPasswordResetToken(request.Token.Trim());
+            var userId = await _context.PasswordResetTokens
+                .AsNoTracking()
+                .Where(token => token.TokenHash == tokenHash)
+                .Select(token => (Guid?)token.UserId)
+                .SingleOrDefaultAsync(cancellationToken)
+                ?? throw InvalidPasswordResetToken();
+
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var transactionCompleted = false;
+
+            try
+            {
+                var user = await _consistency.LockUserAsync(
+                    userId,
+                    activeOnly: true,
+                    cancellationToken)
+                    ?? throw InvalidPasswordResetToken();
+                var token = await _context.PasswordResetTokens
+                    .SingleOrDefaultAsync(
+                        candidate => candidate.TokenHash == tokenHash,
+                        cancellationToken)
+                    ?? throw InvalidPasswordResetToken();
+                var occurredAt = UtcNow;
+                if (!token.IsActiveAt(occurredAt))
+                    throw InvalidPasswordResetToken();
+
+                if (_passwordHasher.Verify(
+                    request.NewPassword,
+                    user.PasswordHash))
+                {
+                    throw new ConflictException(
+                        "password_reuse",
+                        "Mật khẩu mới phải khác mật khẩu hiện tại.");
+                }
+
+                DomainRuleGuard.AsConflict(() => token.Consume(occurredAt));
+                DomainRuleGuard.AsConflict(() => user.ChangePasswordHash(
+                    _passwordHasher.Hash(request.NewPassword),
+                    occurredAt));
+                await RevokeAllUserTokensAsync(
+                    user.Id,
+                    "Password reset",
+                    occurredAt,
+                    cancellationToken);
+                await RevokePasswordResetTokensAsync(
+                    user.Id,
+                    token.Id,
+                    occurredAt,
+                    cancellationToken);
+                _audit.Write(
+                    "auth.password_reset.completed",
+                    nameof(User),
+                    user.Id.ToString());
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                transactionCompleted = true;
+                telemetry.Complete();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw InvalidPasswordResetToken();
+            }
+            catch (Exception ex) when (_consistency.IsDeadlock(ex))
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "password_reset_concurrency_conflict",
+                    "Mật khẩu hoặc mã đặt lại đang được xử lý bởi yêu cầu khác. Vui lòng thử lại.",
+                    ex);
             }
             catch
             {
@@ -463,6 +663,22 @@ namespace ECommerceBackend.Application.Services
             RevokeTokens(tokens, reason, occurredAt);
         }
 
+        private async Task RevokePasswordResetTokensAsync(
+            Guid userId,
+            Guid? exceptTokenId,
+            DateTime occurredAt,
+            CancellationToken cancellationToken)
+        {
+            var tokens = await _context.PasswordResetTokens
+                .Where(token => token.UserId == userId
+                    && token.ConsumedAt == null
+                    && token.RevokedAt == null
+                    && (!exceptTokenId.HasValue || token.Id != exceptTokenId.Value))
+                .ToListAsync(cancellationToken);
+            foreach (var token in tokens)
+                DomainRuleGuard.AsConflict(() => token.Revoke(occurredAt));
+        }
+
         private static void RevokeTokens(
             IEnumerable<RefreshToken> tokens,
             string reason,
@@ -570,13 +786,23 @@ namespace ECommerceBackend.Application.Services
         private static string HashRefreshToken(string token)
             => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
+        private static string HashPasswordResetToken(string token)
+            => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+        private string BuildPasswordResetMessage(string rawToken)
+        {
+            var url = new UriBuilder(_securityOptions.PasswordResetUrl)
+            {
+                Query = $"token={Uri.EscapeDataString(rawToken)}"
+            }.Uri.AbsoluteUri;
+            return $"Mở liên kết sau để đặt lại mật khẩu: {url}\n"
+                + $"Liên kết có hiệu lực trong {_securityOptions.PasswordResetTokenMinutes} phút.";
+        }
+
         private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 
         private static string? NormalizeOptional(string? value)
             => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-        private static bool IsBcryptHash(string value)
-            => value.StartsWith("$2", StringComparison.Ordinal);
 
         private static IEnumerable<string> GetRoles(User user)
             => user.UserRoles
@@ -592,6 +818,12 @@ namespace ECommerceBackend.Application.Services
 
         private static ApiException Unauthorized()
             => new(401, "unauthorized", "Tên đăng nhập, mật khẩu hoặc token không hợp lệ.");
+
+        private static ApiException InvalidPasswordResetToken()
+            => new(
+                400,
+                "invalid_password_reset_token",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.");
 
         private sealed record RefreshTokenPair(string RawToken, RefreshToken Entity);
     }

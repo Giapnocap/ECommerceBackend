@@ -18,6 +18,7 @@ using ECommerceBackend.Infrastructure.Maintenance;
 using ECommerceBackend.Infrastructure.Observability;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Repositories;
+using ECommerceBackend.Infrastructure.Security;
 using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -78,6 +79,13 @@ namespace ECommerceBackend.API.Extensions
                 .Validate(
                     options => IsValidJwtOptions(options, environment),
                     "Jwt config is invalid or contains a production placeholder secret.")
+                .ValidateOnStart();
+
+            services.AddOptions<AuthSecurityOptions>()
+                .Bind(configuration.GetSection(AuthSecurityOptions.SectionName))
+                .Validate(
+                    options => IsValidAuthSecurityOptions(options, environment),
+                    "Auth security config is invalid.")
                 .ValidateOnStart();
 
             services.AddOptions<ReverseProxyOptions>()
@@ -275,6 +283,10 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<IReportService, ReportService>();
             services.AddScoped<IOutboxWriter, OutboxWriter>();
             services.AddScoped<IAuditWriter, AuditWriter>();
+            services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+            services.AddSingleton<
+                ISensitivePayloadProtector,
+                DataProtectionSensitivePayloadProtector>();
             services.AddScoped<IOperationsService, OperationsService>();
             services.AddScoped<IUploadReconciliationService, UploadReconciliationService>();
             services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
@@ -563,6 +575,33 @@ namespace ECommerceBackend.API.Extensions
                 return false;
 
             return true;
+        }
+
+        private static bool IsValidAuthSecurityOptions(
+            AuthSecurityOptions options,
+            IWebHostEnvironment environment)
+        {
+            if (options.MaxFailedLoginAttempts is < 2 or > 20
+                || options.LockoutMinutes is < 1 or > 1440
+                || options.PasswordResetTokenMinutes is < 5 or > 1440
+                || !Uri.TryCreate(
+                    options.PasswordResetUrl?.Trim(),
+                    UriKind.Absolute,
+                    out var resetUrl)
+                || resetUrl.Scheme is not ("http" or "https")
+                || !string.IsNullOrEmpty(resetUrl.UserInfo)
+                || !string.IsNullOrEmpty(resetUrl.Query)
+                || !string.IsNullOrEmpty(resetUrl.Fragment))
+            {
+                return false;
+            }
+
+            return !environment.IsProduction()
+                || (resetUrl.Scheme == "https"
+                    && !string.Equals(
+                        resetUrl.Host,
+                        "localhost",
+                        StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool IsValidCorsOptions(CorsOptions options, IWebHostEnvironment environment)

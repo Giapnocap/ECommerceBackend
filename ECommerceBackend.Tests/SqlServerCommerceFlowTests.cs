@@ -2,6 +2,7 @@ using System.Data;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using AutoMapper;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
@@ -1400,6 +1401,126 @@ public sealed class SqlServerCommerceFlowTests
             Assert.Equal("Purchased Reporting Snapshot", topProduct.ProductName);
             Assert.Equal(2, topProduct.QuantitySold);
             Assert.Equal(100m, topProduct.Revenue);
+        }
+        finally
+        {
+            await using var cleanupContext = new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task PasswordReset_ConcurrentUse_AllowsExactlyOneCommitAndRevokesSessions()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName = $"ECommerceBackendIntegration_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        var now = new DateTimeOffset(2026, 7, 24, 13, 0, 0, TimeSpan.Zero);
+        var clock = new FixedTimeProvider(now);
+        var protector = new TestSensitivePayloadProtector();
+        Guid userId;
+        string rawToken;
+
+        try
+        {
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.MigrateAsync();
+                var auth = TestServiceFactory.CreateAuthService(
+                    setupContext,
+                    clock,
+                    payloadProtector: protector);
+                var registered = await auth.RegisterAsync(new RegisterRequest
+                {
+                    UserName = "concurrent_reset_customer",
+                    Email = "concurrent_reset_customer@example.com",
+                    Password = "Customer@123",
+                    FullName = "Concurrent Reset Customer"
+                });
+                userId = registered.UserId;
+
+                await auth.RequestPasswordResetAsync(new ForgotPasswordRequest
+                {
+                    Email = "concurrent_reset_customer@example.com"
+                });
+
+                var firstMessage = await setupContext.OutboxMessages
+                    .SingleAsync(candidate =>
+                        candidate.Type
+                            == OutboxMessageTypes.ProtectedNotificationRequested);
+                await auth.RequestPasswordResetAsync(new ForgotPasswordRequest
+                {
+                    Email = "concurrent_reset_customer@example.com"
+                });
+                var message = await setupContext.OutboxMessages
+                    .SingleAsync(candidate =>
+                        candidate.Type
+                            == OutboxMessageTypes.ProtectedNotificationRequested
+                        && candidate.Id != firstMessage.Id);
+                var payload = JsonSerializer.Deserialize<NotificationRequestedPayload>(
+                    protector.Unprotect(message.Payload),
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                Assert.NotNull(payload);
+                var resetUrl = new Uri(
+                    payload.Message.Split('\n')[0].Split(": ", 2)[1]);
+                rawToken = Uri.UnescapeDataString(
+                    resetUrl.Query["?token=".Length..]);
+
+                var issuedTokens = await setupContext.PasswordResetTokens
+                    .AsNoTracking()
+                    .OrderBy(token => token.Id)
+                    .ToListAsync();
+                Assert.Equal(2, issuedTokens.Count);
+                Assert.Single(issuedTokens, token => token.RevokedAt.HasValue);
+                Assert.Single(issuedTokens, token => token.IsActiveAt(now.UtcDateTime));
+            }
+
+            async Task<Exception?> TryResetAsync(string newPassword)
+            {
+                await using var context = new AppDbContext(options);
+                var auth = TestServiceFactory.CreateAuthService(
+                    context,
+                    clock,
+                    payloadProtector: protector);
+                return await Record.ExceptionAsync(() =>
+                    auth.ResetPasswordAsync(new ResetPasswordRequest
+                    {
+                        Token = rawToken,
+                        NewPassword = newPassword
+                    }));
+            }
+
+            var results = await Task.WhenAll(
+                TryResetAsync("ChangedA@123"),
+                TryResetAsync("ChangedB@123"));
+
+            Assert.Single(results, result => result is null);
+            var rejected = Assert.Single(results, result => result is not null);
+            Assert.IsType<ApiException>(rejected);
+
+            await using var verificationContext = new AppDbContext(options);
+            var user = await verificationContext.Users
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == userId);
+            var token = await verificationContext.PasswordResetTokens
+                .AsNoTracking()
+                .SingleAsync(candidate => candidate.ConsumedAt.HasValue);
+            var refreshTokens = await verificationContext.RefreshTokens
+                .AsNoTracking()
+                .Where(candidate => candidate.UserId == userId)
+                .ToListAsync();
+
+            Assert.NotNull(token.ConsumedAt);
+            Assert.Equal(1, user.TokenVersion);
+            Assert.All(refreshTokens, candidate => Assert.True(candidate.IsRevoked));
+            Assert.True(
+                BCrypt.Net.BCrypt.Verify("ChangedA@123", user.PasswordHash)
+                ^ BCrypt.Net.BCrypt.Verify("ChangedB@123", user.PasswordHash));
         }
         finally
         {

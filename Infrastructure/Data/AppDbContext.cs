@@ -27,6 +27,7 @@ namespace ECommerceBackend.Infrastructure.Data
         public DbSet<PaymentStatusHistory> PaymentStatusHistories { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
+        public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
         public DbSet<AuditEvent> AuditEvents { get; set; }
 
@@ -58,6 +59,9 @@ namespace ECommerceBackend.Infrastructure.Data
             modelBuilder.Entity<Order>().Property(o => o.RowVersion).IsRowVersion();
             modelBuilder.Entity<Payment>().Property(payment => payment.RowVersion).IsRowVersion();
             modelBuilder.Entity<RefreshToken>().Property(rt => rt.RowVersion).IsRowVersion();
+            modelBuilder.Entity<PasswordResetToken>()
+                .Property(token => token.RowVersion)
+                .IsRowVersion();
 
             // ===================== UNIQUE INDEXES =====================
             modelBuilder.Entity<User>().HasIndex(u => u.NormalizedUserName).IsUnique();
@@ -92,6 +96,16 @@ namespace ECommerceBackend.Infrastructure.Data
                 .HasDatabaseName("IX_RefreshTokens_ExpiresAt");
             modelBuilder.Entity<RefreshToken>().HasIndex(rt => new { rt.UserId, rt.ExpiresAt });
             modelBuilder.Entity<RefreshToken>().HasIndex(rt => new { rt.UserId, rt.FamilyId, rt.ExpiresAt });
+            modelBuilder.Entity<PasswordResetToken>()
+                .HasIndex(token => token.TokenHash)
+                .IsUnique();
+            modelBuilder.Entity<PasswordResetToken>()
+                .HasIndex(token => token.ExpiresAt);
+            modelBuilder.Entity<PasswordResetToken>()
+                .HasIndex(token => token.UserId)
+                .HasDatabaseName("UX_PasswordResetTokens_UserId_Active")
+                .HasFilter("[ConsumedAt] IS NULL AND [RevokedAt] IS NULL")
+                .IsUnique();
             modelBuilder.Entity<Order>().HasIndex(order => order.OrderNumber).IsUnique();
             modelBuilder.Entity<Order>()
                 .HasIndex(order => new { order.UserId, order.IdempotencyKey })
@@ -185,6 +199,9 @@ namespace ECommerceBackend.Infrastructure.Data
             modelBuilder.Entity<RefreshToken>().Property(rt => rt.TokenHash).HasMaxLength(128);
             modelBuilder.Entity<RefreshToken>().Property(rt => rt.ReplacedByTokenHash).HasMaxLength(128);
             modelBuilder.Entity<RefreshToken>().Property(rt => rt.RevocationReason).HasMaxLength(100);
+            modelBuilder.Entity<PasswordResetToken>()
+                .Property(token => token.TokenHash)
+                .HasMaxLength(64);
             modelBuilder.Entity<Category>().Property(c => c.Name).HasMaxLength(100);
             modelBuilder.Entity<Category>().Property(c => c.NormalizedName).HasMaxLength(100);
             modelBuilder.Entity<Product>().Property(p => p.Name).HasMaxLength(200);
@@ -314,6 +331,13 @@ namespace ECommerceBackend.Infrastructure.Data
                 t.HasCheckConstraint("CK_AuditEvents_CorrelationId_NotEmpty", "LEN([CorrelationId]) > 0");
             });
 
+            modelBuilder.Entity<User>().ToTable(t =>
+            {
+                t.HasCheckConstraint(
+                    "CK_Users_FailedLoginCount_NonNegative",
+                    "[FailedLoginCount] >= 0");
+            });
+
             // ===================== RELATIONSHIPS =====================
 
             // UserRole
@@ -321,6 +345,12 @@ namespace ECommerceBackend.Infrastructure.Data
                 .HasOne(ur => ur.User)
                 .WithMany(u => u.UserRoles)
                 .HasForeignKey(ur => ur.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PasswordResetToken>()
+                .HasOne(token => token.User)
+                .WithMany(user => user.PasswordResetTokens)
+                .HasForeignKey(token => token.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<UserRole>()

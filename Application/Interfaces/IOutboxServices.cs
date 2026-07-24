@@ -10,6 +10,11 @@ namespace ECommerceBackend.Application.Interfaces
             string message,
             Guid? orderId = null,
             Guid? paymentId = null);
+
+        void EnqueueSensitiveNotification(
+            Guid userId,
+            string subject,
+            string message);
     }
 
     public interface IOutboxStore

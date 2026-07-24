@@ -44,6 +44,38 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>Yêu cầu gửi hướng dẫn đặt lại mật khẩu</summary>
+        [HttpPost("forgot-password")]
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ForgotPassword(
+            [FromBody] ForgotPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            await _authService.RequestPasswordResetAsync(request, cancellationToken);
+            return Ok(new MessageResponse
+            {
+                Message = "Nếu email tồn tại, hướng dẫn đặt lại mật khẩu sẽ được gửi."
+            });
+        }
+
+        /// <summary>Đặt lại mật khẩu bằng mã dùng một lần</summary>
+        [HttpPost("reset-password")]
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ResetPassword(
+            [FromBody] ResetPasswordRequest request,
+            CancellationToken cancellationToken)
+        {
+            await _authService.ResetPasswordAsync(request, cancellationToken);
+            return Ok(new MessageResponse
+            {
+                Message = "Đặt lại mật khẩu thành công."
+            });
+        }
+
         /// <summary>Làm mới access token bằng refresh token</summary>
         [HttpPost("refresh")]
         [AllowAnonymous]

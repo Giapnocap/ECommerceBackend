@@ -24,6 +24,7 @@ namespace ECommerceBackend.Application.Interfaces
         DbSet<PaymentStatusHistory> PaymentStatusHistories { get; }
         DbSet<InventoryTransaction> InventoryTransactions { get; }
         DbSet<RefreshToken> RefreshTokens { get; }
+        DbSet<PasswordResetToken> PasswordResetTokens { get; }
         DbSet<OutboxMessage> OutboxMessages { get; }
         DbSet<AuditEvent> AuditEvents { get; }
         EntityEntry<TEntity> Entry<TEntity>(TEntity entity) where TEntity : class;

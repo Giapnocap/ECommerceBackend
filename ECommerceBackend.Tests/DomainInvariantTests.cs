@@ -278,6 +278,49 @@ public sealed class DomainInvariantTests
     }
 
     [Fact]
+    public void User_LoginFailuresLockAtThreshold_AndExpiredLockoutStartsNewWindow()
+    {
+        var occurredAt = new DateTime(2026, 7, 24, 12, 0, 0, DateTimeKind.Utc);
+        var user = new User();
+
+        Assert.False(user.RecordFailedLogin(occurredAt, 2, TimeSpan.FromMinutes(15)));
+        Assert.True(user.RecordFailedLogin(
+            occurredAt.AddMinutes(1),
+            2,
+            TimeSpan.FromMinutes(15)));
+        Assert.True(user.IsLockedOutAt(occurredAt.AddMinutes(2)));
+        Assert.False(user.RecordFailedLogin(
+            occurredAt.AddMinutes(2),
+            2,
+            TimeSpan.FromMinutes(15)));
+
+        Assert.False(user.RecordFailedLogin(
+            occurredAt.AddMinutes(17),
+            2,
+            TimeSpan.FromMinutes(15)));
+        Assert.Equal(1, user.FailedLoginCount);
+        Assert.Null(user.LockoutEndAt);
+    }
+
+    [Fact]
+    public void PasswordResetToken_CanOnlyBeConsumedOnce()
+    {
+        var createdAt = new DateTime(2026, 7, 24, 12, 0, 0, DateTimeKind.Utc);
+        var token = new PasswordResetToken
+        {
+            CreatedAt = createdAt,
+            ExpiresAt = createdAt.AddMinutes(30)
+        };
+
+        token.Consume(createdAt.AddMinutes(1));
+
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            token.Consume(createdAt.AddMinutes(2)));
+        Assert.Equal("password_reset_token_not_active", exception.Code);
+        Assert.Equal(createdAt.AddMinutes(1), token.ConsumedAt);
+    }
+
+    [Fact]
     public void AggregateInvariantSetters_AreNotPublic()
     {
         Assert.False(typeof(Order).GetProperty(nameof(Order.Status))!.SetMethod!.IsPublic);
@@ -286,5 +329,9 @@ public sealed class DomainInvariantTests
         Assert.False(typeof(Payment).GetProperty(nameof(Payment.PaidAt))!.SetMethod!.IsPublic);
         Assert.False(typeof(RefreshToken).GetProperty(nameof(RefreshToken.RevokedAt))!.SetMethod!.IsPublic);
         Assert.False(typeof(User).GetProperty(nameof(User.TokenVersion))!.SetMethod!.IsPublic);
+        Assert.False(typeof(User).GetProperty(nameof(User.FailedLoginCount))!.SetMethod!.IsPublic);
+        Assert.False(typeof(User).GetProperty(nameof(User.LockoutEndAt))!.SetMethod!.IsPublic);
+        Assert.False(typeof(PasswordResetToken).GetProperty(nameof(PasswordResetToken.ConsumedAt))!.SetMethod!.IsPublic);
+        Assert.False(typeof(PasswordResetToken).GetProperty(nameof(PasswordResetToken.RevokedAt))!.SetMethod!.IsPublic);
     }
 }

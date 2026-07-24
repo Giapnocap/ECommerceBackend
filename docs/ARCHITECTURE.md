@@ -47,7 +47,8 @@ Database checks, unique indexes and row versions remain defense-in-depth beneath
 
 ## Modules
 
-- Auth: register, login, token-family rotation, reuse detection, logout and logout-all.
+- Auth: register, constant-work login, timed account lockout, single-use password reset,
+  token-family rotation, reuse detection, logout and logout-all.
 - Users: profile, password changes, paged administration, role assignment and last-admin protection.
 - Catalogue: category hierarchy, products, images, search, filtering and paging.
 - Cart: one cart per user, unique product lines and current-price availability checks.
@@ -207,6 +208,19 @@ Identity services and the admin bootstrapper use the injected `TimeProvider`. To
 rotation, family revocation, password changes and JWT expiry therefore share deterministic
 security timestamps. Identity conflicts expose stable error codes while preserving the
 existing HTTP 400, 401 and 409 status contracts.
+
+Login performs a BCrypt verification for both known and unknown user names, returns the same
+unauthorized contract and applies a configurable, automatically expiring lockout after repeated
+failures. Password-reset requests intentionally return the same success response for registered
+and unknown email addresses. Reset tokens are random, stored only as SHA-256 hashes, expire,
+are single-use and are serialized per user. Completing a reset increments the user token version
+and revokes every refresh-token family.
+
+Password-reset notifications use a Data Protection protected outbox payload so the raw reset
+token is not stored as readable JSON. Email verification is not an enforced sign-in condition:
+the existing user schema has no verified-email lifecycle, and enabling it without enrollment and
+migration rules would lock out existing accounts and break current clients. It should be introduced
+only as a separately versioned product requirement.
 
 ## Operations
 

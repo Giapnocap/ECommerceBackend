@@ -9,7 +9,9 @@ using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Payments;
+using ECommerceBackend.Infrastructure.Security;
 using ECommerceBackend.Tests.Support;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -339,6 +341,47 @@ public class PaymentAndOutboxTests
         var message = await context.OutboxMessages.SingleAsync();
         Assert.Equal(now.UtcDateTime, message.OccurredAt);
         Assert.Equal(now.UtcDateTime, message.NextAttemptAt);
+    }
+
+    [Fact]
+    public async Task SensitiveOutboxPayload_IsProtectedAtRest_AndCanBeDispatched()
+    {
+        await using var context = TestAppDbContext.Create();
+        var (_, user) = await SeedPaymentAsync(
+            context,
+            "generic-hmac",
+            "txn-protected-outbox");
+        var protector = new DataProtectionSensitivePayloadProtector(
+            new EphemeralDataProtectionProvider());
+        const string sensitiveMessage = "reset-token=not-for-database-plaintext";
+        var writer = new OutboxWriter(context, TimeProvider.System, protector);
+
+        writer.EnqueueSensitiveNotification(
+            user.Id,
+            "Password reset",
+            sensitiveMessage);
+        await context.SaveChangesAsync();
+
+        var outboxMessage = await context.OutboxMessages.SingleAsync();
+        Assert.Equal(
+            OutboxMessageTypes.ProtectedNotificationRequested,
+            outboxMessage.Type);
+        Assert.DoesNotContain(
+            sensitiveMessage,
+            outboxMessage.Payload,
+            StringComparison.Ordinal);
+
+        var sender = new RecordingNotificationSender();
+        var handler = new NotificationOutboxMessageHandler(
+            context,
+            sender,
+            NullLogger<NotificationOutboxMessageHandler>.Instance,
+            protector);
+        await handler.HandleAsync(outboxMessage);
+
+        var delivered = Assert.Single(sender.Messages);
+        Assert.Equal(user.Email, delivered.Recipient);
+        Assert.Equal(sensitiveMessage, delivered.Message);
     }
 
     [Fact]

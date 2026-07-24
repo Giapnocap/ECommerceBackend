@@ -1,11 +1,13 @@
 using AutoMapper;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Mappings;
+using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Repositories;
+using ECommerceBackend.Infrastructure.Security;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -68,8 +70,17 @@ internal static class TestServiceFactory
             Options.Create(new UploadOptions()),
             NullLogger<UploadService>.Instance);
 
-    public static AuthService CreateAuthService(AppDbContext context, TimeProvider? timeProvider = null)
-        => new(
+    public static AuthService CreateAuthService(
+        AppDbContext context,
+        TimeProvider? timeProvider = null,
+        AuthSecurityOptions? securityOptions = null,
+        IPasswordHasher? passwordHasher = null,
+        IAuditWriter? auditWriter = null,
+        ISensitivePayloadProtector? payloadProtector = null)
+    {
+        var clock = timeProvider ?? TimeProvider.System;
+        var protector = payloadProtector ?? new TestSensitivePayloadProtector();
+        return new AuthService(
             Repository<User>(context),
             Repository<Role>(context),
             Repository<UserRole>(context),
@@ -85,7 +96,12 @@ internal static class TestServiceFactory
                 AccessTokenMinutes = 60,
                 RefreshTokenDays = 7
             }),
-            timeProvider ?? TimeProvider.System);
+            Options.Create(securityOptions ?? new AuthSecurityOptions()),
+            passwordHasher ?? new BCryptPasswordHasher(),
+            new OutboxWriter(context, clock, protector),
+            auditWriter ?? NullAuditWriter.Instance,
+            clock);
+    }
 
     public static UserService CreateUserService(AppDbContext context, TimeProvider? timeProvider = null)
         => new(
@@ -110,4 +126,21 @@ internal static class TestServiceFactory
             CreateMapper(),
             timeProvider ?? TimeProvider.System,
             Options.Create(lifecycleOptions ?? new OrderLifecycleOptions()));
+}
+
+internal sealed class TestSensitivePayloadProtector : ISensitivePayloadProtector
+{
+    private const string Prefix = "test-protected:";
+
+    public string Protect(string plaintext)
+        => Prefix + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plaintext));
+
+    public string Unprotect(string protectedPayload)
+    {
+        if (!protectedPayload.StartsWith(Prefix, StringComparison.Ordinal))
+            throw new InvalidOperationException("Protected test payload is invalid.");
+
+        return System.Text.Encoding.UTF8.GetString(
+            Convert.FromBase64String(protectedPayload[Prefix.Length..]));
+    }
 }

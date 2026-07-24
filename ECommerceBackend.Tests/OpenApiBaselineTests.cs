@@ -3,6 +3,7 @@ using System.Text.Json;
 
 namespace ECommerceBackend.Tests;
 
+[Collection(ApiContractTestCollection.Name)]
 public sealed class OpenApiBaselineTests : IClassFixture<TestApiFactory>
 {
     private const string UpdateBaselineVariable = "UPDATE_OPENAPI_BASELINE";

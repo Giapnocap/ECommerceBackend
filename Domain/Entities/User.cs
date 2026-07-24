@@ -14,6 +14,8 @@ namespace ECommerceBackend.Domain.Entities
         public string? Phone { get; set; }
         public bool IsDeleted { get; set; }
         public int TokenVersion { get; private set; }
+        public int FailedLoginCount { get; private set; }
+        public DateTime? LockoutEndAt { get; private set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? PasswordChangedAt { get; private set; }
         public byte[] RowVersion { get; set; } = [];
@@ -22,6 +24,8 @@ namespace ECommerceBackend.Domain.Entities
         public Cart? Cart { get; set; }
         public ICollection<Order> Orders { get; set; } = new List<Order>();
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+        public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } =
+            new List<PasswordResetToken>();
         public ICollection<OrderStatusHistory> OrderStatusChanges { get; set; } = new List<OrderStatusHistory>();
         public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
 
@@ -37,7 +41,43 @@ namespace ECommerceBackend.Domain.Entities
 
             PasswordHash = normalizedHash;
             PasswordChangedAt = occurredAt;
+            ClearLoginFailures();
             InvalidateSessions();
+        }
+
+        public bool IsLockedOutAt(DateTime occurredAt)
+            => LockoutEndAt.HasValue && LockoutEndAt.Value > occurredAt;
+
+        public bool RecordFailedLogin(
+            DateTime occurredAt,
+            int maxFailedAttempts,
+            TimeSpan lockoutDuration)
+        {
+            if (maxFailedAttempts <= 0 || lockoutDuration <= TimeSpan.Zero)
+            {
+                throw new DomainRuleViolationException(
+                    "user_lockout_policy_invalid",
+                    "Chính sách khóa tài khoản không hợp lệ.");
+            }
+
+            if (IsLockedOutAt(occurredAt))
+                return false;
+
+            if (LockoutEndAt.HasValue)
+                ClearLoginFailures();
+
+            FailedLoginCount = checked(FailedLoginCount + 1);
+            if (FailedLoginCount < maxFailedAttempts)
+                return false;
+
+            LockoutEndAt = occurredAt.Add(lockoutDuration);
+            return true;
+        }
+
+        public void ClearLoginFailures()
+        {
+            FailedLoginCount = 0;
+            LockoutEndAt = null;
         }
 
         public void InvalidateSessions()
