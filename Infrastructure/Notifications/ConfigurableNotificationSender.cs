@@ -8,6 +8,8 @@ namespace ECommerceBackend.Infrastructure.Notifications
 {
     public sealed class ConfigurableNotificationSender : INotificationSender
     {
+        private const string MessageIdDomain =
+            "notifications.ecommercebackend.local";
         private readonly SmtpOptions _options;
         private readonly ILogger<ConfigurableNotificationSender> _logger;
 
@@ -42,6 +44,9 @@ namespace ECommerceBackend.Infrastructure.Notifications
                 IsBodyHtml = false
             };
             mail.To.Add(new MailAddress(recipientEmail));
+            mail.Headers.Add(
+                "Message-ID",
+                $"<{idempotencyKey:N}@{MessageIdDomain}>");
             mail.Headers.Add("X-Idempotency-Key", idempotencyKey.ToString("N"));
 
             using var client = new SmtpClient(_options.Host, _options.Port)

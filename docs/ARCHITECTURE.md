@@ -137,6 +137,15 @@ the same database transaction as business data. The background dispatcher atomic
 messages, retries with exponential backoff and dead-letters after the configured attempt count.
 Delivery is at-least-once; notification adapters receive the outbox ID as an idempotency key.
 Enqueue, lease, completion, retry and backlog-health timestamps use the injected UTC clock.
+SMTP messages also use a deterministic RFC `Message-ID` derived from that outbox ID, so every
+retry of the same message carries the same delivery identity. This gives downstream mail systems
+a stable deduplication signal, but does not claim exactly-once delivery: a process can stop after
+SMTP accepts a message and before the database records completion. After the lease expires, the
+dispatcher intentionally delivers that message again with the same `Message-ID`.
+
+The project does not persist a separate provider-delivery receipt because SMTP does not expose a
+portable idempotent acknowledgement contract. Provider-specific delivery tracking should only be
+introduced with an email API whose contract and operational requirements can enforce it.
 
 When `Outbox:RequireProcessing=true`, readiness also requires a recent dispatcher heartbeat. This
 detects a stopped dispatcher before its backlog reaches the age threshold.

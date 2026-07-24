@@ -176,7 +176,8 @@ production. Secret production phải được cấp qua environment variable ho�
 - Row version, unique constraints và SQL locks bảo vệ race condition.
 - Order detail lưu snapshot tên và giá để giữ lịch sử chính xác.
 - Payment webhook xác thực chữ ký, event ID và payload trước khi thay đổi trạng thái.
-- Outbox ghi cùng transaction với business data, xử lý retry/dead-letter ở background.
+- Outbox ghi cùng transaction với business data, xử lý retry/dead-letter ở background và giữ
+  nguyên `Message-ID` qua các lần gửi lại.
 - Mọi thay đổi tồn kho đều sinh ledger entry có balance sau giao dịch.
 - Correlation ID liên kết ProblemDetails, request log và audit event.
 
