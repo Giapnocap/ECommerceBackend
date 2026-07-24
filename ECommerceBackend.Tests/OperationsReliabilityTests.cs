@@ -29,13 +29,7 @@ public sealed class OperationsReliabilityTests
             Audit(Guid.NewGuid(), "user.role.assign", "User", Now.UtcDateTime.AddMinutes(-1)),
             Audit(actorUserId, "user.password.change", "User", Now.UtcDateTime.AddMinutes(-1)));
         await context.SaveChangesAsync();
-        var service = new OperationsService(
-            context,
-            new EfDataConsistencyService(context),
-            CreateAuditWriter(context, actorUserId),
-            new FixedTimeProvider(Now),
-            RetentionOptions(),
-            NullLogger<OperationsService>.Instance);
+        var service = CreateOperationsService(context, actorUserId);
 
         var result = await service.GetAuditEventsAsync(new AuditQueryParams
         {
@@ -71,14 +65,7 @@ public sealed class OperationsReliabilityTests
         };
         context.OutboxMessages.Add(message);
         await context.SaveChangesAsync();
-        var audit = CreateAuditWriter(context, actorUserId);
-        var service = new OperationsService(
-            context,
-            new EfDataConsistencyService(context),
-            audit,
-            new FixedTimeProvider(Now),
-            RetentionOptions(),
-            NullLogger<OperationsService>.Instance);
+        var service = CreateOperationsService(context, actorUserId);
 
         var listed = await service.GetDeadLettersAsync(new DeadLetterQueryParams());
         var first = await service.RedriveDeadLetterAsync(message.Id, actorUserId);
@@ -279,13 +266,7 @@ public sealed class OperationsReliabilityTests
         context.PaymentWebhookEvents.AddRange(oldWebhook, recentWebhook);
         await context.SaveChangesAsync();
 
-        var service = new OperationsService(
-            context,
-            new EfDataConsistencyService(context),
-            CreateAuditWriter(context, actorUserId),
-            new FixedTimeProvider(Now),
-            RetentionOptions(),
-            NullLogger<OperationsService>.Instance);
+        var service = CreateOperationsService(context, actorUserId);
 
         var preview = await service.RunDataRetentionAsync(
             new DataRetentionRequest { MaxBatchSize = 10 }, actorUserId);
@@ -360,6 +341,25 @@ public sealed class OperationsReliabilityTests
             context,
             new HttpContextAccessor { HttpContext = httpContext },
             new FixedTimeProvider(Now));
+    }
+
+    private static OperationsService CreateOperationsService(
+        AppDbContext context,
+        Guid actorUserId)
+    {
+        var consistency = new EfDataConsistencyService(context);
+        var audit = CreateAuditWriter(context, actorUserId);
+        var clock = new FixedTimeProvider(Now);
+        return new OperationsService(
+            new DeadLetterUseCase(context, consistency, audit, clock),
+            new AuditQueryUseCase(context),
+            new DataRetentionUseCase(
+                context,
+                consistency,
+                audit,
+                clock,
+                RetentionOptions(),
+                NullLogger<DataRetentionUseCase>.Instance));
     }
 
     private static IOptions<DataRetentionOptions> RetentionOptions()

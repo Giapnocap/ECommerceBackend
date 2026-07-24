@@ -17,7 +17,6 @@ using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Maintenance;
 using ECommerceBackend.Infrastructure.Observability;
 using ECommerceBackend.Infrastructure.Payments;
-using ECommerceBackend.Infrastructure.Repositories;
 using ECommerceBackend.Infrastructure.Security;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -271,16 +270,22 @@ namespace ECommerceBackend.API.Extensions
         {
             services.AddSingleton(TimeProvider.System);
             services.AddHttpContextAccessor();
-            services.AddScoped(typeof(IGenericRepository<>), typeof(GenericRepository<>));
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<AuthRegistrationUseCase>();
+            services.AddScoped<AuthSessionService>();
+            services.AddScoped<PasswordResetUseCase>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<IUploadService, UploadService>();
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IOrderService, OrderService>();
+            services.AddScoped<OrderCheckoutUseCase>();
+            services.AddScoped<OrderCommandService>();
+            services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<AuthTokenIssuer>();
             services.AddScoped<IOutboxWriter, OutboxWriter>();
             services.AddScoped<IAuditWriter, AuditWriter>();
             services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
@@ -288,6 +293,9 @@ namespace ECommerceBackend.API.Extensions
                 ISensitivePayloadProtector,
                 DataProtectionSensitivePayloadProtector>();
             services.AddScoped<IOperationsService, OperationsService>();
+            services.AddScoped<DeadLetterUseCase>();
+            services.AddScoped<AuditQueryUseCase>();
+            services.AddScoped<DataRetentionUseCase>();
             services.AddScoped<IUploadReconciliationService, UploadReconciliationService>();
             services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
             services.AddScoped<IOutboxStore, EfOutboxStore>();

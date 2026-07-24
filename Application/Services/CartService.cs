@@ -10,24 +10,15 @@ namespace ECommerceBackend.Application.Services
 {
     public class CartService : ICartService
     {
-        private readonly IGenericRepository<Cart> _cartRepo;
-        private readonly IGenericRepository<CartItem> _cartItemRepo;
-        private readonly IGenericRepository<Product> _productRepo;
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
         private readonly IMapper _mapper;
 
         public CartService(
-            IGenericRepository<Cart> cartRepo,
-            IGenericRepository<CartItem> cartItemRepo,
-            IGenericRepository<Product> productRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IMapper mapper)
         {
-            _cartRepo = cartRepo;
-            _cartItemRepo = cartItemRepo;
-            _productRepo = productRepo;
             _context = context;
             _consistency = consistency;
             _mapper = mapper;
@@ -54,7 +45,7 @@ namespace ECommerceBackend.Application.Services
             try
             {
                 var cart = await GetOrCreateCartAsync(userId, cancellationToken, lockForUpdate: true);
-                var product = await _productRepo.Query()
+                var product = await _context.Products
                     .FirstOrDefaultAsync(p => !p.IsDeleted && p.Id == request.ProductId, cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
@@ -70,7 +61,7 @@ namespace ECommerceBackend.Application.Services
                 else
                 {
                     EnsureStockAvailable(product, request.Quantity);
-                    await _cartItemRepo.AddAsync(new CartItem
+                    await _context.CartItems.AddAsync(new CartItem
                     {
                         Id = Guid.NewGuid(),
                         CartId = cart.Id,
@@ -126,7 +117,7 @@ namespace ECommerceBackend.Application.Services
 
                 if (request.Quantity == 0)
                 {
-                    _cartItemRepo.Delete(item);
+                    _context.CartItems.Remove(item);
                 }
                 else
                 {
@@ -176,7 +167,7 @@ namespace ECommerceBackend.Application.Services
                 var item = cart.CartItems.FirstOrDefault(cartItem => cartItem.Id == cartItemId)
                     ?? throw new NotFoundException("Không tìm thấy sản phẩm trong giỏ hàng.");
 
-                _cartItemRepo.Delete(item);
+                _context.CartItems.Remove(item);
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
@@ -211,7 +202,7 @@ namespace ECommerceBackend.Application.Services
             {
                 var cart = await GetOrCreateCartAsync(userId, cancellationToken, lockForUpdate: true);
                 foreach (var item in cart.CartItems.ToList())
-                    _cartItemRepo.Delete(item);
+                    _context.CartItems.Remove(item);
 
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -255,7 +246,7 @@ namespace ECommerceBackend.Application.Services
             }
             else
             {
-                cart = await _cartRepo.Query()
+                cart = await _context.Carts
                     .Include(c => c.CartItems)
                         .ThenInclude(ci => ci.Product)
                             .ThenInclude(p => p!.Images)
@@ -267,7 +258,7 @@ namespace ECommerceBackend.Application.Services
                 return cart;
 
             cart = new Cart { Id = Guid.NewGuid(), UserId = userId };
-            await _cartRepo.AddAsync(cart, cancellationToken);
+            await _context.Carts.AddAsync(cart, cancellationToken);
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
@@ -276,7 +267,7 @@ namespace ECommerceBackend.Application.Services
             {
                 _context.Entry(cart).State = EntityState.Detached;
 
-                var existingCart = await _cartRepo.Query()
+                var existingCart = await _context.Carts
                     .Include(c => c.CartItems)
                         .ThenInclude(ci => ci.Product)
                             .ThenInclude(p => p!.Images)

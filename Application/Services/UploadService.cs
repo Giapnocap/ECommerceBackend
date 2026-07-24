@@ -16,8 +16,6 @@ namespace ECommerceBackend.Application.Services
 
         private static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
-        private readonly IGenericRepository<Product> _productRepo;
-        private readonly IGenericRepository<ProductImage> _imageRepo;
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
         private readonly IWebHostEnvironment _environment;
@@ -27,8 +25,6 @@ namespace ECommerceBackend.Application.Services
         private readonly IAuditWriter _audit;
 
         public UploadService(
-            IGenericRepository<Product> productRepo,
-            IGenericRepository<ProductImage> imageRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IWebHostEnvironment environment,
@@ -37,8 +33,6 @@ namespace ECommerceBackend.Application.Services
             ILogger<UploadService> logger,
             IAuditWriter? auditWriter = null)
         {
-            _productRepo = productRepo;
-            _imageRepo = imageRepo;
             _context = context;
             _consistency = consistency;
             _environment = environment;
@@ -55,7 +49,7 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default,
             Guid? actorUserId = null)
         {
-            var productExists = await _productRepo.Query()
+            var productExists = await _context.Products
                 .AsNoTracking()
                 .AnyAsync(product => !product.IsDeleted && product.Id == productId, cancellationToken);
             if (!productExists)
@@ -121,7 +115,7 @@ namespace ECommerceBackend.Application.Services
             {
                 _ = await _consistency.LockProductAsync(productId, activeOnly: true, cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{productId}'.");
-                var image = await _imageRepo.Query()
+                var image = await _context.ProductImages
                     .FirstOrDefaultAsync(candidate => candidate.Id == imageId
                         && candidate.ProductId == productId, cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy ảnh sản phẩm.");
@@ -130,14 +124,14 @@ namespace ECommerceBackend.Application.Services
                 ProductImage? replacement = null;
                 if (image.IsMain)
                 {
-                    replacement = await _imageRepo.Query()
+                    replacement = await _context.ProductImages
                         .Where(candidate => candidate.ProductId == productId
                             && candidate.Id != imageId)
                         .OrderBy(candidate => candidate.Id)
                         .FirstOrDefaultAsync(cancellationToken);
                 }
 
-                _imageRepo.Delete(image);
+                _context.ProductImages.Remove(image);
                 _audit.Write(
                     "product.image.delete",
                     "ProductImage",
@@ -212,7 +206,7 @@ namespace ECommerceBackend.Application.Services
                     IsMain = imageIsMain
                 };
 
-                await _imageRepo.AddAsync(image, cancellationToken);
+                await _context.ProductImages.AddAsync(image, cancellationToken);
                 _audit.Write(
                     "product.image.upload",
                     "ProductImage",

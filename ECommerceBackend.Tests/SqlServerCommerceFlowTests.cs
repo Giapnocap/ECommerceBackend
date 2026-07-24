@@ -15,7 +15,6 @@ using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Payments;
-using ECommerceBackend.Infrastructure.Repositories;
 using ECommerceBackend.Tests.Support;
 using Microsoft.Data.SqlClient;
 using Microsoft.AspNetCore.Http;
@@ -591,13 +590,21 @@ public sealed class SqlServerCommerceFlowTests
                     context,
                     new HttpContextAccessor(),
                     clock);
+                var consistency = new EfDataConsistencyService(context);
                 var service = new OperationsService(
-                    context,
-                    new EfDataConsistencyService(context),
-                    audit,
-                    clock,
-                    Options.Create(new DataRetentionOptions()),
-                    NullLogger<OperationsService>.Instance);
+                    new DeadLetterUseCase(
+                        context,
+                        consistency,
+                        audit,
+                        clock),
+                    new AuditQueryUseCase(context),
+                    new DataRetentionUseCase(
+                        context,
+                        consistency,
+                        audit,
+                        clock,
+                        Options.Create(new DataRetentionOptions()),
+                        NullLogger<DataRetentionUseCase>.Instance));
                 return await service.RedriveDeadLetterAsync(messageId, actorUserId);
             }
 
@@ -658,17 +665,29 @@ public sealed class SqlServerCommerceFlowTests
             {
                 await using var context = new AppDbContext(options);
                 var clock = new FixedTimeProvider(now);
-                var service = new OperationsService(
+                var consistency = new EfDataConsistencyService(context);
+                var audit = new AuditWriter(
                     context,
-                    new EfDataConsistencyService(context),
-                    new AuditWriter(context, new HttpContextAccessor(), clock),
-                    clock,
-                    Options.Create(new DataRetentionOptions
-                    {
-                        Enabled = true,
-                        ProcessedOutboxRetentionDays = 30
-                    }),
-                    NullLogger<OperationsService>.Instance);
+                    new HttpContextAccessor(),
+                    clock);
+                var service = new OperationsService(
+                    new DeadLetterUseCase(
+                        context,
+                        consistency,
+                        audit,
+                        clock),
+                    new AuditQueryUseCase(context),
+                    new DataRetentionUseCase(
+                        context,
+                        consistency,
+                        audit,
+                        clock,
+                        Options.Create(new DataRetentionOptions
+                        {
+                            Enabled = true,
+                            ProcessedOutboxRetentionDays = 30
+                        }),
+                        NullLogger<DataRetentionUseCase>.Instance));
                 return await service.RunDataRetentionAsync(
                     new DataRetentionRequest { ApplyChanges = true, MaxBatchSize = 10 },
                     actorUserId);
@@ -961,15 +980,8 @@ public sealed class SqlServerCommerceFlowTests
 
             await using var orderContext = new AppDbContext(options);
             await using var webhookContext = new AppDbContext(options);
-            var orderService = new OrderService(
-                new GenericRepository<Order>(orderContext),
+            var orderService = TestServiceFactory.CreateOrderService(
                 orderContext,
-                new EfDataConsistencyService(orderContext),
-                new PaymentProviderResolver([new CashOnDeliveryPaymentProvider()]),
-                new OutboxWriter(orderContext),
-                new MapperConfiguration(
-                    configuration => configuration.AddProfile<MappingProfile>(),
-                    NullLoggerFactory.Instance).CreateMapper(),
                 clock);
             var webhookService = new PaymentWebhookService(
                 webhookContext,
@@ -1530,18 +1542,7 @@ public sealed class SqlServerCommerceFlowTests
     }
 
     private static OrderService CreateOrderService(AppDbContext context)
-    {
-        var mapperConfiguration = new MapperConfiguration(
-            configuration => configuration.AddProfile<MappingProfile>(),
-            NullLoggerFactory.Instance);
-        return new OrderService(
-            new GenericRepository<Order>(context),
-            context,
-            new EfDataConsistencyService(context),
-            new PaymentProviderResolver([new CashOnDeliveryPaymentProvider()]),
-            new OutboxWriter(context),
-            mapperConfiguration.CreateMapper());
-    }
+        => TestServiceFactory.CreateOrderService(context);
 
     private static string BuildConnectionString(string databaseName)
         => SqlServerIntegrationTestGate.CreateTestDatabaseConnectionString(databaseName);

@@ -10,20 +10,17 @@ namespace ECommerceBackend.Application.Services
 {
     public class CategoryService : ICategoryService
     {
-        private readonly IGenericRepository<Category> _categoryRepo;
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
         private readonly IMapper _mapper;
         private readonly IAuditWriter _audit;
 
         public CategoryService(
-            IGenericRepository<Category> categoryRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IMapper mapper,
             IAuditWriter? auditWriter = null)
         {
-            _categoryRepo = categoryRepo;
             _context = context;
             _consistency = consistency;
             _mapper = mapper;
@@ -33,7 +30,7 @@ namespace ECommerceBackend.Application.Services
         public async Task<IEnumerable<CategoryResponse>> GetAllAsync(
             CancellationToken cancellationToken = default)
         {
-            var categories = await _categoryRepo.Query()
+            var categories = await _context.Categories
                 .AsNoTracking()
                 .Include(category => category.Children.Where(child => !child.IsDeleted))
                 .Include(category => category.Parent)
@@ -49,7 +46,7 @@ namespace ECommerceBackend.Application.Services
             Guid id,
             CancellationToken cancellationToken = default)
         {
-            var category = await _categoryRepo.Query()
+            var category = await _context.Categories
                 .AsNoTracking()
                 .Include(candidate => candidate.Children.Where(child => !child.IsDeleted))
                 .Include(candidate => candidate.Parent)
@@ -96,7 +93,7 @@ namespace ECommerceBackend.Application.Services
                 };
                 categoryId = category.Id;
 
-                await _categoryRepo.AddAsync(category, cancellationToken);
+                await _context.Categories.AddAsync(category, cancellationToken);
                 _audit.Write(
                     "category.create",
                     "Category",

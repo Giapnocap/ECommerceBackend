@@ -11,9 +11,6 @@ namespace ECommerceBackend.Application.Services
 {
     public class UserService : IUserService
     {
-        private readonly IGenericRepository<User> _userRepo;
-        private readonly IGenericRepository<Role> _roleRepo;
-        private readonly IGenericRepository<UserRole> _userRoleRepo;
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
         private readonly IMapper _mapper;
@@ -21,16 +18,10 @@ namespace ECommerceBackend.Application.Services
         private readonly IAuditWriter _audit;
 
         public UserService(
-            IGenericRepository<User> userRepo,
-            IGenericRepository<Role> roleRepo,
-            IGenericRepository<UserRole> userRoleRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IMapper mapper)
             : this(
-                userRepo,
-                roleRepo,
-                userRoleRepo,
                 context,
                 consistency,
                 mapper,
@@ -39,18 +30,12 @@ namespace ECommerceBackend.Application.Services
         }
 
         public UserService(
-            IGenericRepository<User> userRepo,
-            IGenericRepository<Role> roleRepo,
-            IGenericRepository<UserRole> userRoleRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IMapper mapper,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
-            _userRepo = userRepo;
-            _roleRepo = roleRepo;
-            _userRoleRepo = userRoleRepo;
             _context = context;
             _consistency = consistency;
             _mapper = mapper;
@@ -64,7 +49,7 @@ namespace ECommerceBackend.Application.Services
             Guid userId,
             CancellationToken cancellationToken = default)
         {
-            var user = await _userRepo.Query()
+            var user = await _context.Users
                 .AsNoTracking()
                 .Include(candidate => candidate.UserRoles)
                     .ThenInclude(userRole => userRole.Role)
@@ -81,7 +66,7 @@ namespace ECommerceBackend.Application.Services
             UpdateProfileRequest request,
             CancellationToken cancellationToken = default)
         {
-            var user = await _userRepo.Query()
+            var user = await _context.Users
                 .Include(candidate => candidate.UserRoles)
                     .ThenInclude(userRole => userRole.Role)
                 .FirstOrDefaultAsync(
@@ -168,7 +153,7 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default)
         {
             var paging = Paging.Normalize(queryParams.Page, queryParams.PageSize, defaultSize: 20);
-            var query = _userRepo.Query()
+            var query = _context.Users
                 .AsNoTracking()
                 .Where(user => !user.IsDeleted);
 
@@ -226,7 +211,7 @@ namespace ECommerceBackend.Application.Services
                     .Include(userRole => userRole.Role)
                     .LoadAsync(cancellationToken);
 
-                var role = await _roleRepo.Query()
+                var role = await _context.Roles
                     .FirstOrDefaultAsync(
                         candidate => candidate.Name == request.RoleName,
                         cancellationToken)
@@ -263,9 +248,9 @@ namespace ECommerceBackend.Application.Services
                 }
 
                 foreach (var userRole in currentRoles)
-                    _userRoleRepo.Delete(userRole);
+                    _context.UserRoles.Remove(userRole);
 
-                await _userRoleRepo.AddAsync(
+                await _context.UserRoles.AddAsync(
                     new UserRole { UserId = userId, RoleId = role.Id },
                     cancellationToken);
                 var occurredAt = UtcNow;

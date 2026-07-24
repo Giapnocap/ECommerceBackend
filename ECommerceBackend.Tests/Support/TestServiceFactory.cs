@@ -6,7 +6,6 @@ using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Payments;
-using ECommerceBackend.Infrastructure.Repositories;
 using ECommerceBackend.Infrastructure.Security;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -26,16 +25,11 @@ internal static class TestServiceFactory
 
     public static IMapper CreateMapper() => Mapper.Value;
 
-    public static GenericRepository<T> Repository<T>(AppDbContext context)
-        where T : class
-        => new(context);
-
     public static EfDataConsistencyService Consistency(AppDbContext context)
         => new(context);
 
     public static ProductService CreateProductService(AppDbContext context, TimeProvider? timeProvider = null)
         => new(
-            Repository<Product>(context),
             context,
             Consistency(context),
             CreateMapper(),
@@ -43,16 +37,12 @@ internal static class TestServiceFactory
 
     public static CategoryService CreateCategoryService(AppDbContext context)
         => new(
-            Repository<Category>(context),
             context,
             Consistency(context),
             CreateMapper());
 
     public static CartService CreateCartService(AppDbContext context)
         => new(
-            Repository<Cart>(context),
-            Repository<CartItem>(context),
-            Repository<Product>(context),
             context,
             Consistency(context),
             CreateMapper());
@@ -61,8 +51,6 @@ internal static class TestServiceFactory
         AppDbContext context,
         TestWebHostEnvironment environment)
         => new(
-            Repository<Product>(context),
-            Repository<ProductImage>(context),
             context,
             Consistency(context),
             environment,
@@ -80,34 +68,48 @@ internal static class TestServiceFactory
     {
         var clock = timeProvider ?? TimeProvider.System;
         var protector = payloadProtector ?? new TestSensitivePayloadProtector();
+        var jwtOptions = Options.Create(new JwtOptions
+        {
+            Key = "phase-7-test-jwt-key-with-enough-length",
+            Issuer = "ECommerceBackend.Tests",
+            Audience = "ECommerceBackend.Tests.Client",
+            AccessTokenMinutes = 60,
+            RefreshTokenDays = 7
+        });
+        var options = Options.Create(
+            securityOptions ?? new AuthSecurityOptions());
+        var hasher = passwordHasher ?? new BCryptPasswordHasher();
+        var audit = auditWriter ?? NullAuditWriter.Instance;
+        var consistency = Consistency(context);
+        var tokenIssuer = new AuthTokenIssuer(jwtOptions);
+        var outbox = new OutboxWriter(context, clock, protector);
         return new AuthService(
-            Repository<User>(context),
-            Repository<Role>(context),
-            Repository<UserRole>(context),
-            Repository<Cart>(context),
-            Repository<RefreshToken>(context),
-            context,
-            Consistency(context),
-            Options.Create(new JwtOptions
-            {
-                Key = "phase-7-test-jwt-key-with-enough-length",
-                Issuer = "ECommerceBackend.Tests",
-                Audience = "ECommerceBackend.Tests.Client",
-                AccessTokenMinutes = 60,
-                RefreshTokenDays = 7
-            }),
-            Options.Create(securityOptions ?? new AuthSecurityOptions()),
-            passwordHasher ?? new BCryptPasswordHasher(),
-            new OutboxWriter(context, clock, protector),
-            auditWriter ?? NullAuditWriter.Instance,
-            clock);
+            new AuthRegistrationUseCase(
+                context,
+                consistency,
+                hasher,
+                tokenIssuer,
+                clock),
+            new AuthSessionService(
+                context,
+                consistency,
+                tokenIssuer,
+                options,
+                hasher,
+                audit,
+                clock),
+            new PasswordResetUseCase(
+                context,
+                consistency,
+                hasher,
+                outbox,
+                audit,
+                options,
+                clock));
     }
 
     public static UserService CreateUserService(AppDbContext context, TimeProvider? timeProvider = null)
         => new(
-            Repository<User>(context),
-            Repository<Role>(context),
-            Repository<UserRole>(context),
             context,
             Consistency(context),
             CreateMapper(),
@@ -117,15 +119,33 @@ internal static class TestServiceFactory
         AppDbContext context,
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null)
-        => new(
-            Repository<Order>(context),
+    {
+        var queries = new OrderQueryUseCase(context, CreateMapper());
+        var consistency = Consistency(context);
+        var providers = new PaymentProviderResolver(
+            [new CashOnDeliveryPaymentProvider()]);
+        var outbox = new OutboxWriter(context);
+        var clock = timeProvider ?? TimeProvider.System;
+        var options = Options.Create(
+            lifecycleOptions ?? new OrderLifecycleOptions());
+        var checkout = new OrderCheckoutUseCase(
             context,
-            Consistency(context),
-            new PaymentProviderResolver([new CashOnDeliveryPaymentProvider()]),
-            new OutboxWriter(context),
-            CreateMapper(),
-            timeProvider ?? TimeProvider.System,
-            Options.Create(lifecycleOptions ?? new OrderLifecycleOptions()));
+            consistency,
+            providers,
+            outbox,
+            queries,
+            clock,
+            options);
+        var commands = new OrderCommandService(
+            context,
+            consistency,
+            providers,
+            outbox,
+            queries,
+            clock,
+            options);
+        return new OrderService(checkout, commands, queries);
+    }
 }
 
 internal sealed class TestSensitivePayloadProtector : ISensitivePayloadProtector

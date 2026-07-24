@@ -22,7 +22,6 @@ namespace ECommerceBackend.Application.Services
         private static readonly Histogram<long> CatalogQueryResultCount =
             CatalogMeter.CreateHistogram<long>("catalog.query.result_count", "item");
 
-        private readonly IGenericRepository<Product> _productRepo;
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
         private readonly IMapper _mapper;
@@ -30,23 +29,20 @@ namespace ECommerceBackend.Application.Services
         private readonly IAuditWriter _audit;
 
         public ProductService(
-            IGenericRepository<Product> productRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IMapper mapper)
-            : this(productRepo, context, consistency, mapper, TimeProvider.System)
+            : this(context, consistency, mapper, TimeProvider.System)
         {
         }
 
         public ProductService(
-            IGenericRepository<Product> productRepo,
             IAppDbContext context,
             IDataConsistencyService consistency,
             IMapper mapper,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
-            _productRepo = productRepo;
             _context = context;
             _consistency = consistency;
             _mapper = mapper;
@@ -62,7 +58,7 @@ namespace ECommerceBackend.Application.Services
         {
             var stopwatch = Stopwatch.StartNew();
             var paging = Paging.Normalize(queryParams.Page, queryParams.PageSize);
-            var query = _productRepo.Query()
+            var query = _context.Products
                 .AsNoTracking()
                 .Where(product => !product.IsDeleted
                     && product.Category != null
@@ -152,7 +148,7 @@ namespace ECommerceBackend.Application.Services
             Guid id,
             CancellationToken cancellationToken = default)
         {
-            var product = await _productRepo.Query()
+            var product = await _context.Products
                 .AsNoTracking()
                 .Include(candidate => candidate.Category)
                 .Include(candidate => candidate.Images)
@@ -199,7 +195,7 @@ namespace ECommerceBackend.Application.Services
                     InventoryPolicy.AdjustTo(product, request.StockQuantity));
                 productId = product.Id;
 
-                await _productRepo.AddAsync(product, cancellationToken);
+                await _context.Products.AddAsync(product, cancellationToken);
                 if (inventoryMutation.QuantityChange != 0)
                 {
                     _context.InventoryTransactions.Add(new InventoryTransaction

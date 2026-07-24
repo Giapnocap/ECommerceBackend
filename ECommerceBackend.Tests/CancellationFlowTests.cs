@@ -16,7 +16,6 @@ public sealed class CancellationFlowTests
         using var cancellation = new CancellationTokenSource();
         var consistency = new CancelAfterBeginConsistencyService(cancellation);
         var service = new CategoryService(
-            TestServiceFactory.Repository<Category>(context),
             context,
             consistency,
             TestServiceFactory.CreateMapper());

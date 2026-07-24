@@ -1,0 +1,806 @@
+using System.Data;
+using System.Security.Cryptography;
+using System.Text;
+using ECommerceBackend.Application.Common;
+using ECommerceBackend.Application.DTOs;
+using ECommerceBackend.Application.Exceptions;
+using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Observability;
+using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Domain.Common;
+using ECommerceBackend.Domain.Enums;
+using ECommerceBackend.Domain.Policies;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+
+namespace ECommerceBackend.Application.Services
+{
+    public sealed class OrderCommandService
+    {
+        private readonly IAppDbContext _context;
+        private readonly IDataConsistencyService _consistency;
+        private readonly IPaymentProviderResolver _paymentProviders;
+        private readonly IOutboxWriter _outbox;
+        private readonly TimeProvider _timeProvider;
+        private readonly OrderLifecycleOptions _lifecycleOptions;
+        private readonly IAuditWriter _audit;
+        private readonly OrderQueryUseCase _queries;
+
+        public OrderCommandService(
+            IAppDbContext context,
+            IDataConsistencyService consistency,
+            IPaymentProviderResolver paymentProviders,
+            IOutboxWriter outbox,
+            OrderQueryUseCase queries)
+            : this(
+                context,
+                consistency,
+                paymentProviders,
+                outbox,
+                queries,
+                TimeProvider.System,
+                Options.Create(new OrderLifecycleOptions()))
+        {
+        }
+
+        public OrderCommandService(
+            IAppDbContext context,
+            IDataConsistencyService consistency,
+            IPaymentProviderResolver paymentProviders,
+            IOutboxWriter outbox,
+            OrderQueryUseCase queries,
+            TimeProvider timeProvider)
+            : this(
+                context,
+                consistency,
+                paymentProviders,
+                outbox,
+                queries,
+                timeProvider,
+                Options.Create(new OrderLifecycleOptions()))
+        {
+        }
+
+        public OrderCommandService(
+            IAppDbContext context,
+            IDataConsistencyService consistency,
+            IPaymentProviderResolver paymentProviders,
+            IOutboxWriter outbox,
+            OrderQueryUseCase queries,
+            TimeProvider timeProvider,
+            IOptions<OrderLifecycleOptions> lifecycleOptions,
+            IAuditWriter? auditWriter = null)
+        {
+            _context = context;
+            _consistency = consistency;
+            _paymentProviders = paymentProviders;
+            _outbox = outbox;
+            _queries = queries;
+            _timeProvider = timeProvider;
+            _lifecycleOptions = lifecycleOptions.Value;
+            _audit = auditWriter ?? NullAuditWriter.Instance;
+        }
+
+        private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
+
+        private async Task<OrderResponse> PlaceOrderAsync(
+            Guid userId,
+            PlaceOrderRequest request,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+        {
+            var paymentMethod = Enum.IsDefined(request.PaymentMethod)
+                ? request.PaymentMethod.ToString()
+                : "unknown";
+            using var telemetry = BusinessTelemetry.Start(
+                "checkout.place_order",
+                cancellationToken,
+                new KeyValuePair<string, object?>(
+                    "payment.method",
+                    paymentMethod));
+            var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
+            var requestHash = HashCheckoutRequest(request);
+            var existingOrder = await FindIdempotentOrderAsync(
+                userId,
+                normalizedKey,
+                cancellationToken);
+
+            if (existingOrder != null)
+            {
+                EnsureSameIdempotencyRequest(existingOrder, requestHash);
+                telemetry.SetTag("checkout.idempotency.replay", true);
+                var response = await _queries.GetByIdAsync(
+                    existingOrder.Id,
+                    userId,
+                    true,
+                    cancellationToken);
+                telemetry.Complete();
+                return response;
+            }
+
+            Guid orderId;
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var transactionCompleted = false;
+
+            try
+            {
+                var cart = await _consistency.LockCartByUserIdAsync(userId, cancellationToken)
+                    ?? throw new BusinessException("Không tìm thấy giỏ hàng.");
+
+                existingOrder = await FindIdempotentOrderAsync(
+                    userId,
+                    normalizedKey,
+                    cancellationToken);
+                if (existingOrder != null)
+                {
+                    EnsureSameIdempotencyRequest(existingOrder, requestHash);
+                    orderId = existingOrder.Id;
+                    await transaction.CommitAsync(cancellationToken);
+                    transactionCompleted = true;
+                    telemetry.SetTag("checkout.idempotency.replay", true);
+                    var response = await _queries.GetByIdAsync(
+                        orderId,
+                        userId,
+                        true,
+                        cancellationToken);
+                    telemetry.Complete();
+                    return response;
+                }
+
+                var pendingOrderCount = await _context.Orders
+                    .CountAsync(order => order.UserId == userId
+                        && order.Status == OrderStatus.Pending, cancellationToken);
+                if (pendingOrderCount >= _lifecycleOptions.MaxPendingOrdersPerCustomer)
+                {
+                    throw new ConflictException(
+                        "pending_order_limit_reached",
+                        $"Bạn chỉ có thể có tối đa {_lifecycleOptions.MaxPendingOrdersPerCustomer} đơn hàng đang chờ xử lý.");
+                }
+
+                var productIds = await _context.CartItems
+                    .AsNoTracking()
+                    .Where(item => item.CartId == cart.Id)
+                    .Select(item => item.ProductId)
+                    .ToListAsync(cancellationToken);
+
+                if (productIds.Count == 0)
+                    throw new BusinessException("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
+
+                var products = await LoadProductsForUpdateAsync(productIds, cancellationToken);
+                await _context.Entry(cart)
+                    .Collection(candidate => candidate.CartItems)
+                    .LoadAsync(cancellationToken);
+
+                if (cart.CartItems.Count == 0)
+                    throw new BusinessException("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
+
+                foreach (var item in cart.CartItems)
+                {
+                    if (!products.TryGetValue(item.ProductId, out var product))
+                    {
+                        throw new BusinessException(
+                            "Dữ liệu sản phẩm trong giỏ hàng không còn khả dụng.");
+                    }
+
+                    item.Product = product;
+                }
+
+                foreach (var item in cart.CartItems)
+                {
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryPolicy.EnsureCanReserve(item.Product!, item.Quantity));
+                }
+
+                var orderOccurredAt = UtcNow;
+                var subtotal = DomainRuleGuard.AsBusiness(() =>
+                    OrderPricingPolicy.CalculateSubtotal(cart.CartItems.Select(item =>
+                        new OrderPricingLine(
+                            item.Product?.Name ?? string.Empty,
+                            item.Product?.Price ?? 0,
+                            item.Quantity))));
+                var order = new Order
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    OrderNumber = CreateOrderNumber(orderOccurredAt),
+                    IdempotencyKey = normalizedKey,
+                    IdempotencyRequestHash = requestHash,
+                    OrderDate = orderOccurredAt,
+                    ShippingAddress = request.ShippingAddress.Trim(),
+                    Note = NormalizeOptional(request.Note)
+                };
+                DomainRuleGuard.AsBusiness(() =>
+                    order.SetPricing(subtotal, discount: 0, shipping: 0, tax: 0));
+                DomainRuleGuard.AsBusiness(() => order.SetPendingExpiration(
+                    orderOccurredAt.AddMinutes(_lifecycleOptions.PendingCodHoldMinutes)));
+                orderId = order.Id;
+                var paymentProvider = _paymentProviders.GetCheckoutProvider(request.PaymentMethod);
+                var initializedPayment = PaymentProviderContract.NormalizeInitialization(
+                    paymentProvider,
+                    paymentProvider.Initialize(new PaymentInitializationRequest(
+                        order.Id,
+                        order.OrderNumber,
+                        order.TotalAmount)));
+
+                var paymentCreatedAt = orderOccurredAt;
+                var payment = new Payment
+                {
+                    Id = Guid.NewGuid(),
+                    OrderId = order.Id,
+                    Method = request.PaymentMethod,
+                    Amount = order.TotalAmount,
+                    Provider = initializedPayment.Provider,
+                    ProviderTransactionId = initializedPayment.ProviderTransactionId,
+                    CreatedAt = paymentCreatedAt
+                };
+                if (initializedPayment.Status != payment.Status)
+                {
+                    DomainRuleGuard.AsBusiness(() =>
+                        payment.ChangeStatus(initializedPayment.Status, paymentCreatedAt));
+                }
+
+                _context.Orders.Add(order);
+                _context.Payments.Add(payment);
+                _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+                {
+                    Id = Guid.NewGuid(),
+                    PaymentId = payment.Id,
+                    ChangedByUserId = userId,
+                    FromStatus = null,
+                    ToStatus = payment.Status,
+                    Source = PaymentStatusChangeSource.Checkout,
+                    Reference = order.OrderNumber,
+                    OccurredAt = paymentCreatedAt,
+                    CreatedAt = paymentCreatedAt
+                });
+                _context.OrderStatusHistories.Add(new OrderStatusHistory
+                {
+                    Id = Guid.NewGuid(),
+                    OrderId = order.Id,
+                    ChangedByUserId = userId,
+                    FromStatus = null,
+                    ToStatus = order.Status,
+                    Note = "Đã đặt hàng và giữ tồn kho",
+                    CreatedAt = orderOccurredAt
+                });
+
+                foreach (var item in cart.CartItems)
+                {
+                    var product = item.Product!;
+                    var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
+                        InventoryPolicy.Reserve(product, item.Quantity));
+
+                    _context.OrderDetails.Add(new OrderDetail
+                    {
+                        Id = Guid.NewGuid(),
+                        OrderId = order.Id,
+                        ProductId = item.ProductId,
+                        ProductNameSnapshot = product.Name,
+                        Quantity = item.Quantity,
+                        UnitPrice = product.Price
+                    });
+                    _context.InventoryTransactions.Add(new InventoryTransaction
+                    {
+                        Id = Guid.NewGuid(),
+                        ProductId = product.Id,
+                        OrderId = order.Id,
+                        CreatedByUserId = userId,
+                        Type = InventoryTransactionType.OrderPlaced,
+                        QuantityChange = inventoryMutation.QuantityChange,
+                        BalanceAfter = inventoryMutation.BalanceAfter,
+                        Reason = $"Đặt đơn {order.OrderNumber}",
+                        CreatedAt = orderOccurredAt
+                    });
+                    _context.CartItems.Remove(item);
+                }
+
+                _outbox.EnqueueNotification(
+                    userId,
+                    "Đặt hàng thành công",
+                    $"Đơn hàng {order.OrderNumber} đã được tiếp nhận và đang chờ xác nhận.",
+                    order.Id);
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                transactionCompleted = true;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "Tồn kho vừa được thay đổi. Vui lòng tải lại giỏ hàng và thử lại.",
+                    ex);
+            }
+            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                var savedOrder = await FindIdempotentOrderAsync(userId, normalizedKey, cancellationToken);
+                if (savedOrder != null)
+                {
+                    EnsureSameIdempotencyRequest(savedOrder, requestHash);
+                    telemetry.SetTag("checkout.idempotency.replay", true);
+                    var response = await _queries.GetByIdAsync(
+                        savedOrder.Id,
+                        userId,
+                        true,
+                        cancellationToken);
+                    telemetry.Complete();
+                    return response;
+                }
+
+                throw new ConflictException("Không thể tạo đơn hàng do dữ liệu vừa được cập nhật.", ex);
+            }
+            catch (Exception ex) when (_consistency.IsDeadlock(ex))
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "Hệ thống đang xử lý giao dịch khác trên cùng sản phẩm. Vui lòng thử lại.",
+                    ex);
+            }
+            catch
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+
+            var orderResponse = await _queries.GetByIdAsync(
+                orderId,
+                userId,
+                true,
+                cancellationToken);
+            telemetry.Complete();
+            return orderResponse;
+        }
+
+        public async Task<OrderResponse> UpdateStatusAsync(
+            Guid orderId,
+            Guid actorUserId,
+            UpdateOrderStatusRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var transactionCompleted = false;
+
+            try
+            {
+                var order = await _consistency.LockOrderAsync(orderId, cancellationToken)
+                    ?? throw new NotFoundException("Không tìm thấy đơn hàng.");
+
+                if (order.Status != request.Status)
+                {
+                    var payment = await _consistency.LockPaymentByOrderIdAsync(
+                        order.Id,
+                        cancellationToken);
+                    var occurredAt = UtcNow;
+                    var statusChange = request.Status == OrderStatus.Cancelled
+                        ? DomainRuleGuard.AsBusiness(() => order.Cancel(
+                            occurredAt,
+                            payment?.Status,
+                            NormalizeOptional(request.Note) ?? "CancelledByStaff"))
+                        : DomainRuleGuard.AsBusiness(() =>
+                            order.ChangeStatus(request.Status, payment?.Status));
+
+                    if (request.Status == OrderStatus.Cancelled)
+                    {
+                        await RestoreOrderStockAsync(order, actorUserId, occurredAt, cancellationToken);
+                    }
+
+                    UpdatePaymentForOrderStatus(
+                        payment,
+                        request.Status,
+                        actorUserId,
+                        occurredAt);
+
+                    _context.OrderStatusHistories.Add(new OrderStatusHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        OrderId = order.Id,
+                        ChangedByUserId = actorUserId,
+                        FromStatus = statusChange.Previous,
+                        ToStatus = request.Status,
+                        Note = NormalizeOptional(request.Note),
+                        CreatedAt = occurredAt
+                    });
+
+                    _outbox.EnqueueNotification(
+                        order.UserId,
+                        "Cập nhật trạng thái đơn hàng",
+                        $"Đơn hàng {order.OrderNumber} đã chuyển sang trạng thái {GetOrderStatusLabel(request.Status)}.",
+                        order.Id,
+                        payment?.Id);
+
+                    _audit.Write(
+                        "order.status.update",
+                        "Order",
+                        order.Id.ToString(),
+                        actorUserId,
+                        new Dictionary<string, object?>
+                        {
+                            ["fromStatus"] = statusChange.Previous.ToString(),
+                            ["toStatus"] = request.Status.ToString()
+                        });
+
+                    await _context.SaveChangesAsync(cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+                transactionCompleted = true;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "Đơn hàng hoặc tồn kho vừa được cập nhật. Vui lòng tải lại và thử lại.",
+                    ex);
+            }
+            catch (Exception ex) when (_consistency.IsDeadlock(ex))
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "Hệ thống đang xử lý giao dịch khác trên cùng đơn hàng hoặc sản phẩm. Vui lòng thử lại.",
+                    ex);
+            }
+            catch
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+
+            return await _queries.GetByIdAsync(
+                orderId,
+                actorUserId,
+                true,
+                cancellationToken);
+        }
+
+        public async Task<OrderResponse> CancelByCustomerAsync(
+            Guid orderId,
+            Guid customerUserId,
+            CancelOrderRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var transactionCompleted = false;
+
+            try
+            {
+                var order = await _consistency.LockOrderAsync(orderId, cancellationToken);
+                if (order == null || order.UserId != customerUserId)
+                    throw new NotFoundException("Không tìm thấy đơn hàng.");
+
+                if (order.Status == OrderStatus.Cancelled)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    transactionCompleted = true;
+                    return await _queries.GetByIdAsync(
+                        orderId,
+                        customerUserId,
+                        false,
+                        cancellationToken);
+                }
+
+                if (order.Status != OrderStatus.Pending)
+                {
+                    throw new ConflictException(
+                        "customer_order_cancellation_forbidden",
+                        "Khách hàng chỉ có thể hủy đơn hàng đang chờ xử lý.");
+                }
+
+                var payment = await _consistency.LockPaymentByOrderIdAsync(order.Id, cancellationToken);
+                var occurredAt = UtcNow;
+                var statusChange = DomainRuleGuard.AsConflict(() => order.Cancel(
+                    occurredAt,
+                    payment?.Status,
+                    NormalizeOptional(request.Reason) ?? "Khách hàng yêu cầu hủy"));
+
+                await RestoreOrderStockAsync(order, customerUserId, occurredAt, cancellationToken);
+                UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, customerUserId, occurredAt);
+                AddCancellationHistory(order, statusChange, customerUserId, request.Reason, occurredAt);
+                EnqueueCancellationNotification(order, payment, "Đơn hàng đã được hủy theo yêu cầu của bạn.");
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                transactionCompleted = true;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "Đơn hàng hoặc tồn kho vừa được cập nhật. Vui lòng tải lại và thử lại.",
+                    ex);
+            }
+            catch (Exception ex) when (_consistency.IsDeadlock(ex))
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "Hệ thống đang xử lý giao dịch khác trên cùng đơn hàng. Vui lòng thử lại.",
+                    ex);
+            }
+            catch
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+
+            return await _queries.GetByIdAsync(
+                orderId,
+                customerUserId,
+                false,
+                cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<Guid>> GetDuePendingOrderIdsAsync(
+            DateTime asOf,
+            int batchSize,
+            CancellationToken cancellationToken = default)
+        {
+            if (batchSize <= 0)
+                return Array.Empty<Guid>();
+
+            return await _context.Orders
+                .AsNoTracking()
+                .Where(order => order.Status == OrderStatus.Pending
+                    && order.ExpiresAt != null
+                    && order.ExpiresAt <= asOf)
+                .OrderBy(order => order.ExpiresAt)
+                .ThenBy(order => order.Id)
+                .Select(order => order.Id)
+                .Take(batchSize)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<bool> ExpirePendingOrderAsync(
+            Guid orderId,
+            DateTime asOf,
+            CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var transactionCompleted = false;
+
+            try
+            {
+                var order = await _consistency.LockOrderAsync(orderId, cancellationToken);
+                if (order == null
+                    || order.Status != OrderStatus.Pending
+                    || !order.ExpiresAt.HasValue
+                    || order.ExpiresAt.Value > asOf)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    transactionCompleted = true;
+                    return false;
+                }
+
+                var payment = await _consistency.LockPaymentByOrderIdAsync(order.Id, cancellationToken);
+                var statusChange = DomainRuleGuard.AsConflict(() => order.Cancel(
+                    asOf,
+                    payment?.Status,
+                    "SystemExpired",
+                    isExpiration: true));
+
+                await RestoreOrderStockAsync(order, null, asOf, cancellationToken);
+                UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, null, asOf);
+                AddCancellationHistory(order, statusChange, null, "SystemExpired", asOf);
+                EnqueueCancellationNotification(order, payment, "Đơn hàng đã hết thời gian giữ tồn kho và được hủy tự động.");
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                transactionCompleted = true;
+                return true;
+            }
+            catch
+            {
+                if (!transactionCompleted)
+                    await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+        }
+
+        private async Task<Order?> FindIdempotentOrderAsync(
+            Guid userId,
+            string idempotencyKey,
+            CancellationToken cancellationToken)
+            => await _context.Orders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(order => order.UserId == userId
+                    && order.IdempotencyKey == idempotencyKey, cancellationToken);
+
+        private async Task<Dictionary<Guid, Product>> LoadProductsForUpdateAsync(
+            IEnumerable<Guid> productIds,
+            CancellationToken cancellationToken)
+        {
+            var products = new Dictionary<Guid, Product>();
+            foreach (var productId in productIds.Distinct().OrderBy(id => id))
+            {
+                var product = await _consistency.LockProductAsync(
+                        productId,
+                        activeOnly: false,
+                        cancellationToken)
+                    ?? throw new BusinessException("Dữ liệu sản phẩm của giỏ hàng hoặc đơn hàng không còn tồn tại.");
+
+                products.Add(productId, product);
+            }
+
+            return products;
+        }
+
+        private async Task RestoreOrderStockAsync(
+            Order order,
+            Guid? actorUserId,
+            DateTime occurredAt,
+            CancellationToken cancellationToken)
+        {
+            await _context.Entry(order)
+                .Collection(candidate => candidate.OrderDetails)
+                .LoadAsync(cancellationToken);
+            var products = await LoadProductsForUpdateAsync(
+                order.OrderDetails.Select(detail => detail.ProductId),
+                cancellationToken);
+
+            foreach (var detail in order.OrderDetails)
+            {
+                var product = products[detail.ProductId];
+                var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
+                    InventoryPolicy.Release(product, detail.Quantity));
+
+                _context.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = product.Id,
+                    OrderId = order.Id,
+                    CreatedByUserId = actorUserId,
+                    Type = InventoryTransactionType.OrderCancelled,
+                    QuantityChange = inventoryMutation.QuantityChange,
+                    BalanceAfter = inventoryMutation.BalanceAfter,
+                    Reason = $"Hoàn kho do hủy đơn {order.OrderNumber}",
+                    CreatedAt = occurredAt
+                });
+            }
+        }
+
+        private void UpdatePaymentForOrderStatus(
+            Payment? payment,
+            OrderStatus orderStatus,
+            Guid? actorUserId,
+            DateTime occurredAt)
+        {
+            if (payment == null)
+                return;
+
+            PaymentStatus? nextStatus = null;
+            if (orderStatus == OrderStatus.Cancelled && payment.Status == PaymentStatus.Pending)
+                nextStatus = PaymentStatus.Cancelled;
+            else if (orderStatus == OrderStatus.Delivered
+                && payment.Method == PaymentMethod.CashOnDelivery
+                && payment.Status == PaymentStatus.Pending)
+                nextStatus = PaymentStatus.Paid;
+
+            if (!nextStatus.HasValue)
+                return;
+
+            var statusChange = DomainRuleGuard.AsConflict(() =>
+                payment.ChangeStatus(nextStatus.Value, occurredAt));
+
+            _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+            {
+                Id = Guid.NewGuid(),
+                PaymentId = payment.Id,
+                ChangedByUserId = actorUserId,
+                FromStatus = statusChange.Previous,
+                ToStatus = nextStatus.Value,
+                Source = PaymentStatusChangeSource.OrderLifecycle,
+                Reference = GetOrderStatusLabel(orderStatus),
+                OccurredAt = occurredAt,
+                CreatedAt = occurredAt
+            });
+        }
+
+        private void AddCancellationHistory(
+            Order order,
+            StatusChange<OrderStatus> statusChange,
+            Guid? actorUserId,
+            string? note,
+            DateTime occurredAt)
+        {
+            _context.OrderStatusHistories.Add(new OrderStatusHistory
+            {
+                Id = Guid.NewGuid(),
+                OrderId = order.Id,
+                ChangedByUserId = actorUserId,
+                FromStatus = statusChange.Previous,
+                ToStatus = OrderStatus.Cancelled,
+                Note = NormalizeOptional(note),
+                CreatedAt = occurredAt
+            });
+        }
+
+        private void EnqueueCancellationNotification(
+            Order order,
+            Payment? payment,
+            string message)
+        {
+            _outbox.EnqueueNotification(
+                order.UserId,
+                "Cập nhật trạng thái đơn hàng",
+                $"Đơn hàng {order.OrderNumber}: {message}",
+                order.Id,
+                payment?.Id);
+        }
+
+        private static string NormalizeIdempotencyKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                throw new BusinessException("Trường Idempotency-Key trong tiêu đề yêu cầu là bắt buộc khi đặt hàng.");
+
+            var normalized = value.Trim();
+            if (normalized.Length > 100)
+                throw new BusinessException("Trường Idempotency-Key trong tiêu đề yêu cầu không được vượt quá 100 ký tự.");
+
+            return normalized;
+        }
+
+        private static string HashCheckoutRequest(PlaceOrderRequest request)
+        {
+            var canonical = string.Join('\n',
+                request.ShippingAddress.Trim(),
+                NormalizeOptional(request.Note) ?? string.Empty,
+                ((int)request.PaymentMethod).ToString());
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
+        }
+
+        private static void EnsureSameIdempotencyRequest(Order order, string requestHash)
+        {
+            if (!string.Equals(order.IdempotencyRequestHash, requestHash, StringComparison.Ordinal))
+            {
+                throw new ConflictException(
+                    "Idempotency-Key đã được sử dụng cho một yêu cầu đặt hàng khác.");
+            }
+        }
+
+        private static string CreateOrderNumber(DateTime occurredAt)
+            => $"ORD-{occurredAt:yyyyMMdd}-{Guid.NewGuid():N}"[..32].ToUpperInvariant();
+
+        private static string GetOrderStatusLabel(OrderStatus status)
+            => status switch
+            {
+                OrderStatus.Pending => "Chờ xác nhận",
+                OrderStatus.Confirmed => "Đã xác nhận",
+                OrderStatus.Shipping => "Đang giao",
+                OrderStatus.Delivered => "Đã giao",
+                OrderStatus.Cancelled => "Đã hủy",
+                _ => status.ToString()
+            };
+
+        private static string? NormalizeOptional(string? value)
+            => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    }
+}

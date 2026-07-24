@@ -58,6 +58,16 @@ Database checks, unique indexes and row versions remain defense-in-depth beneath
 - Reports: bounded UTC order/payment cohorts, cash flow, delivered-product ranking and low-stock snapshot.
 - Notifications: transactional outbox, retry/dead-letter dispatch and configurable SMTP sender.
 
+Public application service interfaces remain stable facades for controllers and hosted workers.
+The large auth, order and operations implementations are composed from focused use cases:
+registration/session/password reset, checkout/order queries/lifecycle commands, and
+dead-letter/audit/retention operations. Facades do not own `DbContext` or transaction dependencies.
+
+The former generic repository was removed because every consuming service already required
+`IAppDbContext`, while the repository exposed `IQueryable` and merely forwarded EF Core calls.
+Application services now use the existing context abstraction directly, keeping query shape,
+tracking and transaction ownership visible in the use case that controls them.
+
 ## Checkout Flow
 
 ```text
