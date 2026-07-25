@@ -144,7 +144,13 @@ internal static class TestServiceFactory
             queries,
             clock,
             options);
-        return new OrderService(checkout, commands, queries);
+        var refund = new OrderRefundUseCase(
+            context,
+            consistency,
+            outbox,
+            queries,
+            clock);
+        return new OrderService(checkout, commands, refund, queries);
     }
 }
 

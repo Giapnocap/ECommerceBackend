@@ -86,6 +86,23 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>[Staff/Admin] Ghi nhận hoàn tiền COD đã hoàn tất cho đơn hoàn hàng</summary>
+        [HttpPost("{id:guid}/refund")]
+        [Authorize(Policy = PermissionNames.ProcessOrders)]
+        [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> RecordRefund(
+            Guid id,
+            [FromBody] RecordOrderRefundRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.RecordRefundAsync(
+                id,
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>Cancel one of the current customer's eligible orders</summary>
         [HttpPost("{id:guid}/cancel")]
         [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]

@@ -175,6 +175,18 @@ public sealed class SqlServerCommerceFlowTests
                 deliveryOrder.Id,
                 user.Id,
                 new UpdateOrderStatusRequest { Status = OrderStatus.Shipping });
+            _ = await service.UpdateStatusAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new UpdateOrderStatusRequest
+                {
+                    Status = OrderStatus.DeliveryFailed,
+                    Note = "Không liên hệ được người nhận"
+                });
+            _ = await service.UpdateStatusAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new UpdateOrderStatusRequest { Status = OrderStatus.Shipping });
             var delivered = await service.UpdateStatusAsync(
                 deliveryOrder.Id,
                 user.Id,
@@ -207,10 +219,24 @@ public sealed class SqlServerCommerceFlowTests
                 .OrderBy(history => history.CreatedAt)
                 .ToListAsync();
             Assert.Equal(
-                [OrderStatus.Pending, OrderStatus.Confirmed, OrderStatus.Shipping, OrderStatus.Delivered],
+                [
+                    OrderStatus.Pending,
+                    OrderStatus.Confirmed,
+                    OrderStatus.Shipping,
+                    OrderStatus.DeliveryFailed,
+                    OrderStatus.Shipping,
+                    OrderStatus.Delivered
+                ],
                 deliveryHistory.Select(history => history.ToStatus));
             Assert.Equal(
-                [null, OrderStatus.Pending, OrderStatus.Confirmed, OrderStatus.Shipping],
+                [
+                    null,
+                    OrderStatus.Pending,
+                    OrderStatus.Confirmed,
+                    OrderStatus.Shipping,
+                    OrderStatus.DeliveryFailed,
+                    OrderStatus.Shipping
+                ],
                 deliveryHistory.Select(history => history.FromStatus));
             Assert.Equal(4, await context.PaymentStatusHistories.CountAsync());
 
@@ -238,7 +264,47 @@ public sealed class SqlServerCommerceFlowTests
             Assert.Equal(1, topProduct.QuantitySold);
             Assert.Equal(125.50m, topProduct.Revenue);
 
-            Assert.Equal(6, await context.OutboxMessages.CountAsync());
+            var returned = await service.UpdateStatusAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new UpdateOrderStatusRequest
+                {
+                    Status = OrderStatus.Returned,
+                    Note = "Sản phẩm còn nguyên trạng"
+                });
+            var refunded = await service.RecordRefundAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new RecordOrderRefundRequest
+                {
+                    Reference = "SQL-REFUND-001",
+                    Note = "Đã hoàn tiền qua chuyển khoản"
+                });
+            _ = await service.RecordRefundAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new RecordOrderRefundRequest { Reference = "SQL-REFUND-001" });
+
+            Assert.Equal(nameof(OrderStatus.Returned), returned.Status);
+            Assert.Equal(nameof(PaymentStatus.Refunded), refunded.Payment?.Status);
+            Assert.Equal(5, await context.Products
+                .Where(item => item.Id == product.Id)
+                .Select(item => item.StockQuantity)
+                .SingleAsync());
+            Assert.Single(await context.InventoryTransactions
+                .Where(item => item.OrderId == deliveryOrder.Id
+                    && item.Type == InventoryTransactionType.OrderReturned)
+                .ToListAsync());
+            var refundHistory = Assert.Single(await context.PaymentStatusHistories
+                .Where(history => history.PaymentId == refunded.Payment!.Id
+                    && history.ToStatus == PaymentStatus.Refunded)
+                .ToListAsync());
+            Assert.Equal(PaymentStatusChangeSource.ManualRefund, refundHistory.Source);
+            Assert.Equal("SQL-REFUND-001", refundHistory.Reference);
+            Assert.Equal(7, await context.OrderStatusHistories
+                .CountAsync(history => history.OrderId == deliveryOrder.Id));
+
+            Assert.Equal(10, await context.OutboxMessages.CountAsync());
 
             var notificationSender = new RecordingNotificationSender();
             var outboxProcessor = new OutboxProcessor(
@@ -256,8 +322,8 @@ public sealed class SqlServerCommerceFlowTests
                 }),
                 NullLogger<OutboxProcessor>.Instance);
 
-            Assert.Equal(6, await outboxProcessor.ProcessBatchAsync());
-            Assert.Equal(6, notificationSender.Messages.Count);
+            Assert.Equal(10, await outboxProcessor.ProcessBatchAsync());
+            Assert.Equal(10, notificationSender.Messages.Count);
             Assert.All(
                 await context.OutboxMessages.AsNoTracking().ToListAsync(),
                 message => Assert.NotNull(message.ProcessedAt));

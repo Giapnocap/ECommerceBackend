@@ -13,8 +13,10 @@ namespace ECommerceBackend.Domain.Enums
             {
                 OrderStatus.Pending => next is OrderStatus.Confirmed or OrderStatus.Cancelled,
                 OrderStatus.Confirmed => next is OrderStatus.Shipping or OrderStatus.Cancelled,
-                OrderStatus.Shipping => next == OrderStatus.Delivered,
-                OrderStatus.Delivered or OrderStatus.Cancelled => false,
+                OrderStatus.Shipping => next is OrderStatus.Delivered or OrderStatus.DeliveryFailed,
+                OrderStatus.DeliveryFailed => next is OrderStatus.Shipping or OrderStatus.Cancelled,
+                OrderStatus.Delivered => next == OrderStatus.Returned,
+                OrderStatus.Cancelled or OrderStatus.Returned => false,
                 _ => false
             };
         }

@@ -55,6 +55,7 @@ public sealed class ArchitectureBoundaryTests
         AssertPublicMethodCount<OrderQueryUseCase>(3);
         AssertPublicMethodCount<OrderCheckoutUseCase>(1);
         AssertPublicMethodCount<OrderCommandService>(4);
+        AssertPublicMethodCount<OrderRefundUseCase>(1);
         AssertPublicMethodCount<DeadLetterUseCase>(2);
         AssertPublicMethodCount<AuditQueryUseCase>(1);
         AssertPublicMethodCount<DataRetentionUseCase>(1);

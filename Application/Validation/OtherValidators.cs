@@ -140,6 +140,11 @@ namespace ECommerceBackend.Application.Validation
             RuleFor(x => x.Note)
                 .MaximumLength(200).WithMessage("Lý do hủy đơn không được vượt quá 200 ký tự.")
                 .When(x => x.Status == Domain.Enums.OrderStatus.Cancelled && x.Note != null);
+
+            RuleFor(x => x.Note)
+                .NotEmpty().WithMessage("Phải nhập lý do giao thất bại hoặc hoàn hàng.")
+                .When(x => x.Status is Domain.Enums.OrderStatus.DeliveryFailed
+                    or Domain.Enums.OrderStatus.Returned);
         }
     }
 
@@ -150,6 +155,20 @@ namespace ECommerceBackend.Application.Validation
             RuleFor(x => x.Reason)
                 .MaximumLength(200).WithMessage("Lý do hủy đơn không được vượt quá 200 ký tự.")
                 .When(x => x.Reason != null);
+        }
+    }
+
+    public sealed class RecordOrderRefundRequestValidator : AbstractValidator<RecordOrderRefundRequest>
+    {
+        public RecordOrderRefundRequestValidator()
+        {
+            RuleFor(x => x.Reference)
+                .NotEmpty().WithMessage("Mã tham chiếu hoàn tiền không được để trống.")
+                .MaximumLength(200).WithMessage("Mã tham chiếu hoàn tiền không được vượt quá 200 ký tự.");
+
+            RuleFor(x => x.Note)
+                .MaximumLength(500).WithMessage("Ghi chú hoàn tiền không được vượt quá 500 ký tự.")
+                .When(x => x.Note != null);
         }
     }
 

@@ -70,7 +70,7 @@ public class ReportServiceTests
         Assert.Equal(result.NetRevenue, result.PaidRevenue);
         Assert.Equal(2_500m, result.PendingPaymentAmount);
         Assert.Equal(1, result.LowStockProductCount);
-        Assert.Equal(5, result.OrdersByStatus.Count());
+        Assert.Equal(7, result.OrdersByStatus.Count());
         Assert.Equal(2, result.OrdersByStatus.Single(item => item.Status == nameof(OrderStatus.Delivered)).Count);
         Assert.Equal(1, result.OrdersByStatus.Single(item => item.Status == nameof(OrderStatus.Pending)).Count);
         Assert.Equal(2, result.PaymentsByStatus.Single(item => item.Status == nameof(PaymentStatus.Paid)).Count);

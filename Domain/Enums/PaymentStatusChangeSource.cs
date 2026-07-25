@@ -5,6 +5,7 @@ namespace ECommerceBackend.Domain.Enums
         Checkout = 0,
         OrderLifecycle = 1,
         Webhook = 2,
-        LegacyBackfill = 3
+        LegacyBackfill = 3,
+        ManualRefund = 4
     }
 }

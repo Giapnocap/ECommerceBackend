@@ -74,6 +74,14 @@ namespace ECommerceBackend.Domain.Entities
                     "Không thể hủy đơn hàng đã thanh toán trước khi hoàn tiền.");
             }
 
+            if (nextStatus == OrderStatus.Returned
+                && paymentStatus is not (PaymentStatus.Paid or PaymentStatus.Refunded))
+            {
+                throw new DomainRuleViolationException(
+                    "order_return_requires_collected_payment",
+                    "Chỉ có thể ghi nhận hoàn hàng sau khi đơn hàng đã thu tiền.");
+            }
+
             Status = nextStatus;
             return new StatusChange<OrderStatus>(previousStatus, nextStatus, true);
         }
@@ -142,6 +150,8 @@ namespace ECommerceBackend.Domain.Entities
                 OrderStatus.Shipping => "Đang giao",
                 OrderStatus.Delivered => "Đã giao",
                 OrderStatus.Cancelled => "Đã hủy",
+                OrderStatus.DeliveryFailed => "Giao thất bại",
+                OrderStatus.Returned => "Đã hoàn hàng",
                 _ => status.ToString()
             };
     }

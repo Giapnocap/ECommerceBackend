@@ -39,6 +39,12 @@ namespace ECommerceBackend.Application.Interfaces
             CancelOrderRequest request,
             CancellationToken cancellationToken = default);
 
+        Task<OrderResponse> RecordRefundAsync(
+            Guid orderId,
+            Guid actorUserId,
+            RecordOrderRefundRequest request,
+            CancellationToken cancellationToken = default);
+
         Task<IReadOnlyList<Guid>> GetDuePendingOrderIdsAsync(
             DateTime asOf,
             int batchSize,

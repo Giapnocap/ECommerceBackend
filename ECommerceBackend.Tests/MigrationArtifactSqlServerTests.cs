@@ -10,6 +10,7 @@ public sealed class MigrationArtifactSqlServerTests
 {
     private const string ArtifactsDirectoryVariable = "ECOMMERCE_MIGRATION_ARTIFACTS_DIRECTORY";
     private const string BackupDirectoryVariable = "ECOMMERCE_TEST_SQL_BACKUP_DIRECTORY";
+    private const string AuthenticationMigration = "20260724152822_HardenAuthenticationFlows";
     private static readonly string[] RetentionIndexes =
     [
         "IX_RefreshTokens_ExpiresAt",
@@ -54,7 +55,14 @@ public sealed class MigrationArtifactSqlServerTests
             Assert.False(await HasMigrationAsync(connectionString, manifest.LatestMigration));
             Assert.True(await HasMigrationAsync(connectionString, manifest.PreviousMigration));
             Assert.Equal(RetentionIndexes.Length, await CountIndexesAsync(connectionString));
-            Assert.Equal(0, await CountAuthenticationSchemaObjectsAsync(connectionString));
+            var expectedAuthenticationObjects = string.CompareOrdinal(
+                manifest.PreviousMigration,
+                AuthenticationMigration) >= 0
+                ? 7
+                : 0;
+            Assert.Equal(
+                expectedAuthenticationObjects,
+                await CountAuthenticationSchemaObjectsAsync(connectionString));
 
             await ExecuteScriptAsync(connectionString, forwardScript);
             await ExecuteScriptAsync(connectionString, forwardScript);

@@ -89,9 +89,11 @@ different address, note or payment method returns `409 Conflict`.
 ## Order And Payment State
 
 ```text
-Order: Pending -> Confirmed -> Shipping -> Delivered
-         |           |
-         +-----------+-------> Cancelled
+Order: Pending -> Confirmed -> Shipping -> Delivered -> Returned
+         |           |           |
+         +-----------+           +-> DeliveryFailed -> Shipping
+                                      |
+                                      +-> Cancelled
 
 Payment: Pending -> Paid -> Refunded
             |------> Failed
@@ -100,8 +102,15 @@ Payment: Pending -> Paid -> Refunded
 COD reaches Paid when the order is Delivered and Cancelled when the order is Cancelled.
 ```
 
-Stock is reserved while an order is Pending. Repeated updates to the current order status are idempotent. Cancellation restores stock
-and writes an inventory movement exactly once.
+Stock is reserved while an order is Pending. Repeated updates to the current order status are
+idempotent. Cancellation and return acceptance restore stock with distinct, unique inventory
+movements. A delivery failure keeps stock reserved; staff can retry shipping or cancel fulfillment.
+
+`POST /api/orders/{id}/refund` records a completed offline COD refund only after the order is
+`Returned` and the payment is `Paid`. The request requires the external receipt/reference. Replaying
+the same reference is idempotent; a different reference returns `409` instead of rewriting financial
+history. Return acceptance and refund recording are intentionally separate because receiving the
+item does not prove that money has already been returned.
 
 Pending COD orders expire after the configured hold period. The expiration worker selects a bounded
 batch by `(Status, ExpiresAt, Id)`, then locks each order and rechecks its state inside a transaction.
@@ -189,7 +198,9 @@ missing referenced files are reported and never removed from the database automa
 - Category uniqueness is enforced both in code and filtered SQL unique indexes.
 - Historical order names and prices come from `OrderDetails`, not the current product row.
 - Every stock change caused by product administration or an order appends an inventory entry.
-- Database constraints prevent duplicate order lines, lifecycle entries and order inventory movements.
+- Database constraints prevent duplicate order lines, payment outcomes and order inventory movements.
+  Order lifecycle writes serialize on the locked order row so repeated delivery attempts can retain
+  multiple `Shipping` and `DeliveryFailed` history entries.
 - Payment and webhook status outcomes are persisted as immutable audit data with valid state/value constraints.
 
 ## Reporting Semantics
@@ -278,6 +289,9 @@ are rethrown because replacing a partially written response would corrupt the HT
   locks; retries must wrap each complete business operation before they are introduced.
 - COD is the only checkout method currently enabled. The generic HMAC webhook is provider
   neutral; a real gateway still needs its own Infrastructure adapter and credential mapping.
+- Discount, shipping fee and tax remain zero at checkout because this project has no approved
+  promotion, carrier or tax rules. Their persisted order snapshot columns are retained for a future
+  calculator without changing historical order totals.
 - Payment adapters are validated before persistence: provider codes must be route-safe, checkout
   methods must be defined, initial states must follow the payment state machine, and webhook-capable
   checkout providers must return a bounded transaction ID.

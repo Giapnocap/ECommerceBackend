@@ -8,15 +8,18 @@ namespace ECommerceBackend.Application.Services
     {
         private readonly OrderCheckoutUseCase _checkout;
         private readonly OrderCommandService _commands;
+        private readonly OrderRefundUseCase _refund;
         private readonly OrderQueryUseCase _queries;
 
         public OrderService(
             OrderCheckoutUseCase checkout,
             OrderCommandService commands,
+            OrderRefundUseCase refund,
             OrderQueryUseCase queries)
         {
             _checkout = checkout;
             _commands = commands;
+            _refund = refund;
             _queries = queries;
         }
 
@@ -77,6 +80,17 @@ namespace ECommerceBackend.Application.Services
             => _commands.CancelByCustomerAsync(
                 orderId,
                 customerUserId,
+                request,
+                cancellationToken);
+
+        public Task<OrderResponse> RecordRefundAsync(
+            Guid orderId,
+            Guid actorUserId,
+            RecordOrderRefundRequest request,
+            CancellationToken cancellationToken = default)
+            => _refund.ExecuteAsync(
+                orderId,
+                actorUserId,
                 request,
                 cancellationToken);
 

@@ -19,9 +19,9 @@ REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NE
 - CRUD danh mục, sản phẩm và ảnh sản phẩm.
 - Tìm kiếm, lọc, sắp xếp và phân trang sản phẩm.
 - Giỏ hàng và checkout có `Idempotency-Key`.
-- Vòng đời đơn hàng, lịch sử trạng thái và tự động hết hạn đơn `Pending`.
-- Giữ/hoàn tồn kho có inventory ledger và bảo vệ oversell.
-- Payment state machine, COD và HMAC webhook chống replay.
+- Vòng đời đơn hàng gồm giao lại, giao thất bại, hoàn hàng và tự động hết hạn đơn `Pending`.
+- Giữ/hoàn tồn kho có inventory ledger riêng cho hủy đơn và nhận hàng hoàn.
+- Payment state machine, COD, ghi nhận hoàn tiền thủ công và HMAC webhook chống replay.
 - Transactional outbox, retry, dead-letter và redrive.
 - Báo cáo doanh thu, trạng thái đơn, sản phẩm bán chạy và tồn kho thấp.
 - Audit trail cho các thao tác đặc quyền và đối soát file upload.
@@ -151,6 +151,11 @@ Trước khi nâng cấp production: kiểm tra checksum artifact, tạo full ba
 SQL Server cô lập, áp dụng `migrate-up.sql` trong maintenance window và chạy smoke test. Chỉ dùng
 `rollback-last.sql` khi thay đổi tương thích với dữ liệu cũ; nếu migration đã làm mất dữ liệu,
 phục hồi từ bản backup đã được kiểm chứng.
+
+Migration vòng đời hoàn hàng chỉ rollback được khi chưa có order status `DeliveryFailed`/`Returned`,
+inventory movement `OrderReturned`, manual refund history hoặc nhiều lần đi qua cùng trạng thái.
+Nếu đã phát sinh các dữ liệu này, giữ migration hiện tại hoặc phục hồi backup thay vì ép chạy script
+rollback.
 
 CI thực hiện restore có vulnerability audit, format check, Release build, kiểm tra model/migration, coverage gate và SQL Server integration tests.
 

@@ -877,7 +877,9 @@
           1,
           2,
           3,
-          4
+          4,
+          5,
+          6
         ],
         "format": "int32",
         "type": "integer"
@@ -1161,6 +1163,20 @@
             "format": "int32",
             "readOnly": true,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "RecordOrderRefundRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reference": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -4085,6 +4101,111 @@
           }
         ],
         "summary": "Cancel one of the current customer\u0027s eligible orders",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/orders/{id}/refund": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordOrderRefundRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordOrderRefundRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordOrderRefundRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Staff/Admin] Ghi nh\u1EADn ho\u00E0n ti\u1EC1n COD \u0111\u00E3 ho\u00E0n t\u1EA5t cho \u0111\u01A1n ho\u00E0n h\u00E0ng",
         "tags": [
           "Order"
         ]

@@ -282,6 +282,7 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<OrderCheckoutUseCase>();
             services.AddScoped<OrderCommandService>();
+            services.AddScoped<OrderRefundUseCase>();
             services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<IReportService, ReportService>();

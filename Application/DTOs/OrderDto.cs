@@ -88,6 +88,12 @@ namespace ECommerceBackend.Application.DTOs
         public string? Reason { get; set; }
     }
 
+    public sealed class RecordOrderRefundRequest
+    {
+        public string Reference { get; set; } = string.Empty;
+        public string? Note { get; set; }
+    }
+
     public class OrderQueryParams
     {
         public OrderStatus? Status { get; set; }

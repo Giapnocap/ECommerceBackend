@@ -392,9 +392,17 @@ namespace ECommerceBackend.Application.Services
                         : DomainRuleGuard.AsBusiness(() =>
                             order.ChangeStatus(request.Status, payment?.Status));
 
-                    if (request.Status == OrderStatus.Cancelled)
+                    if (request.Status is OrderStatus.Cancelled or OrderStatus.Returned)
                     {
-                        await RestoreOrderStockAsync(order, actorUserId, occurredAt, cancellationToken);
+                        var transactionType = request.Status == OrderStatus.Returned
+                            ? InventoryTransactionType.OrderReturned
+                            : InventoryTransactionType.OrderCancelled;
+                        await RestoreOrderStockAsync(
+                            order,
+                            actorUserId,
+                            occurredAt,
+                            transactionType,
+                            cancellationToken);
                     }
 
                     UpdatePaymentForOrderStatus(
@@ -513,7 +521,12 @@ namespace ECommerceBackend.Application.Services
                     payment?.Status,
                     NormalizeOptional(request.Reason) ?? "Khách hàng yêu cầu hủy"));
 
-                await RestoreOrderStockAsync(order, customerUserId, occurredAt, cancellationToken);
+                await RestoreOrderStockAsync(
+                    order,
+                    customerUserId,
+                    occurredAt,
+                    InventoryTransactionType.OrderCancelled,
+                    cancellationToken);
                 UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, customerUserId, occurredAt);
                 AddCancellationHistory(order, statusChange, customerUserId, request.Reason, occurredAt);
                 EnqueueCancellationNotification(order, payment, "Đơn hàng đã được hủy theo yêu cầu của bạn.");
@@ -605,7 +618,12 @@ namespace ECommerceBackend.Application.Services
                     "SystemExpired",
                     isExpiration: true));
 
-                await RestoreOrderStockAsync(order, null, asOf, cancellationToken);
+                await RestoreOrderStockAsync(
+                    order,
+                    null,
+                    asOf,
+                    InventoryTransactionType.OrderCancelled,
+                    cancellationToken);
                 UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, null, asOf);
                 AddCancellationHistory(order, statusChange, null, "SystemExpired", asOf);
                 EnqueueCancellationNotification(order, payment, "Đơn hàng đã hết thời gian giữ tồn kho và được hủy tự động.");
@@ -656,6 +674,7 @@ namespace ECommerceBackend.Application.Services
             Order order,
             Guid? actorUserId,
             DateTime occurredAt,
+            InventoryTransactionType transactionType,
             CancellationToken cancellationToken)
         {
             await _context.Entry(order)
@@ -677,10 +696,12 @@ namespace ECommerceBackend.Application.Services
                     ProductId = product.Id,
                     OrderId = order.Id,
                     CreatedByUserId = actorUserId,
-                    Type = InventoryTransactionType.OrderCancelled,
+                    Type = transactionType,
                     QuantityChange = inventoryMutation.QuantityChange,
                     BalanceAfter = inventoryMutation.BalanceAfter,
-                    Reason = $"Hoàn kho do hủy đơn {order.OrderNumber}",
+                    Reason = transactionType == InventoryTransactionType.OrderReturned
+                        ? $"Hoàn kho do nhận hàng hoàn của đơn {order.OrderNumber}"
+                        : $"Hoàn kho do hủy đơn {order.OrderNumber}",
                     CreatedAt = occurredAt
                 });
             }
@@ -796,6 +817,8 @@ namespace ECommerceBackend.Application.Services
                 OrderStatus.Shipping => "Đang giao",
                 OrderStatus.Delivered => "Đã giao",
                 OrderStatus.Cancelled => "Đã hủy",
+                OrderStatus.DeliveryFailed => "Giao thất bại",
+                OrderStatus.Returned => "Đã hoàn hàng",
                 _ => status.ToString()
             };
 

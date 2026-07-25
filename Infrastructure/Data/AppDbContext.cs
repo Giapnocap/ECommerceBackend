@@ -128,8 +128,7 @@ namespace ECommerceBackend.Infrastructure.Data
                 .HasDatabaseName("IX_OrderStatusHistories_ToStatus_CreatedAt_OrderId");
             modelBuilder.Entity<OrderStatusHistory>()
                 .HasIndex(history => new { history.OrderId, history.ToStatus })
-                .HasDatabaseName("UX_OrderStatusHistories_OrderId_ToStatus")
-                .IsUnique();
+                .HasDatabaseName("IX_OrderStatusHistories_OrderId_ToStatus");
             modelBuilder.Entity<Payment>().HasIndex(payment => payment.OrderId).IsUnique();
             modelBuilder.Entity<Payment>().HasIndex(payment => new { payment.Status, payment.CreatedAt });
             modelBuilder.Entity<Payment>()
@@ -252,7 +251,7 @@ namespace ECommerceBackend.Infrastructure.Data
             modelBuilder.Entity<Order>().ToTable(t =>
             {
                 t.HasCheckConstraint("CK_Orders_TotalAmount_Positive", "[TotalAmount] > 0");
-                t.HasCheckConstraint("CK_Orders_Status_Valid", "[Status] BETWEEN 0 AND 4");
+                t.HasCheckConstraint("CK_Orders_Status_Valid", "[Status] BETWEEN 0 AND 6");
                 t.HasCheckConstraint("CK_Orders_Amounts_NonNegative", "[SubtotalAmount] >= 0 AND [DiscountAmount] >= 0 AND [ShippingFee] >= 0 AND [TaxAmount] >= 0");
                 t.HasCheckConstraint("CK_Orders_TotalAmount_Consistent", "[TotalAmount] = [SubtotalAmount] - [DiscountAmount] + [ShippingFee] + [TaxAmount]");
                 t.HasCheckConstraint("CK_Orders_ExpiresAt_Valid", "[ExpiresAt] IS NULL OR [ExpiresAt] > [OrderDate]");
@@ -268,7 +267,7 @@ namespace ECommerceBackend.Infrastructure.Data
 
             modelBuilder.Entity<OrderStatusHistory>().ToTable(t =>
             {
-                t.HasCheckConstraint("CK_OrderStatusHistories_Status_Valid", "[ToStatus] BETWEEN 0 AND 4 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 4)");
+                t.HasCheckConstraint("CK_OrderStatusHistories_Status_Valid", "[ToStatus] BETWEEN 0 AND 6 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 6)");
                 t.HasCheckConstraint("CK_OrderStatusHistories_Status_Changed", "[FromStatus] IS NULL OR [FromStatus] <> [ToStatus]");
             });
 
@@ -294,20 +293,20 @@ namespace ECommerceBackend.Infrastructure.Data
                     "CK_PaymentStatusHistories_Status_Valid",
                     "[ToStatus] BETWEEN 0 AND 4 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 4)");
                 t.HasCheckConstraint("CK_PaymentStatusHistories_Status_Changed", "[FromStatus] IS NULL OR [FromStatus] <> [ToStatus]");
-                t.HasCheckConstraint("CK_PaymentStatusHistories_Source_Valid", "[Source] BETWEEN 0 AND 3");
+                t.HasCheckConstraint("CK_PaymentStatusHistories_Source_Valid", "[Source] BETWEEN 0 AND 4");
             });
 
             modelBuilder.Entity<InventoryTransaction>().ToTable(t =>
             {
                 t.HasCheckConstraint("CK_InventoryTransactions_QuantityChange_NotZero", "[QuantityChange] <> 0");
                 t.HasCheckConstraint("CK_InventoryTransactions_Balance_NonNegative", "[BalanceAfter] >= 0");
-                t.HasCheckConstraint("CK_InventoryTransactions_Type_Valid", "[Type] BETWEEN 0 AND 3");
+                t.HasCheckConstraint("CK_InventoryTransactions_Type_Valid", "[Type] BETWEEN 0 AND 4");
                 t.HasCheckConstraint(
                     "CK_InventoryTransactions_QuantityChange_MatchesType",
-                    "([Type] = 0 AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] = 3 AND [QuantityChange] > 0)");
+                    "([Type] = 0 AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] IN (3, 4) AND [QuantityChange] > 0)");
                 t.HasCheckConstraint(
                     "CK_InventoryTransactions_OrderLink_MatchesType",
-                    "([Type] IN (0, 1) AND [OrderId] IS NULL) OR ([Type] IN (2, 3) AND [OrderId] IS NOT NULL)");
+                    "([Type] IN (0, 1) AND [OrderId] IS NULL) OR ([Type] IN (2, 3, 4) AND [OrderId] IS NOT NULL)");
             });
 
             modelBuilder.Entity<OutboxMessage>().ToTable(t =>
