@@ -53,7 +53,7 @@ internal static class TestServiceFactory
         var protector = payloadProtector ?? new TestSensitivePayloadProtector();
         var jwtOptions = Options.Create(new JwtOptions
         {
-            Key = "phase-7-test-jwt-key-with-enough-length",
+            Key = "unit-test-jwt-signing-key-with-enough-length",
             Issuer = "ECommerceBackend.Tests",
             Audience = "ECommerceBackend.Tests.Client",
             AccessTokenMinutes = 60,

@@ -287,13 +287,13 @@ public sealed class MigrationArtifactSqlServerTests
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            CREATE TABLE [Phase7RecoveryMarkers]
+            CREATE TABLE [RecoveryMarkers]
             (
                 [Id] uniqueidentifier NOT NULL
-                    CONSTRAINT [PK_Phase7RecoveryMarkers] PRIMARY KEY,
+                    CONSTRAINT [PK_RecoveryMarkers] PRIMARY KEY,
                 [CreatedAt] datetime2 NOT NULL
             );
-            INSERT INTO [Phase7RecoveryMarkers] ([Id], [CreatedAt])
+            INSERT INTO [RecoveryMarkers] ([Id], [CreatedAt])
             VALUES (@marker, SYSUTCDATETIME());
             """;
         command.Parameters.AddWithValue("@marker", marker);
@@ -308,7 +308,7 @@ public sealed class MigrationArtifactSqlServerTests
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            DELETE FROM [Phase7RecoveryMarkers]
+            DELETE FROM [RecoveryMarkers]
             WHERE [Id] = @marker;
             """;
         command.Parameters.AddWithValue("@marker", marker);
@@ -324,7 +324,7 @@ public sealed class MigrationArtifactSqlServerTests
         await using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT COUNT_BIG(1)
-            FROM [Phase7RecoveryMarkers]
+            FROM [RecoveryMarkers]
             WHERE [Id] = @marker;
             """;
         command.Parameters.AddWithValue("@marker", marker);

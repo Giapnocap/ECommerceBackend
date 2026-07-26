@@ -19,10 +19,10 @@ public class AuthServiceTests
 
         var response = await service.RegisterAsync(new RegisterRequest
         {
-            UserName = "phase7_customer",
-            Email = "phase7_customer@example.com",
+            UserName = "registration_customer",
+            Email = "registration_customer@example.com",
             Password = "Customer@123",
-            FullName = "Phase 7 Customer",
+            FullName = "Registration Customer",
             Phone = "0901234567"
         });
 
@@ -31,7 +31,7 @@ public class AuthServiceTests
                 .ThenInclude(ur => ur.Role)
             .SingleAsync(u => u.Id == response.UserId);
 
-        Assert.Equal("phase7_customer", response.UserName);
+        Assert.Equal("registration_customer", response.UserName);
         Assert.NotEmpty(response.AccessToken);
         Assert.NotEmpty(response.RefreshToken);
         Assert.Contains("Customer", response.Roles);

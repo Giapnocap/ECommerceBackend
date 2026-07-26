@@ -69,7 +69,7 @@ Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
 {
-  "name": "Phase 6 Demo Category",
+  "name": "Demo Category",
   "parentId": null
 }
 
@@ -88,15 +88,15 @@ Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
 {
-  "name": "Phase 6 Demo Product",
+  "name": "Demo Product",
   "price": 199000.00,
   "stockQuantity": 10,
-  "description": "Demo product for the Phase 6 HTTP request collection.",
+  "description": "Demo product for the HTTP request collection.",
   "categoryId": "{{CategoryId}}"
 }
 
 ### List products with filter/sort/page
-GET {{BaseUrl}}/api/products?keyword=Phase%206&sortBy=price&sortOrder=asc&page=1&pageSize=12
+GET {{BaseUrl}}/api/products?keyword=Demo&sortBy=price&sortOrder=asc&page=1&pageSize=12
 Accept: application/json
 
 ### Get product by id
@@ -109,10 +109,10 @@ Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
 {
-  "name": "Phase 6 Demo Product Updated",
+  "name": "Demo Product Updated",
   "price": 209000.00,
   "stockQuantity": 12,
-  "description": "Updated demo product for the Phase 6 HTTP request collection.",
+  "description": "Updated demo product for the HTTP request collection.",
   "categoryId": "{{CategoryId}}"
 }
 
@@ -120,14 +120,14 @@ Authorization: Bearer {{AdminToken}}
 # Replace ./sample-product.jpg with a real local image path before sending.
 POST {{BaseUrl}}/api/products/{{ProductId}}/images?isMain=true
 Authorization: Bearer {{AdminToken}}
-Content-Type: multipart/form-data; boundary=BoundaryPhase6
+Content-Type: multipart/form-data; boundary=BoundaryDemoProduct
 
---BoundaryPhase6
+--BoundaryDemoProduct
 Content-Disposition: form-data; name="file"; filename="sample-product.jpg"
 Content-Type: image/jpeg
 
 < ./sample-product.jpg
---BoundaryPhase6--
+--BoundaryDemoProduct--
 
 ### Register customer
 # Change userName/email when re-running after the user already exists.
@@ -136,10 +136,10 @@ POST {{BaseUrl}}/api/auth/register
 Content-Type: application/json
 
 {
-  "userName": "phase6_customer",
-  "email": "phase6_customer@example.com",
+  "userName": "demo_customer",
+  "email": "demo_customer@example.com",
   "password": "Customer@123",
-  "fullName": "Phase 6 Customer",
+  "fullName": "Demo Customer",
   "phone": "0901234567"
 }
 
@@ -149,7 +149,7 @@ POST {{BaseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "userName": "phase6_customer",
+  "userName": "demo_customer",
   "password": "Customer@123"
 }
 
@@ -164,7 +164,7 @@ Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
 {
-  "fullName": "Phase 6 Customer Updated",
+  "fullName": "Demo Customer Updated",
   "phone": "0901234568"
 }
 
@@ -221,7 +221,7 @@ Authorization: Bearer {{CustomerToken}}
 Idempotency-Key: {{IdempotencyKey}}
 
 {
-  "shippingAddress": "123 Phase 6 Street, District 1, Ho Chi Minh City",
+  "shippingAddress": "123 Demo Street, District 1, Ho Chi Minh City",
   "note": "Demo checkout from ECommerceBackend.http",
   "paymentMethod": 0
 }

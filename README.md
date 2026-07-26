@@ -55,7 +55,6 @@ Tài liệu thiết kế:
 - [Sequence các luồng quan trọng](docs/SEQUENCES.md)
 - [Hiệu năng và quyết định scale](docs/PERFORMANCE.md)
 - [Giới hạn hệ thống](docs/LIMITATIONS.md)
-- [Bằng chứng kỹ thuật dùng cho CV](docs/PORTFOLIO.md)
 
 ## Phân Quyền
 

@@ -330,7 +330,7 @@ public sealed class OperationsReliabilityTests
     {
         var httpContext = new DefaultHttpContext
         {
-            TraceIdentifier = "phase-3-correlation"
+            TraceIdentifier = "test-correlation-id"
         };
         httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.10");
         httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
