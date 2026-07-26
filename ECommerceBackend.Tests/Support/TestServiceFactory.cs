@@ -1,6 +1,4 @@
-using AutoMapper;
 using ECommerceBackend.Application.Common;
-using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
@@ -14,17 +12,6 @@ namespace ECommerceBackend.Tests.Support;
 
 internal static class TestServiceFactory
 {
-    private static readonly Lazy<IMapper> Mapper = new(() =>
-    {
-        var config = new MapperConfiguration(
-            cfg => cfg.AddProfile<MappingProfile>(),
-            NullLoggerFactory.Instance);
-        config.AssertConfigurationIsValid();
-        return config.CreateMapper();
-    });
-
-    public static IMapper CreateMapper() => Mapper.Value;
-
     public static EfDataConsistencyService Consistency(AppDbContext context)
         => new(context);
 
@@ -32,20 +19,17 @@ internal static class TestServiceFactory
         => new(
             context,
             Consistency(context),
-            CreateMapper(),
             timeProvider ?? TimeProvider.System);
 
     public static CategoryService CreateCategoryService(AppDbContext context)
         => new(
             context,
-            Consistency(context),
-            CreateMapper());
+            Consistency(context));
 
     public static CartService CreateCartService(AppDbContext context)
         => new(
             context,
-            Consistency(context),
-            CreateMapper());
+            Consistency(context));
 
     public static UploadService CreateUploadService(
         AppDbContext context,
@@ -54,7 +38,6 @@ internal static class TestServiceFactory
             context,
             Consistency(context),
             environment,
-            CreateMapper(),
             Options.Create(new UploadOptions()),
             NullLogger<UploadService>.Instance);
 
@@ -112,7 +95,6 @@ internal static class TestServiceFactory
         => new(
             context,
             Consistency(context),
-            CreateMapper(),
             timeProvider ?? TimeProvider.System);
 
     public static OrderService CreateOrderService(
@@ -120,7 +102,7 @@ internal static class TestServiceFactory
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null)
     {
-        var queries = new OrderQueryUseCase(context, CreateMapper());
+        var queries = new OrderQueryUseCase(context);
         var consistency = Consistency(context);
         var providers = new PaymentProviderResolver(
             [new CashOnDeliveryPaymentProvider()]);

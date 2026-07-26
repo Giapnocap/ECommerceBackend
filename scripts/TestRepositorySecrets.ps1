@@ -3,8 +3,11 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+# CI SQL credentials belong only to disposable localhost containers and are intentionally
+# reviewable fixtures. Application configuration and every other tracked path remain scanned.
 $allowedFixturePaths = @(
     '.github/workflows/ci.yml',
+    '.github/workflows/performance.yml',
     'README.md',
     'ECommerceBackend.http',
     'scripts/SeedDemoData.sql',

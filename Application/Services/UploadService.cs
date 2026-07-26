@@ -1,8 +1,8 @@
-using AutoMapper;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -19,7 +19,6 @@ namespace ECommerceBackend.Application.Services
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
         private readonly IWebHostEnvironment _environment;
-        private readonly IMapper _mapper;
         private readonly ILogger<UploadService> _logger;
         private readonly long _maxImageSizeBytes;
         private readonly IAuditWriter _audit;
@@ -28,7 +27,6 @@ namespace ECommerceBackend.Application.Services
             IAppDbContext context,
             IDataConsistencyService consistency,
             IWebHostEnvironment environment,
-            IMapper mapper,
             IOptions<UploadOptions> options,
             ILogger<UploadService> logger,
             IAuditWriter? auditWriter = null)
@@ -36,7 +34,6 @@ namespace ECommerceBackend.Application.Services
             _context = context;
             _consistency = consistency;
             _environment = environment;
-            _mapper = mapper;
             _logger = logger;
             _maxImageSizeBytes = options.Value.MaxImageSizeBytes;
             _audit = auditWriter ?? NullAuditWriter.Instance;
@@ -220,7 +217,7 @@ namespace ECommerceBackend.Application.Services
                 await _context.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
-                return _mapper.Map<UploadImageResponse>(image);
+                return image.ToUploadImageResponse();
             }
             catch
             {

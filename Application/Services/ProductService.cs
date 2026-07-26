@@ -1,11 +1,11 @@
 using System.Data;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using AutoMapper;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Policies;
 using Microsoft.EntityFrameworkCore;
@@ -24,28 +24,24 @@ namespace ECommerceBackend.Application.Services
 
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
-        private readonly IMapper _mapper;
         private readonly TimeProvider _timeProvider;
         private readonly IAuditWriter _audit;
 
         public ProductService(
             IAppDbContext context,
-            IDataConsistencyService consistency,
-            IMapper mapper)
-            : this(context, consistency, mapper, TimeProvider.System)
+            IDataConsistencyService consistency)
+            : this(context, consistency, TimeProvider.System)
         {
         }
 
         public ProductService(
             IAppDbContext context,
             IDataConsistencyService consistency,
-            IMapper mapper,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
             _context = context;
             _consistency = consistency;
-            _mapper = mapper;
             _timeProvider = timeProvider;
             _audit = auditWriter ?? NullAuditWriter.Instance;
         }
@@ -118,7 +114,7 @@ namespace ECommerceBackend.Application.Services
             RecordCatalogQuery(queryParams, stopwatch, "success", items.Count);
 
             return PagedResult<ProductResponse>.Create(
-                _mapper.Map<IEnumerable<ProductResponse>>(items),
+                items.Select(product => product.ToResponse()),
                 totalCount,
                 paging.Page,
                 paging.Size);
@@ -160,7 +156,7 @@ namespace ECommerceBackend.Application.Services
                     cancellationToken)
                 ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
 
-            return _mapper.Map<ProductResponse>(product);
+            return product.ToResponse();
         }
 
         public async Task<ProductResponse> CreateAsync(

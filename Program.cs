@@ -39,7 +39,6 @@ try
         .AddECommerceConfigurationValidation(builder.Configuration, builder.Environment)
         .AddECommerceReverseProxy(builder.Configuration)
         .AddECommerceValidation()
-        .AddECommerceMapping(builder.Configuration)
         .AddECommerceObservability(builder.Configuration, builder.Environment)
         .AddECommerceDatabase(builder.Configuration)
         .AddECommerceRepositoriesAndServices()

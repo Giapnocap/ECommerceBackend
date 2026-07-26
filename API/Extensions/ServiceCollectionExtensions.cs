@@ -114,9 +114,6 @@ namespace ECommerceBackend.API.Extensions
                 .Validate(options => IsValidCorsOptions(options, environment), "Cors config is invalid.")
                 .ValidateOnStart();
 
-            services.AddOptions<AutoMapperOptions>()
-                .Bind(configuration.GetSection(AutoMapperOptions.SectionName));
-
             services.AddOptions<AdminBootstrapOptions>()
                 .Bind(configuration.GetSection(AdminBootstrapOptions.SectionName))
                 .Validate(IsValidAdminBootstrapOptions, "Admin bootstrap config is invalid.")
@@ -221,25 +218,6 @@ namespace ECommerceBackend.API.Extensions
         {
             services.AddFluentValidationAutoValidation();
             services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
-            return services;
-        }
-
-        public static IServiceCollection AddECommerceMapping(
-            this IServiceCollection services,
-            IConfiguration configuration)
-        {
-            var licenseKey = configuration
-                .GetSection(AutoMapperOptions.SectionName)
-                .GetValue<string?>(nameof(AutoMapperOptions.LicenseKey));
-
-            services.AddAutoMapper(config =>
-            {
-                if (!string.IsNullOrWhiteSpace(licenseKey))
-                    config.LicenseKey = licenseKey;
-
-                config.AddProfile<MappingProfile>();
-            });
-
             return services;
         }
 

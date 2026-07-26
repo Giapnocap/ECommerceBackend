@@ -38,7 +38,6 @@ public class CartRulesTests
     [Fact]
     public void CartMapping_UsesCurrentProductPrice_AndExcludesUnavailableItemsFromTotals()
     {
-        var mapper = TestServiceFactory.CreateMapper();
         var availableProduct = Product("Available", price: 12, stock: 5);
         var unavailableProduct = Product("Unavailable", price: 99, stock: 1);
 
@@ -52,7 +51,7 @@ public class CartRulesTests
             }
         };
 
-        var response = mapper.Map<CartResponse>(cart);
+        var response = cart.ToResponse();
         var items = response.Items.ToArray();
 
         Assert.Equal(2, response.TotalItems);

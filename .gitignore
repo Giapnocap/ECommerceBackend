@@ -11,4 +11,6 @@ appsettings.Local.json
 *.log
 TestResults/
 PerformanceResults/
+MigrationArtifacts/
+ReleasePackage/
 .tools/

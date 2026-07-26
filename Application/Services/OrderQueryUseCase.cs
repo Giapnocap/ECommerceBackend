@@ -1,8 +1,8 @@
-using AutoMapper;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,12 +11,10 @@ namespace ECommerceBackend.Application.Services
     public sealed class OrderQueryUseCase
     {
         private readonly IAppDbContext _context;
-        private readonly IMapper _mapper;
 
-        public OrderQueryUseCase(IAppDbContext context, IMapper mapper)
+        public OrderQueryUseCase(IAppDbContext context)
         {
             _context = context;
-            _mapper = mapper;
         }
 
         public async Task<PagedResult<OrderResponse>> GetMyOrdersAsync(
@@ -36,7 +34,7 @@ namespace ECommerceBackend.Application.Services
                 .Take(paging.Size)
                 .ToListAsync(cancellationToken);
             return PagedResult<OrderResponse>.Create(
-                _mapper.Map<IEnumerable<OrderResponse>>(items),
+                items.Select(order => order.ToResponse()),
                 totalCount,
                 paging.Page,
                 paging.Size);
@@ -53,7 +51,7 @@ namespace ECommerceBackend.Application.Services
                 query = query.Where(order => order.UserId == userId);
             var order = await query.FirstOrDefaultAsync(cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy đơn hàng.");
-            return _mapper.Map<OrderResponse>(order);
+            return order.ToResponse();
         }
 
         public async Task<PagedResult<OrderResponse>> GetAllOrdersAsync(
@@ -84,7 +82,7 @@ namespace ECommerceBackend.Application.Services
                 .Take(paging.Size)
                 .ToListAsync(cancellationToken);
             return PagedResult<OrderResponse>.Create(
-                _mapper.Map<IEnumerable<OrderResponse>>(items),
+                items.Select(order => order.ToResponse()),
                 totalCount,
                 paging.Page,
                 paging.Size);

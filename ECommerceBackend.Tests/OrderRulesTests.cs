@@ -1,5 +1,6 @@
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Application.Validation;
 using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Entities;
@@ -117,7 +118,6 @@ public class OrderRulesTests
     [Fact]
     public void OrderMapping_UsesHistoricalProductSnapshotAndPaymentState()
     {
-        var mapper = TestServiceFactory.CreateMapper();
         var product = new Product { Id = Guid.NewGuid(), Name = "Current product name" };
         var order = new Order
         {
@@ -144,7 +144,7 @@ public class OrderRulesTests
             ]
         };
 
-        var response = mapper.Map<OrderResponse>(order);
+        var response = order.ToResponse();
 
         Assert.Equal("Purchased product name", Assert.Single(response.OrderDetails).ProductName);
         Assert.Equal(nameof(PaymentStatus.Pending), response.Payment?.Status);

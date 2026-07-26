@@ -1,8 +1,8 @@
 using System.Data;
-using AutoMapper;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,18 +12,15 @@ namespace ECommerceBackend.Application.Services
     {
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
-        private readonly IMapper _mapper;
         private readonly IAuditWriter _audit;
 
         public CategoryService(
             IAppDbContext context,
             IDataConsistencyService consistency,
-            IMapper mapper,
             IAuditWriter? auditWriter = null)
         {
             _context = context;
             _consistency = consistency;
-            _mapper = mapper;
             _audit = auditWriter ?? NullAuditWriter.Instance;
         }
 
@@ -39,7 +36,7 @@ namespace ECommerceBackend.Application.Services
                 .ThenBy(category => category.Id)
                 .ToListAsync(cancellationToken);
 
-            return _mapper.Map<IEnumerable<CategoryResponse>>(categories);
+            return categories.Select(category => category.ToResponse());
         }
 
         public async Task<CategoryResponse> GetByIdAsync(
@@ -55,7 +52,7 @@ namespace ECommerceBackend.Application.Services
                     cancellationToken)
                 ?? throw new NotFoundException($"Không tìm thấy danh mục với Id '{id}'.");
 
-            return _mapper.Map<CategoryResponse>(category);
+            return category.ToResponse();
         }
 
         public async Task<CategoryResponse> CreateAsync(

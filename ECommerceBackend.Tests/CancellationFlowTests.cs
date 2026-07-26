@@ -17,8 +17,7 @@ public sealed class CancellationFlowTests
         var consistency = new CancelAfterBeginConsistencyService(cancellation);
         var service = new CategoryService(
             context,
-            consistency,
-            TestServiceFactory.CreateMapper());
+            consistency);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             service.CreateAsync(

@@ -1,0 +1,58 @@
+name: Backend Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  NUGET_AUDIT_MODE: all
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/TestRepositorySecrets.ps1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: >-
+          dotnet restore ECommerceBackend.sln
+          -p:NuGetAudit=true
+          -p:NuGetAuditMode=all
+          -p:NuGetAuditLevel=low
+          -warnaserror:NU1901,NU1902,NU1903,NU1904
+      - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
+      - run: dotnet tool install dotnet-ef --tool-path ./.tools --version 8.0.20
+      - shell: pwsh
+        run: >-
+          ./scripts/BuildMigrationArtifacts.ps1
+          -OutputDirectory ./MigrationArtifacts
+          -DotNetEfPath ./.tools/dotnet-ef
+      - shell: pwsh
+        run: >-
+          ./scripts/BuildReleasePackage.ps1
+          -OutputDirectory ./ReleasePackage
+          -MigrationArtifactsDirectory ./MigrationArtifacts
+          -SourceRevision ${{ github.sha }}
+      - shell: pwsh
+        run: >-
+          ./scripts/VerifyReleasePackage.ps1
+          -ReleaseDirectory ./ReleasePackage
+          -SmokeTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ecommerce-backend-${{ github.ref_name }}
+          path: |
+            ReleasePackage/ECommerceBackend-release.zip
+            ReleasePackage/ECommerceBackend-release.sha256
+            ReleasePackage/release-manifest.json
+          if-no-files-found: error

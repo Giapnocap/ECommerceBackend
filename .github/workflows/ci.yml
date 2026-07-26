@@ -58,6 +58,11 @@ jobs:
           -OutputDirectory ./ReleasePackage
           -MigrationArtifactsDirectory ./MigrationArtifacts
           -SourceRevision ${{ github.sha }}
+      - shell: pwsh
+        run: >-
+          ./scripts/VerifyReleasePackage.ps1
+          -ReleaseDirectory ./ReleasePackage
+          -SmokeTest
       - uses: actions/upload-artifact@v4
         if: always()
         with:

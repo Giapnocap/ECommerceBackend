@@ -7,7 +7,7 @@ REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NE
 - .NET 8, ASP.NET Core Web API
 - Entity Framework Core, SQL Server
 - JWT Bearer, role và permission policies
-- FluentValidation, AutoMapper
+- FluentValidation và mapping response tường minh
 - Serilog, ProblemDetails, correlation ID
 - Swagger/OpenAPI
 - xUnit, EF Core InMemory và SQL Server integration tests
@@ -34,7 +34,7 @@ API request
   -> Controller
   -> Application Service
   -> Domain Entity / Policy
-  -> Repository / DbContext / External Adapter
+  -> IAppDbContext / External Adapter
   -> SQL Server / File Storage
 ```
 
@@ -47,6 +47,15 @@ ECommerceBackend.Tests/  Unit, contract và SQL Server integration tests
 ```
 
 `Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case; Domain bảo vệ invariant; Infrastructure triển khai persistence, locking và external adapters.
+
+Tài liệu thiết kế:
+
+- [Kiến trúc và business invariants](docs/ARCHITECTURE.md)
+- [Database ERD](docs/ERD.md)
+- [Sequence các luồng quan trọng](docs/SEQUENCES.md)
+- [Hiệu năng và quyết định scale](docs/PERFORMANCE.md)
+- [Giới hạn hệ thống](docs/LIMITATIONS.md)
+- [Bằng chứng kỹ thuật dùng cho CV](docs/PORTFOLIO.md)
 
 ## Phân Quyền
 
@@ -189,6 +198,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildReleasePackag
 Output gồm ZIP triển khai backend, checksum SHA-256 và manifest liệt kê checksum từng file.
 Package chứa migration forward/rollback nhưng không chứa cấu hình Development, local hoặc template
 production. Secret production phải được cấp qua environment variable hoặc secret store lúc deploy.
+
+Xác minh checksum, nội dung manifest và khởi động DLL đã publish:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\VerifyReleasePackage.ps1 `
+  -ReleaseDirectory .\ReleasePackage `
+  -SmokeTest
+```
+
+Push tag dạng `v*` sẽ chạy workflow `Backend Release` và lưu package đã xác minh dưới dạng
+GitHub Actions artifact.
 
 ## Điểm Kỹ Thuật Nổi Bật
 

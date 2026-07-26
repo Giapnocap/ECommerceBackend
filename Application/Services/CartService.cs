@@ -1,8 +1,8 @@
 using System.Data;
-using AutoMapper;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,16 +12,13 @@ namespace ECommerceBackend.Application.Services
     {
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
-        private readonly IMapper _mapper;
 
         public CartService(
             IAppDbContext context,
-            IDataConsistencyService consistency,
-            IMapper mapper)
+            IDataConsistencyService consistency)
         {
             _context = context;
             _consistency = consistency;
-            _mapper = mapper;
         }
 
         public async Task<CartResponse> GetCartAsync(
@@ -29,7 +26,7 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default)
         {
             var cart = await GetOrCreateCartAsync(userId, cancellationToken);
-            return _mapper.Map<CartResponse>(cart);
+            return cart.ToResponse();
         }
 
         public async Task<CartResponse> AddItemAsync(

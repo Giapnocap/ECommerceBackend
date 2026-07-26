@@ -1,9 +1,9 @@
 using System.Data;
-using AutoMapper;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,18 +13,15 @@ namespace ECommerceBackend.Application.Services
     {
         private readonly IAppDbContext _context;
         private readonly IDataConsistencyService _consistency;
-        private readonly IMapper _mapper;
         private readonly TimeProvider _timeProvider;
         private readonly IAuditWriter _audit;
 
         public UserService(
             IAppDbContext context,
-            IDataConsistencyService consistency,
-            IMapper mapper)
+            IDataConsistencyService consistency)
             : this(
                 context,
                 consistency,
-                mapper,
                 TimeProvider.System)
         {
         }
@@ -32,13 +29,11 @@ namespace ECommerceBackend.Application.Services
         public UserService(
             IAppDbContext context,
             IDataConsistencyService consistency,
-            IMapper mapper,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
             _context = context;
             _consistency = consistency;
-            _mapper = mapper;
             _timeProvider = timeProvider;
             _audit = auditWriter ?? NullAuditWriter.Instance;
         }
@@ -58,7 +53,7 @@ namespace ECommerceBackend.Application.Services
                     cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
-            return _mapper.Map<UserResponse>(user);
+            return user.ToResponse();
         }
 
         public async Task<UserResponse> UpdateProfileAsync(
@@ -86,7 +81,7 @@ namespace ECommerceBackend.Application.Services
                 throw new ConflictException("Thông tin người dùng vừa được cập nhật bởi yêu cầu khác.", ex);
             }
 
-            return _mapper.Map<UserResponse>(user);
+            return user.ToResponse();
         }
 
         public async Task ChangePasswordAsync(
@@ -185,7 +180,7 @@ namespace ECommerceBackend.Application.Services
                 .ToListAsync(cancellationToken);
 
             return PagedResult<UserResponse>.Create(
-                _mapper.Map<IEnumerable<UserResponse>>(users),
+                users.Select(user => user.ToResponse()),
                 totalCount,
                 paging.Page,
                 paging.Size);
