@@ -124,7 +124,7 @@ Các tài khoản và mật khẩu trên chỉ dùng cho database development lo
 Unit và application tests:
 
 ```powershell
-dotnet test ECommerceBackend.sln --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration"
+dotnet test ECommerceBackend.sln --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration&Category!=SqlServerPerformance"
 ```
 
 SQL Server integration tests dùng database riêng:
@@ -142,6 +142,20 @@ riêng có tên chứa `Integration`; không dùng connection string của datab
 Chạy `scripts/BuildMigrationArtifacts.ps1` trước khi test để tạo thư mục artifact dùng cho
 kiểm tra nâng cấp, rollback và nâng cấp lại migration.
 
+Performance tests dùng SQL Server thật, tạo database tạm và đo catalog, session validation,
+checkout sau bước warm-up:
+
+```powershell
+.\scripts\RunPerformanceTests.ps1 `
+  -ConnectionString "Server=.;Database=ECommerceBackendPerformance;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;" `
+  -ResultsDirectory .\PerformanceResults `
+  -Configuration Release
+```
+
+Connection string phải trỏ tới database riêng có tên chứa `Performance` hoặc `Integration`.
+Kết quả được ghi tại `PerformanceResults/performance-results.json`. Workflow
+`Backend Performance` chạy hằng tuần hoặc thủ công, không làm chậm pull request thông thường.
+
 CI còn chạy recovery drill với thư mục backup nằm trong SQL Server container. Khi chạy thủ công,
 đặt `ECOMMERCE_TEST_SQL_BACKUP_DIRECTORY` thành thư mục mà tài khoản dịch vụ SQL Server có quyền
 ghi, sau đó dùng filter `Category=SqlServerRecoveryIntegration`. Recovery drill tạo database
@@ -157,7 +171,9 @@ inventory movement `OrderReturned`, manual refund history hoặc nhiều lần �
 Nếu đã phát sinh các dữ liệu này, giữ migration hiện tại hoặc phục hồi backup thay vì ép chạy script
 rollback.
 
-CI thực hiện restore có vulnerability audit, format check, Release build, kiểm tra model/migration, coverage gate và SQL Server integration tests.
+CI thực hiện restore có vulnerability audit, format check, Release build, kiểm tra model/migration,
+coverage gate và SQL Server integration tests. Baseline và quyết định scale được ghi tại
+[`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
 
 ## Đóng Gói Release
 

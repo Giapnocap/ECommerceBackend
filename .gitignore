@@ -10,4 +10,5 @@ appsettings.Local.json
 *.suo
 *.log
 TestResults/
+PerformanceResults/
 .tools/

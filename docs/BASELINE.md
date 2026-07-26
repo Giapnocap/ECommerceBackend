@@ -7,7 +7,7 @@ This document records the contract and quality baseline that must remain stable 
 - Architecture: ASP.NET Core 8 layered modular monolith.
 - Persistence: Entity Framework Core with SQL Server.
 - Deployment unit: one API process and one SQL Server database.
-- Latest migration: `20260723134443_AddDataRetentionIndexes`.
+- Latest migration: `20260726065143_OptimizeCatalogDefaultSort`.
 - Payment checkout method: cash on delivery.
 - Notification delivery: transactional outbox with at-least-once delivery.
 - Product images: local file storage for the current single-instance scope.
@@ -53,6 +53,7 @@ The baseline is accepted only when all of the following pass:
 - SQL Server transaction and concurrency tests.
 - Migration forward/rollback/forward test.
 - SQL Server backup/restore recovery test.
+- Opt-in SQL Server performance budgets for catalog, session validation and checkout.
 - Line coverage of at least 75 percent and branch coverage of at least 60 percent.
 - NuGet vulnerability audit and tracked-file secret scan.
 

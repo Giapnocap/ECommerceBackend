@@ -85,6 +85,10 @@ namespace ECommerceBackend.Infrastructure.Data
                 .IsUnique();
             modelBuilder.Entity<Product>()
                 .HasIndex(product => new { product.IsDeleted, product.StockQuantity });
+            modelBuilder.Entity<Product>()
+                .HasIndex(product => new { product.IsDeleted, product.CreatedAt, product.Id })
+                .HasDatabaseName("IX_Products_IsDeleted_CreatedAt_Id")
+                .IsDescending(false, true, true);
             modelBuilder.Entity<ProductImage>()
                 .HasIndex(pi => pi.ProductId)
                 .HasDatabaseName("UX_ProductImages_ProductId_IsMain")

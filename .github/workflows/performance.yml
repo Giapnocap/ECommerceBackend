@@ -1,0 +1,56 @@
+name: Backend Performance
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 1"
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+
+jobs:
+  sql-server-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ECOMMERCE_TEST_SQL_CONNECTION: "Server=localhost,1433;Database=ECommerceBackendPerformance;User Id=sa;Password=ECommerce!CiSql2026;TrustServerCertificate=True;Encrypt=False;"
+
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "ECommerce!CiSql2026"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'ECommerce!CiSql2026' -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/TestRepositorySecrets.ps1
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore ECommerceBackend.sln
+      - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
+      - shell: pwsh
+        run: >-
+          ./scripts/RunPerformanceTests.ps1
+          -ConnectionString $env:ECOMMERCE_TEST_SQL_CONNECTION
+          -ResultsDirectory ./PerformanceResults
+          -Configuration Release
+          -NoBuild
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-performance-results
+          path: PerformanceResults/performance-results.json
+          if-no-files-found: warn

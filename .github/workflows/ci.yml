@@ -42,7 +42,7 @@ jobs:
           --configuration Release
           --no-build
           --settings coverage.runsettings
-          --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration"
+          --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration&Category!=SqlServerPerformance"
           --collect:"XPlat Code Coverage"
           --results-directory ./TestResults
           --logger "console;verbosity=normal"
