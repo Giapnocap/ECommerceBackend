@@ -56,12 +56,12 @@ public class ReportServiceTests
 
         var result = await new ReportService(
             new ReportReadRepository(context)).GetSalesSummaryAsync(new SalesSummaryQuery
-        {
-            From = now.AddDays(-1),
-            To = now.AddDays(1),
-            LowStockThreshold = 10,
-            TopProductLimit = 10
-        });
+            {
+                From = now.AddDays(-1),
+                To = now.AddDays(1),
+                LowStockThreshold = 10,
+                TopProductLimit = 10
+            });
 
         Assert.Equal(3, result.TotalOrders);
         Assert.Equal(3, result.DeliveredOrders);
@@ -116,10 +116,10 @@ public class ReportServiceTests
 
         var result = await new ReportService(
             new ReportReadRepository(context)).GetSalesSummaryAsync(new SalesSummaryQuery
-        {
-            From = from,
-            To = to
-        });
+            {
+                From = from,
+                To = to
+            });
 
         Assert.Equal(1, result.TotalOrders);
         Assert.Equal(100m, result.GrossPaidAmount);

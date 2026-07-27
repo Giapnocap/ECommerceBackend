@@ -1,0 +1,12 @@
+root = true
+
+[*]
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+[*.{csproj,props,targets,json,md,ps1,sql}]
+indent_style = space
+indent_size = 2

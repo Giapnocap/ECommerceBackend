@@ -97,14 +97,14 @@ namespace ECommerceBackend.Application.Services
                     RandomNumberGenerator.GetBytes(48));
                 _authSessionRepository.AddPasswordResetToken(
                     new PasswordResetToken
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = user.Id,
-                    TokenHash = HashToken(rawToken),
-                    CreatedAt = occurredAt,
-                    ExpiresAt = occurredAt.AddMinutes(
+                    {
+                        Id = Guid.NewGuid(),
+                        UserId = user.Id,
+                        TokenHash = HashToken(rawToken),
+                        CreatedAt = occurredAt,
+                        ExpiresAt = occurredAt.AddMinutes(
                         _options.PasswordResetTokenMinutes)
-                });
+                    });
                 _outbox.EnqueueSensitiveNotification(
                     user.Id,
                     "Đặt lại mật khẩu",

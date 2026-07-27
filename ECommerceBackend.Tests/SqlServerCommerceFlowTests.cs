@@ -242,12 +242,12 @@ public sealed class SqlServerCommerceFlowTests
 
             var report = await new ReportService(
                 new ReportReadRepository(context)).GetSalesSummaryAsync(new SalesSummaryQuery
-            {
-                From = DateTime.UtcNow.AddDays(-1),
-                To = DateTime.UtcNow.AddDays(1),
-                LowStockThreshold = 10,
-                TopProductLimit = 10
-            });
+                {
+                    From = DateTime.UtcNow.AddDays(-1),
+                    To = DateTime.UtcNow.AddDays(1),
+                    LowStockThreshold = 10,
+                    TopProductLimit = 10
+                });
             Assert.Equal(2, report.TotalOrders);
             Assert.Equal(1, report.DeliveredOrders);
             Assert.Equal(1, report.CancelledOrders);
