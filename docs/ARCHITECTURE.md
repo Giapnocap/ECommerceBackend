@@ -12,11 +12,11 @@ HTTP request
     |
 API controllers / middleware
     |
-Application services / validation / DTOs
-    |
-Domain entities / state machines
-    |
-Infrastructure adapters (EF Core, SQL Server, file storage, logging)
+Application services / validation / DTOs ------> Domain entities / policies
+    |                                                  ^
+    v                                                  |
+Application persistence contracts <------ Infrastructure adapters
+                                           (EF Core, SQL Server, files, SMTP)
 ```
 
 `Program.cs` is the composition root. Controllers contain no business transaction logic.
@@ -27,7 +27,14 @@ system.
 
 Application code uses repositories, `IUnitOfWork`, `IDataConsistencyService` and
 `IAppTransaction`. EF Core query composition, SQL Server transaction objects, lock hints and
-error numbers are implemented only in Infrastructure.
+provider exception types are implemented only in Infrastructure. An architecture regression test
+rejects EF Core references under `Application`.
+
+Composition registration is split by responsibility across
+`ServiceCollectionExtensions.Configuration`, `.Infrastructure`, `.Security` and `.Web`.
+`AppDbContext` discovers per-entity `IEntityTypeConfiguration<T>` implementations from
+`Infrastructure/Data/Configurations`; indexes, constraints, relationships and authorization seed
+data are kept at that persistence boundary.
 
 ## Domain Invariants
 
@@ -52,7 +59,7 @@ Database checks, unique indexes and row versions remain defense-in-depth beneath
 - Auth: register, constant-work login, timed account lockout, single-use password reset,
   token-family rotation, reuse detection, logout and logout-all.
 - Users: profile, password changes, paged administration, role assignment and last-admin protection.
-- Catalogue: category hierarchy, products, images, search, filtering and paging.
+- Catalog: category hierarchy, products, images, search, filtering and paging.
 - Cart: one cart per user, unique product lines and current-price availability checks.
 - Orders: idempotent checkout, order snapshots, state transitions and cancellation.
 - Payments: centralized state machine, immutable status history, COD adapter and signed/idempotent webhook processing.

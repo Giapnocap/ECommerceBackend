@@ -39,14 +39,32 @@ API request
 ```
 
 ```text
-API/                 Controllers, middleware, health checks, Swagger, DI
-Application/         DTOs, validators, repository contracts, use-case services
+API/
+  Controllers/       HTTP endpoints
+  Middlewares/       Correlation ID, security headers, exception handling
+  Extensions/        Composition modules, routing và static files
+Application/
+  DTOs/              Request/response contracts
+  Validation/        FluentValidation rules theo feature
+  Interfaces/        Service, repository và transaction contracts
+  Services/          Use cases và application facades
 Domain/              Entities, enums, state transitions, business policies
-Infrastructure/      Repository implementations, EF Core, SQL Server, migrations, background services
+Infrastructure/
+  Data/Repositories/ EF Core repository implementations
+  Data/Configurations/ Entity mappings, indexes, constraints và seed data
+  Migrations/        SQL Server migration history
+  Notifications/     Outbox processing và notification adapters
+  Payments/          Payment provider adapters
 ECommerceBackend.Tests/  Unit, contract và SQL Server integration tests
 ```
 
 `Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
+
+Đăng ký dependency được chia theo trách nhiệm trong
+`API/Extensions/ServiceCollectionExtensions.*.cs`. `AppDbContext` chỉ khai báo `DbSet` và nạp
+`IEntityTypeConfiguration<T>` từ `Infrastructure/Data/Configurations`; mapping không nằm trong
+application service. Repository là các contract theo feature, không sử dụng generic repository và
+không expose `DbSet` hoặc `IQueryable` qua tầng Application.
 
 Tài liệu thiết kế:
 
