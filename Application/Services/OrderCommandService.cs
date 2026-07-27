@@ -1,19 +1,15 @@
 using System.Data;
-using System.Security.Cryptography;
-using System.Text;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
-using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Domain.Policies;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -21,375 +17,37 @@ namespace ECommerceBackend.Application.Services
     {
         private readonly IOrderRepository _orderRepository;
         private readonly IPaymentRepository _paymentRepository;
-        private readonly ICartRepository _cartRepository;
         private readonly IInventoryRepository _inventoryRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
-        private readonly IPaymentProviderResolver _paymentProviders;
         private readonly IOutboxWriter _outbox;
         private readonly TimeProvider _timeProvider;
-        private readonly OrderLifecycleOptions _lifecycleOptions;
         private readonly IAuditWriter _audit;
         private readonly OrderQueryUseCase _queries;
 
         public OrderCommandService(
             IOrderRepository orderRepository,
             IPaymentRepository paymentRepository,
-            ICartRepository cartRepository,
             IInventoryRepository inventoryRepository,
             IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
-            IPaymentProviderResolver paymentProviders,
-            IOutboxWriter outbox,
-            OrderQueryUseCase queries)
-            : this(
-                orderRepository,
-                paymentRepository,
-                cartRepository,
-                inventoryRepository,
-                unitOfWork,
-                consistency,
-                paymentProviders,
-                outbox,
-                queries,
-                TimeProvider.System,
-                Options.Create(new OrderLifecycleOptions()))
-        {
-        }
-
-        public OrderCommandService(
-            IOrderRepository orderRepository,
-            IPaymentRepository paymentRepository,
-            ICartRepository cartRepository,
-            IInventoryRepository inventoryRepository,
-            IUnitOfWork unitOfWork,
-            IDataConsistencyService consistency,
-            IPaymentProviderResolver paymentProviders,
-            IOutboxWriter outbox,
-            OrderQueryUseCase queries,
-            TimeProvider timeProvider)
-            : this(
-                orderRepository,
-                paymentRepository,
-                cartRepository,
-                inventoryRepository,
-                unitOfWork,
-                consistency,
-                paymentProviders,
-                outbox,
-                queries,
-                timeProvider,
-                Options.Create(new OrderLifecycleOptions()))
-        {
-        }
-
-        public OrderCommandService(
-            IOrderRepository orderRepository,
-            IPaymentRepository paymentRepository,
-            ICartRepository cartRepository,
-            IInventoryRepository inventoryRepository,
-            IUnitOfWork unitOfWork,
-            IDataConsistencyService consistency,
-            IPaymentProviderResolver paymentProviders,
             IOutboxWriter outbox,
             OrderQueryUseCase queries,
             TimeProvider timeProvider,
-            IOptions<OrderLifecycleOptions> lifecycleOptions,
             IAuditWriter? auditWriter = null)
         {
             _orderRepository = orderRepository;
             _paymentRepository = paymentRepository;
-            _cartRepository = cartRepository;
             _inventoryRepository = inventoryRepository;
             _unitOfWork = unitOfWork;
             _consistency = consistency;
-            _paymentProviders = paymentProviders;
             _outbox = outbox;
             _queries = queries;
             _timeProvider = timeProvider;
-            _lifecycleOptions = lifecycleOptions.Value;
             _audit = auditWriter ?? NullAuditWriter.Instance;
         }
 
         private DateTime UtcNow => _timeProvider.GetUtcNow().UtcDateTime;
-
-        private async Task<OrderResponse> PlaceOrderAsync(
-            Guid userId,
-            PlaceOrderRequest request,
-            string idempotencyKey,
-            CancellationToken cancellationToken = default)
-        {
-            var paymentMethod = Enum.IsDefined(request.PaymentMethod)
-                ? request.PaymentMethod.ToString()
-                : "unknown";
-            using var telemetry = BusinessTelemetry.Start(
-                "checkout.place_order",
-                cancellationToken,
-                new KeyValuePair<string, object?>(
-                    "payment.method",
-                    paymentMethod));
-            var normalizedKey = NormalizeIdempotencyKey(idempotencyKey);
-            var requestHash = HashCheckoutRequest(request);
-            var existingOrder = await FindIdempotentOrderAsync(
-                userId,
-                normalizedKey,
-                cancellationToken);
-
-            if (existingOrder != null)
-            {
-                EnsureSameIdempotencyRequest(existingOrder, requestHash);
-                telemetry.SetTag("checkout.idempotency.replay", true);
-                var response = await _queries.GetByIdAsync(
-                    existingOrder.Id,
-                    userId,
-                    true,
-                    cancellationToken);
-                telemetry.Complete();
-                return response;
-            }
-
-            Guid orderId;
-            await using var transaction = await _consistency.BeginTransactionAsync(
-                IsolationLevel.ReadCommitted,
-                cancellationToken);
-            var transactionCompleted = false;
-
-            try
-            {
-                var cart = await _consistency.LockCartByUserIdAsync(userId, cancellationToken)
-                    ?? throw new BusinessException("Không tìm thấy giỏ hàng.");
-
-                existingOrder = await FindIdempotentOrderAsync(
-                    userId,
-                    normalizedKey,
-                    cancellationToken);
-                if (existingOrder != null)
-                {
-                    EnsureSameIdempotencyRequest(existingOrder, requestHash);
-                    orderId = existingOrder.Id;
-                    await transaction.CommitAsync(cancellationToken);
-                    transactionCompleted = true;
-                    telemetry.SetTag("checkout.idempotency.replay", true);
-                    var response = await _queries.GetByIdAsync(
-                        orderId,
-                        userId,
-                        true,
-                        cancellationToken);
-                    telemetry.Complete();
-                    return response;
-                }
-
-                var pendingOrderCount =
-                    await _orderRepository.CountPendingByUserAsync(
-                        userId,
-                        cancellationToken);
-                if (pendingOrderCount >= _lifecycleOptions.MaxPendingOrdersPerCustomer)
-                {
-                    throw new ConflictException(
-                        "pending_order_limit_reached",
-                        $"Bạn chỉ có thể có tối đa {_lifecycleOptions.MaxPendingOrdersPerCustomer} đơn hàng đang chờ xử lý.");
-                }
-
-                var productIds = await _cartRepository.GetProductIdsAsync(
-                    cart.Id,
-                    cancellationToken);
-
-                if (productIds.Count == 0)
-                    throw new BusinessException("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
-
-                var products = await LoadProductsForUpdateAsync(productIds, cancellationToken);
-                await _cartRepository.LoadItemsAsync(
-                    cart,
-                    cancellationToken);
-
-                if (cart.CartItems.Count == 0)
-                    throw new BusinessException("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
-
-                foreach (var item in cart.CartItems)
-                {
-                    if (!products.TryGetValue(item.ProductId, out var product))
-                    {
-                        throw new BusinessException(
-                            "Dữ liệu sản phẩm trong giỏ hàng không còn khả dụng.");
-                    }
-
-                    item.Product = product;
-                }
-
-                foreach (var item in cart.CartItems)
-                {
-                    DomainRuleGuard.AsBusiness(() =>
-                        InventoryPolicy.EnsureCanReserve(item.Product!, item.Quantity));
-                }
-
-                var orderOccurredAt = UtcNow;
-                var subtotal = DomainRuleGuard.AsBusiness(() =>
-                    OrderPricingPolicy.CalculateSubtotal(cart.CartItems.Select(item =>
-                        new OrderPricingLine(
-                            item.Product?.Name ?? string.Empty,
-                            item.Product?.Price ?? 0,
-                            item.Quantity))));
-                var order = new Order
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    OrderNumber = CreateOrderNumber(orderOccurredAt),
-                    IdempotencyKey = normalizedKey,
-                    IdempotencyRequestHash = requestHash,
-                    OrderDate = orderOccurredAt,
-                    ShippingAddress = request.ShippingAddress.Trim(),
-                    Note = NormalizeOptional(request.Note)
-                };
-                DomainRuleGuard.AsBusiness(() =>
-                    order.SetPricing(subtotal, discount: 0, shipping: 0, tax: 0));
-                DomainRuleGuard.AsBusiness(() => order.SetPendingExpiration(
-                    orderOccurredAt.AddMinutes(_lifecycleOptions.PendingCodHoldMinutes)));
-                orderId = order.Id;
-                var paymentProvider = _paymentProviders.GetCheckoutProvider(request.PaymentMethod);
-                var initializedPayment = PaymentProviderContract.NormalizeInitialization(
-                    paymentProvider,
-                    paymentProvider.Initialize(new PaymentInitializationRequest(
-                        order.Id,
-                        order.OrderNumber,
-                        order.TotalAmount)));
-
-                var paymentCreatedAt = orderOccurredAt;
-                var payment = new Payment
-                {
-                    Id = Guid.NewGuid(),
-                    OrderId = order.Id,
-                    Method = request.PaymentMethod,
-                    Amount = order.TotalAmount,
-                    Provider = initializedPayment.Provider,
-                    ProviderTransactionId = initializedPayment.ProviderTransactionId,
-                    CreatedAt = paymentCreatedAt
-                };
-                if (initializedPayment.Status != payment.Status)
-                {
-                    DomainRuleGuard.AsBusiness(() =>
-                        payment.ChangeStatus(initializedPayment.Status, paymentCreatedAt));
-                }
-
-                _orderRepository.Add(order);
-                _paymentRepository.Add(payment);
-                _paymentRepository.AddStatusHistory(new PaymentStatusHistory
-                {
-                    Id = Guid.NewGuid(),
-                    PaymentId = payment.Id,
-                    ChangedByUserId = userId,
-                    FromStatus = null,
-                    ToStatus = payment.Status,
-                    Source = PaymentStatusChangeSource.Checkout,
-                    Reference = order.OrderNumber,
-                    OccurredAt = paymentCreatedAt,
-                    CreatedAt = paymentCreatedAt
-                });
-                _orderRepository.AddStatusHistory(new OrderStatusHistory
-                {
-                    Id = Guid.NewGuid(),
-                    OrderId = order.Id,
-                    ChangedByUserId = userId,
-                    FromStatus = null,
-                    ToStatus = order.Status,
-                    Note = "Đã đặt hàng và giữ tồn kho",
-                    CreatedAt = orderOccurredAt
-                });
-
-                foreach (var item in cart.CartItems)
-                {
-                    var product = item.Product!;
-                    var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
-                        InventoryPolicy.Reserve(product, item.Quantity));
-
-                    _orderRepository.AddDetail(new OrderDetail
-                    {
-                        Id = Guid.NewGuid(),
-                        OrderId = order.Id,
-                        ProductId = item.ProductId,
-                        ProductNameSnapshot = product.Name,
-                        Quantity = item.Quantity,
-                        UnitPrice = product.Price
-                    });
-                    _inventoryRepository.AddTransaction(new InventoryTransaction
-                    {
-                        Id = Guid.NewGuid(),
-                        ProductId = product.Id,
-                        OrderId = order.Id,
-                        CreatedByUserId = userId,
-                        Type = InventoryTransactionType.OrderPlaced,
-                        QuantityChange = inventoryMutation.QuantityChange,
-                        BalanceAfter = inventoryMutation.BalanceAfter,
-                        Reason = $"Đặt đơn {order.OrderNumber}",
-                        CreatedAt = orderOccurredAt
-                    });
-                    _cartRepository.RemoveItem(item);
-                }
-
-                _outbox.EnqueueNotification(
-                    userId,
-                    "Đặt hàng thành công",
-                    $"Đơn hàng {order.OrderNumber} đã được tiếp nhận và đang chờ xác nhận.",
-                    order.Id);
-
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-                transactionCompleted = true;
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                if (!transactionCompleted)
-                    await transaction.RollbackAsync(CancellationToken.None);
-
-                throw new ConflictException(
-                    "Tồn kho vừa được thay đổi. Vui lòng tải lại giỏ hàng và thử lại.",
-                    ex);
-            }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
-            {
-                if (!transactionCompleted)
-                    await transaction.RollbackAsync(CancellationToken.None);
-
-                var savedOrder = await FindIdempotentOrderAsync(userId, normalizedKey, cancellationToken);
-                if (savedOrder != null)
-                {
-                    EnsureSameIdempotencyRequest(savedOrder, requestHash);
-                    telemetry.SetTag("checkout.idempotency.replay", true);
-                    var response = await _queries.GetByIdAsync(
-                        savedOrder.Id,
-                        userId,
-                        true,
-                        cancellationToken);
-                    telemetry.Complete();
-                    return response;
-                }
-
-                throw new ConflictException("Không thể tạo đơn hàng do dữ liệu vừa được cập nhật.", ex);
-            }
-            catch (Exception ex) when (_consistency.IsDeadlock(ex))
-            {
-                if (!transactionCompleted)
-                    await transaction.RollbackAsync(CancellationToken.None);
-
-                throw new ConflictException(
-                    "Hệ thống đang xử lý giao dịch khác trên cùng sản phẩm. Vui lòng thử lại.",
-                    ex);
-            }
-            catch
-            {
-                if (!transactionCompleted)
-                    await transaction.RollbackAsync(CancellationToken.None);
-
-                throw;
-            }
-
-            var orderResponse = await _queries.GetByIdAsync(
-                orderId,
-                userId,
-                true,
-                cancellationToken);
-            telemetry.Complete();
-            return orderResponse;
-        }
 
         public async Task<OrderResponse> UpdateStatusAsync(
             Guid orderId,
@@ -665,15 +323,6 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        private async Task<Order?> FindIdempotentOrderAsync(
-            Guid userId,
-            string idempotencyKey,
-            CancellationToken cancellationToken)
-            => await _orderRepository.FindByIdempotencyKeyAsync(
-                userId,
-                idempotencyKey,
-                cancellationToken);
-
         private async Task<Dictionary<Guid, Product>> LoadProductsForUpdateAsync(
             IEnumerable<Guid> productIds,
             CancellationToken cancellationToken)
@@ -798,39 +447,6 @@ namespace ECommerceBackend.Application.Services
                 order.Id,
                 payment?.Id);
         }
-
-        private static string NormalizeIdempotencyKey(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                throw new BusinessException("Trường Idempotency-Key trong tiêu đề yêu cầu là bắt buộc khi đặt hàng.");
-
-            var normalized = value.Trim();
-            if (normalized.Length > 100)
-                throw new BusinessException("Trường Idempotency-Key trong tiêu đề yêu cầu không được vượt quá 100 ký tự.");
-
-            return normalized;
-        }
-
-        private static string HashCheckoutRequest(PlaceOrderRequest request)
-        {
-            var canonical = string.Join('\n',
-                request.ShippingAddress.Trim(),
-                NormalizeOptional(request.Note) ?? string.Empty,
-                ((int)request.PaymentMethod).ToString());
-            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
-        }
-
-        private static void EnsureSameIdempotencyRequest(Order order, string requestHash)
-        {
-            if (!string.Equals(order.IdempotencyRequestHash, requestHash, StringComparison.Ordinal))
-            {
-                throw new ConflictException(
-                    "Idempotency-Key đã được sử dụng cho một yêu cầu đặt hàng khác.");
-            }
-        }
-
-        private static string CreateOrderNumber(DateTime occurredAt)
-            => $"ORD-{occurredAt:yyyyMMdd}-{Guid.NewGuid():N}"[..32].ToUpperInvariant();
 
         private static string GetOrderStatusLabel(OrderStatus status)
             => status switch

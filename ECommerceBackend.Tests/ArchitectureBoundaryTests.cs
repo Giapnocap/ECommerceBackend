@@ -121,6 +121,23 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [Fact]
+    public void Checkout_IsOwnedByOrderCheckoutUseCase()
+    {
+        var commandMethods = typeof(OrderCommandService)
+            .GetMethods(
+                System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.Public
+                | System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.DeclaredOnly);
+
+        Assert.DoesNotContain(
+            commandMethods,
+            method => method.Name == "PlaceOrderAsync");
+        Assert.NotNull(typeof(OrderCheckoutUseCase).GetMethod(
+            nameof(OrderCheckoutUseCase.ExecuteAsync)));
+    }
+
+    [Fact]
     public void CriticalControllers_KeepDependingOnStableServiceInterfaces()
     {
         AssertConstructorDependency<AuthController, IAuthService>();

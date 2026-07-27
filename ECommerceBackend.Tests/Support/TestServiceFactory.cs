@@ -151,15 +151,12 @@ internal static class TestServiceFactory
         var commands = new OrderCommandService(
             orderRepository,
             paymentRepository,
-            cartRepository,
             inventoryRepository,
             context,
             consistency,
-            providers,
             outbox,
             queries,
-            clock,
-            options);
+            clock);
         var refund = new OrderRefundUseCase(
             paymentRepository,
             context,
