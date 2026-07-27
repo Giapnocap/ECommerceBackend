@@ -1,6 +1,9 @@
 using ECommerceBackend.API.Controllers;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Services;
+using ECommerceBackend.Infrastructure.Data;
 
 namespace ECommerceBackend.Tests;
 
@@ -17,7 +20,7 @@ public sealed class ArchitectureBoundaryTests
         };
         var forbiddenTypes = new[]
         {
-            typeof(IAppDbContext),
+            typeof(IUnitOfWork),
             typeof(IDataConsistencyService)
         };
 
@@ -81,6 +84,43 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [Fact]
+    public void ApplicationServices_DoNotDependOnAppDbContext()
+    {
+        var serviceTypes = typeof(AuthService).Assembly
+            .GetTypes()
+            .Where(type => type.IsClass
+                && type.Namespace == typeof(AuthService).Namespace);
+        var dependencies = serviceTypes
+            .SelectMany(type => type.GetConstructors())
+            .SelectMany(constructor => constructor.GetParameters())
+            .Select(parameter => parameter.ParameterType)
+            .Concat(
+                serviceTypes.SelectMany(type => type.GetFields(
+                    System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.NonPublic))
+                    .Select(field => field.FieldType));
+
+        Assert.DoesNotContain(typeof(AppDbContext), dependencies);
+    }
+
+    [Fact]
+    public void RepositoryContracts_DoNotExposeQueryableOrDbSet()
+    {
+        var repositoryContracts = typeof(IOrderRepository).Assembly
+            .GetTypes()
+            .Where(type => type.IsInterface
+                && type.Namespace == typeof(IOrderRepository).Namespace);
+        var exposedTypes = repositoryContracts
+            .SelectMany(type => type.GetMethods())
+            .SelectMany(method => method
+                .GetParameters()
+                .Select(parameter => parameter.ParameterType)
+                .Append(method.ReturnType));
+
+        Assert.DoesNotContain(exposedTypes, ContainsPersistenceQueryType);
+    }
+
+    [Fact]
     public void CriticalControllers_KeepDependingOnStableServiceInterfaces()
     {
         AssertConstructorDependency<AuthController, IAuthService>();
@@ -107,5 +147,22 @@ public sealed class ArchitectureBoundaryTests
             .SelectMany(constructor => constructor.GetParameters())
             .Select(parameter => parameter.ParameterType);
         Assert.Contains(typeof(TDependency), dependencies);
+    }
+
+    private static bool ContainsPersistenceQueryType(Type type)
+    {
+        if (type.IsGenericType)
+        {
+            var genericType = type.GetGenericTypeDefinition();
+            if (genericType == typeof(IQueryable<>)
+                || genericType.FullName == "Microsoft.EntityFrameworkCore.DbSet`1")
+            {
+                return true;
+            }
+
+            return type.GetGenericArguments().Any(ContainsPersistenceQueryType);
+        }
+
+        return false;
     }
 }

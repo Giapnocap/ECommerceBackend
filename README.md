@@ -34,19 +34,19 @@ API request
   -> Controller
   -> Application Service
   -> Domain Entity / Policy
-  -> IAppDbContext / External Adapter
+  -> Repository / IUnitOfWork / External Adapter
   -> SQL Server / File Storage
 ```
 
 ```text
 API/                 Controllers, middleware, health checks, Swagger, DI
-Application/         DTOs, validators, interfaces, use-case services
+Application/         DTOs, validators, repository contracts, use-case services
 Domain/              Entities, enums, state transitions, business policies
-Infrastructure/      EF Core, SQL Server, migrations, background services
+Infrastructure/      Repository implementations, EF Core, SQL Server, migrations, background services
 ECommerceBackend.Tests/  Unit, contract và SQL Server integration tests
 ```
 
-`Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case; Domain bảo vệ invariant; Infrastructure triển khai persistence, locking và external adapters.
+`Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
 
 Tài liệu thiết kế:
 

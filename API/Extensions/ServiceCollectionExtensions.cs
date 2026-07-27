@@ -241,7 +241,6 @@ namespace ECommerceBackend.API.Extensions
                 options.AddInterceptors(
                     provider.GetRequiredService<DatabaseTelemetryInterceptor>());
             });
-            services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
             services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
             services.AddScoped<IDataConsistencyService, EfDataConsistencyService>();
 

@@ -2,7 +2,7 @@ using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
-namespace ECommerceBackend.Infrastructure.Data
+namespace ECommerceBackend.Infrastructure.Data.Repositories
 {
     public sealed class EfOutboxStore : IOutboxStore
     {

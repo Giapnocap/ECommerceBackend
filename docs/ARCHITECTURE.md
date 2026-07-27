@@ -20,12 +20,14 @@ Infrastructure adapters (EF Core, SQL Server, file storage, logging)
 ```
 
 `Program.cs` is the composition root. Controllers contain no business transaction logic.
-Application services own use-case orchestration, while SQL-specific locking and persistence
-remain explicit at the data boundary. The project is deployed as one process; it is not a
-microservice system.
+Application services own use-case orchestration and commit boundaries. Feature-specific
+repository contracts isolate query and persistence details, while SQL-specific locking remains
+explicit at the data boundary. The project is deployed as one process; it is not a microservice
+system.
 
-Application code uses `IDataConsistencyService` and `IAppTransaction`. SQL Server transaction
-objects, lock hints and error numbers are implemented only in Infrastructure.
+Application code uses repositories, `IUnitOfWork`, `IDataConsistencyService` and
+`IAppTransaction`. EF Core query composition, SQL Server transaction objects, lock hints and
+error numbers are implemented only in Infrastructure.
 
 ## Domain Invariants
 
@@ -63,10 +65,10 @@ The large auth, order and operations implementations are composed from focused u
 registration/session/password reset, checkout/order queries/lifecycle commands, and
 dead-letter/audit/retention operations. Facades do not own `DbContext` or transaction dependencies.
 
-The former generic repository was removed because every consuming service already required
-`IAppDbContext`, while the repository exposed `IQueryable` and merely forwarded EF Core calls.
-Application services now use the existing context abstraction directly, keeping query shape,
-tracking and transaction ownership visible in the use case that controls them.
+Repositories are feature-specific rather than generic. Their contracts expose business-oriented
+queries and persistence operations without leaking `DbSet` or `IQueryable`. Application services
+retain transaction orchestration and call `IUnitOfWork` at the same commit points as the business
+use case; all repositories in one request share the same scoped `AppDbContext`.
 
 ## Checkout Flow
 
