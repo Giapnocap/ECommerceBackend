@@ -3,6 +3,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +13,8 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class OrderRefundUseCase
     {
-        private readonly IAppDbContext _context;
+        private readonly IPaymentRepository _paymentRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IOutboxWriter _outbox;
         private readonly OrderQueryUseCase _queries;
@@ -19,12 +22,14 @@ namespace ECommerceBackend.Application.Services
         private readonly IAuditWriter _audit;
 
         public OrderRefundUseCase(
-            IAppDbContext context,
+            IPaymentRepository paymentRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IOutboxWriter outbox,
             OrderQueryUseCase queries)
             : this(
-                context,
+                paymentRepository,
+                unitOfWork,
                 consistency,
                 outbox,
                 queries,
@@ -33,14 +38,16 @@ namespace ECommerceBackend.Application.Services
         }
 
         public OrderRefundUseCase(
-            IAppDbContext context,
+            IPaymentRepository paymentRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IOutboxWriter outbox,
             OrderQueryUseCase queries,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
-            _context = context;
+            _paymentRepository = paymentRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _outbox = outbox;
             _queries = queries;
@@ -87,11 +94,9 @@ namespace ECommerceBackend.Application.Services
                 var reference = NormalizeReference(request.Reference);
                 if (payment.Status == PaymentStatus.Refunded)
                 {
-                    var existingRefund = await _context.PaymentStatusHistories
-                        .AsNoTracking()
-                        .SingleOrDefaultAsync(
-                            history => history.PaymentId == payment.Id
-                                && history.ToStatus == PaymentStatus.Refunded,
+                    var existingRefund =
+                        await _paymentRepository.GetRefundHistoryAsync(
+                            payment.Id,
                             cancellationToken);
                     if (existingRefund == null
                         || existingRefund.Source != PaymentStatusChangeSource.ManualRefund
@@ -119,7 +124,7 @@ namespace ECommerceBackend.Application.Services
                     var statusChange = DomainRuleGuard.AsConflict(() =>
                         payment.ChangeStatus(PaymentStatus.Refunded, occurredAt));
 
-                    _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+                    _paymentRepository.AddStatusHistory(new PaymentStatusHistory
                     {
                         Id = Guid.NewGuid(),
                         PaymentId = payment.Id,
@@ -151,7 +156,7 @@ namespace ECommerceBackend.Application.Services
                             ["note"] = NormalizeOptional(request.Note)
                         });
 
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
                 await transaction.CommitAsync(cancellationToken);

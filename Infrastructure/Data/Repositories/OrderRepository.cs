@@ -68,6 +68,56 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             return new PageSlice<Order>(items, totalCount);
         }
 
+        public Task<Order?> FindByIdempotencyKeyAsync(
+            Guid userId,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default)
+            => _context.Orders
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    order => order.UserId == userId
+                        && order.IdempotencyKey == idempotencyKey,
+                    cancellationToken);
+
+        public Task<int> CountPendingByUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+            => _context.Orders.CountAsync(
+                order => order.UserId == userId
+                    && order.Status == OrderStatus.Pending,
+                cancellationToken);
+
+        public async Task<IReadOnlyList<Guid>> GetDuePendingOrderIdsAsync(
+            DateTime asOf,
+            int batchSize,
+            CancellationToken cancellationToken = default)
+            => await _context.Orders
+                .AsNoTracking()
+                .Where(order => order.Status == OrderStatus.Pending
+                    && order.ExpiresAt != null
+                    && order.ExpiresAt <= asOf)
+                .OrderBy(order => order.ExpiresAt)
+                .ThenBy(order => order.Id)
+                .Select(order => order.Id)
+                .Take(batchSize)
+                .ToListAsync(cancellationToken);
+
+        public Task LoadDetailsAsync(
+            Order order,
+            CancellationToken cancellationToken = default)
+            => _context.Entry(order)
+                .Collection(candidate => candidate.OrderDetails)
+                .LoadAsync(cancellationToken);
+
+        public void Add(Order order)
+            => _context.Orders.Add(order);
+
+        public void AddDetail(OrderDetail detail)
+            => _context.OrderDetails.Add(detail);
+
+        public void AddStatusHistory(OrderStatusHistory history)
+            => _context.OrderStatusHistories.Add(history);
+
         private IQueryable<Order> BuildReadQuery()
             => _context.Orders
                 .AsNoTracking()

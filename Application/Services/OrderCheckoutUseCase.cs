@@ -5,6 +5,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Entities;
@@ -17,7 +19,11 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class OrderCheckoutUseCase
     {
-        private readonly IAppDbContext _context;
+        private readonly IOrderRepository _orderRepository;
+        private readonly IPaymentRepository _paymentRepository;
+        private readonly ICartRepository _cartRepository;
+        private readonly IInventoryRepository _inventoryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IPaymentProviderResolver _paymentProviders;
         private readonly IOutboxWriter _outbox;
@@ -26,7 +32,11 @@ namespace ECommerceBackend.Application.Services
         private readonly OrderLifecycleOptions _options;
 
         public OrderCheckoutUseCase(
-            IAppDbContext context,
+            IOrderRepository orderRepository,
+            IPaymentRepository paymentRepository,
+            ICartRepository cartRepository,
+            IInventoryRepository inventoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPaymentProviderResolver paymentProviders,
             IOutboxWriter outbox,
@@ -34,7 +44,11 @@ namespace ECommerceBackend.Application.Services
             TimeProvider timeProvider,
             IOptions<OrderLifecycleOptions> options)
         {
-            _context = context;
+            _orderRepository = orderRepository;
+            _paymentRepository = paymentRepository;
+            _cartRepository = cartRepository;
+            _inventoryRepository = inventoryRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _paymentProviders = paymentProviders;
             _outbox = outbox;
@@ -107,9 +121,9 @@ namespace ECommerceBackend.Application.Services
                     return replay;
                 }
 
-                var pendingOrderCount = await _context.Orders.CountAsync(
-                    order => order.UserId == userId
-                        && order.Status == OrderStatus.Pending,
+                var pendingOrderCount =
+                    await _orderRepository.CountPendingByUserAsync(
+                    userId,
                     cancellationToken);
                 if (pendingOrderCount
                     >= _options.MaxPendingOrdersPerCustomer)
@@ -121,11 +135,9 @@ namespace ECommerceBackend.Application.Services
                         + "đơn hàng đang chờ xử lý.");
                 }
 
-                var productIds = await _context.CartItems
-                    .AsNoTracking()
-                    .Where(item => item.CartId == cart.Id)
-                    .Select(item => item.ProductId)
-                    .ToListAsync(cancellationToken);
+                var productIds = await _cartRepository.GetProductIdsAsync(
+                    cart.Id,
+                    cancellationToken);
                 if (productIds.Count == 0)
                 {
                     throw new BusinessException(
@@ -136,9 +148,9 @@ namespace ECommerceBackend.Application.Services
                 var products = await LoadProductsForUpdateAsync(
                     productIds,
                     cancellationToken);
-                await _context.Entry(cart)
-                    .Collection(candidate => candidate.CartItems)
-                    .LoadAsync(cancellationToken);
+                await _cartRepository.LoadItemsAsync(
+                    cart,
+                    cancellationToken);
                 if (cart.CartItems.Count == 0)
                 {
                     throw new BusinessException(
@@ -234,7 +246,7 @@ namespace ECommerceBackend.Application.Services
                     $"Đơn hàng {order.OrderNumber} đã được tiếp nhận "
                     + "và đang chờ xác nhận.",
                     order.Id);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
             }
@@ -305,9 +317,9 @@ namespace ECommerceBackend.Application.Services
             Guid userId,
             DateTime occurredAt)
         {
-            _context.Orders.Add(order);
-            _context.Payments.Add(payment);
-            _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+            _orderRepository.Add(order);
+            _paymentRepository.Add(payment);
+            _paymentRepository.AddStatusHistory(new PaymentStatusHistory
             {
                 Id = Guid.NewGuid(),
                 PaymentId = payment.Id,
@@ -319,7 +331,7 @@ namespace ECommerceBackend.Application.Services
                 OccurredAt = occurredAt,
                 CreatedAt = occurredAt
             });
-            _context.OrderStatusHistories.Add(new OrderStatusHistory
+            _orderRepository.AddStatusHistory(new OrderStatusHistory
             {
                 Id = Guid.NewGuid(),
                 OrderId = order.Id,
@@ -335,7 +347,7 @@ namespace ECommerceBackend.Application.Services
                 var product = item.Product!;
                 var mutation = DomainRuleGuard.AsBusiness(() =>
                     InventoryPolicy.Reserve(product, item.Quantity));
-                _context.OrderDetails.Add(new OrderDetail
+                _orderRepository.AddDetail(new OrderDetail
                 {
                     Id = Guid.NewGuid(),
                     OrderId = order.Id,
@@ -344,7 +356,7 @@ namespace ECommerceBackend.Application.Services
                     Quantity = item.Quantity,
                     UnitPrice = product.Price
                 });
-                _context.InventoryTransactions.Add(
+                _inventoryRepository.AddTransaction(
                     new InventoryTransaction
                     {
                         Id = Guid.NewGuid(),
@@ -357,7 +369,7 @@ namespace ECommerceBackend.Application.Services
                         Reason = $"Đặt đơn {order.OrderNumber}",
                         CreatedAt = occurredAt
                     });
-                _context.CartItems.Remove(item);
+                _cartRepository.RemoveItem(item);
             }
         }
 
@@ -375,12 +387,10 @@ namespace ECommerceBackend.Application.Services
             Guid userId,
             string idempotencyKey,
             CancellationToken cancellationToken)
-            => await _context.Orders
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    order => order.UserId == userId
-                        && order.IdempotencyKey == idempotencyKey,
-                    cancellationToken);
+            => await _orderRepository.FindByIdempotencyKeyAsync(
+                userId,
+                idempotencyKey,
+                cancellationToken);
 
         private async Task<Dictionary<Guid, Product>>
             LoadProductsForUpdateAsync(

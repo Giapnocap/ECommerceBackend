@@ -23,5 +23,29 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             int skip,
             int take,
             CancellationToken cancellationToken = default);
+
+        Task<Order?> FindByIdempotencyKeyAsync(
+            Guid userId,
+            string idempotencyKey,
+            CancellationToken cancellationToken = default);
+
+        Task<int> CountPendingByUserAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<Guid>> GetDuePendingOrderIdsAsync(
+            DateTime asOf,
+            int batchSize,
+            CancellationToken cancellationToken = default);
+
+        Task LoadDetailsAsync(
+            Order order,
+            CancellationToken cancellationToken = default);
+
+        void Add(Order order);
+
+        void AddDetail(OrderDetail detail);
+
+        void AddStatusHistory(OrderStatusHistory history);
     }
 }

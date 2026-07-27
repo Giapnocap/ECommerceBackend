@@ -5,6 +5,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Common;
@@ -17,7 +19,11 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class OrderCommandService
     {
-        private readonly IAppDbContext _context;
+        private readonly IOrderRepository _orderRepository;
+        private readonly IPaymentRepository _paymentRepository;
+        private readonly ICartRepository _cartRepository;
+        private readonly IInventoryRepository _inventoryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IPaymentProviderResolver _paymentProviders;
         private readonly IOutboxWriter _outbox;
@@ -27,13 +33,21 @@ namespace ECommerceBackend.Application.Services
         private readonly OrderQueryUseCase _queries;
 
         public OrderCommandService(
-            IAppDbContext context,
+            IOrderRepository orderRepository,
+            IPaymentRepository paymentRepository,
+            ICartRepository cartRepository,
+            IInventoryRepository inventoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPaymentProviderResolver paymentProviders,
             IOutboxWriter outbox,
             OrderQueryUseCase queries)
             : this(
-                context,
+                orderRepository,
+                paymentRepository,
+                cartRepository,
+                inventoryRepository,
+                unitOfWork,
                 consistency,
                 paymentProviders,
                 outbox,
@@ -44,14 +58,22 @@ namespace ECommerceBackend.Application.Services
         }
 
         public OrderCommandService(
-            IAppDbContext context,
+            IOrderRepository orderRepository,
+            IPaymentRepository paymentRepository,
+            ICartRepository cartRepository,
+            IInventoryRepository inventoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPaymentProviderResolver paymentProviders,
             IOutboxWriter outbox,
             OrderQueryUseCase queries,
             TimeProvider timeProvider)
             : this(
-                context,
+                orderRepository,
+                paymentRepository,
+                cartRepository,
+                inventoryRepository,
+                unitOfWork,
                 consistency,
                 paymentProviders,
                 outbox,
@@ -62,7 +84,11 @@ namespace ECommerceBackend.Application.Services
         }
 
         public OrderCommandService(
-            IAppDbContext context,
+            IOrderRepository orderRepository,
+            IPaymentRepository paymentRepository,
+            ICartRepository cartRepository,
+            IInventoryRepository inventoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPaymentProviderResolver paymentProviders,
             IOutboxWriter outbox,
@@ -71,7 +97,11 @@ namespace ECommerceBackend.Application.Services
             IOptions<OrderLifecycleOptions> lifecycleOptions,
             IAuditWriter? auditWriter = null)
         {
-            _context = context;
+            _orderRepository = orderRepository;
+            _paymentRepository = paymentRepository;
+            _cartRepository = cartRepository;
+            _inventoryRepository = inventoryRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _paymentProviders = paymentProviders;
             _outbox = outbox;
@@ -149,9 +179,10 @@ namespace ECommerceBackend.Application.Services
                     return response;
                 }
 
-                var pendingOrderCount = await _context.Orders
-                    .CountAsync(order => order.UserId == userId
-                        && order.Status == OrderStatus.Pending, cancellationToken);
+                var pendingOrderCount =
+                    await _orderRepository.CountPendingByUserAsync(
+                        userId,
+                        cancellationToken);
                 if (pendingOrderCount >= _lifecycleOptions.MaxPendingOrdersPerCustomer)
                 {
                     throw new ConflictException(
@@ -159,19 +190,17 @@ namespace ECommerceBackend.Application.Services
                         $"Bạn chỉ có thể có tối đa {_lifecycleOptions.MaxPendingOrdersPerCustomer} đơn hàng đang chờ xử lý.");
                 }
 
-                var productIds = await _context.CartItems
-                    .AsNoTracking()
-                    .Where(item => item.CartId == cart.Id)
-                    .Select(item => item.ProductId)
-                    .ToListAsync(cancellationToken);
+                var productIds = await _cartRepository.GetProductIdsAsync(
+                    cart.Id,
+                    cancellationToken);
 
                 if (productIds.Count == 0)
                     throw new BusinessException("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
 
                 var products = await LoadProductsForUpdateAsync(productIds, cancellationToken);
-                await _context.Entry(cart)
-                    .Collection(candidate => candidate.CartItems)
-                    .LoadAsync(cancellationToken);
+                await _cartRepository.LoadItemsAsync(
+                    cart,
+                    cancellationToken);
 
                 if (cart.CartItems.Count == 0)
                     throw new BusinessException("Giỏ hàng trống. Vui lòng thêm sản phẩm trước khi đặt hàng.");
@@ -241,9 +270,9 @@ namespace ECommerceBackend.Application.Services
                         payment.ChangeStatus(initializedPayment.Status, paymentCreatedAt));
                 }
 
-                _context.Orders.Add(order);
-                _context.Payments.Add(payment);
-                _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+                _orderRepository.Add(order);
+                _paymentRepository.Add(payment);
+                _paymentRepository.AddStatusHistory(new PaymentStatusHistory
                 {
                     Id = Guid.NewGuid(),
                     PaymentId = payment.Id,
@@ -255,7 +284,7 @@ namespace ECommerceBackend.Application.Services
                     OccurredAt = paymentCreatedAt,
                     CreatedAt = paymentCreatedAt
                 });
-                _context.OrderStatusHistories.Add(new OrderStatusHistory
+                _orderRepository.AddStatusHistory(new OrderStatusHistory
                 {
                     Id = Guid.NewGuid(),
                     OrderId = order.Id,
@@ -272,7 +301,7 @@ namespace ECommerceBackend.Application.Services
                     var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
                         InventoryPolicy.Reserve(product, item.Quantity));
 
-                    _context.OrderDetails.Add(new OrderDetail
+                    _orderRepository.AddDetail(new OrderDetail
                     {
                         Id = Guid.NewGuid(),
                         OrderId = order.Id,
@@ -281,7 +310,7 @@ namespace ECommerceBackend.Application.Services
                         Quantity = item.Quantity,
                         UnitPrice = product.Price
                     });
-                    _context.InventoryTransactions.Add(new InventoryTransaction
+                    _inventoryRepository.AddTransaction(new InventoryTransaction
                     {
                         Id = Guid.NewGuid(),
                         ProductId = product.Id,
@@ -293,7 +322,7 @@ namespace ECommerceBackend.Application.Services
                         Reason = $"Đặt đơn {order.OrderNumber}",
                         CreatedAt = orderOccurredAt
                     });
-                    _context.CartItems.Remove(item);
+                    _cartRepository.RemoveItem(item);
                 }
 
                 _outbox.EnqueueNotification(
@@ -302,7 +331,7 @@ namespace ECommerceBackend.Application.Services
                     $"Đơn hàng {order.OrderNumber} đã được tiếp nhận và đang chờ xác nhận.",
                     order.Id);
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
             }
@@ -411,7 +440,7 @@ namespace ECommerceBackend.Application.Services
                         actorUserId,
                         occurredAt);
 
-                    _context.OrderStatusHistories.Add(new OrderStatusHistory
+                    _orderRepository.AddStatusHistory(new OrderStatusHistory
                     {
                         Id = Guid.NewGuid(),
                         OrderId = order.Id,
@@ -440,7 +469,7 @@ namespace ECommerceBackend.Application.Services
                             ["toStatus"] = request.Status.ToString()
                         });
 
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
                 await transaction.CommitAsync(cancellationToken);
@@ -531,7 +560,7 @@ namespace ECommerceBackend.Application.Services
                 AddCancellationHistory(order, statusChange, customerUserId, request.Reason, occurredAt);
                 EnqueueCancellationNotification(order, payment, "Đơn hàng đã được hủy theo yêu cầu của bạn.");
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
             }
@@ -576,16 +605,10 @@ namespace ECommerceBackend.Application.Services
             if (batchSize <= 0)
                 return Array.Empty<Guid>();
 
-            return await _context.Orders
-                .AsNoTracking()
-                .Where(order => order.Status == OrderStatus.Pending
-                    && order.ExpiresAt != null
-                    && order.ExpiresAt <= asOf)
-                .OrderBy(order => order.ExpiresAt)
-                .ThenBy(order => order.Id)
-                .Select(order => order.Id)
-                .Take(batchSize)
-                .ToListAsync(cancellationToken);
+            return await _orderRepository.GetDuePendingOrderIdsAsync(
+                asOf,
+                batchSize,
+                cancellationToken);
         }
 
         public async Task<bool> ExpirePendingOrderAsync(
@@ -628,7 +651,7 @@ namespace ECommerceBackend.Application.Services
                 AddCancellationHistory(order, statusChange, null, "SystemExpired", asOf);
                 EnqueueCancellationNotification(order, payment, "Đơn hàng đã hết thời gian giữ tồn kho và được hủy tự động.");
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
                 return true;
@@ -646,10 +669,10 @@ namespace ECommerceBackend.Application.Services
             Guid userId,
             string idempotencyKey,
             CancellationToken cancellationToken)
-            => await _context.Orders
-                .AsNoTracking()
-                .FirstOrDefaultAsync(order => order.UserId == userId
-                    && order.IdempotencyKey == idempotencyKey, cancellationToken);
+            => await _orderRepository.FindByIdempotencyKeyAsync(
+                userId,
+                idempotencyKey,
+                cancellationToken);
 
         private async Task<Dictionary<Guid, Product>> LoadProductsForUpdateAsync(
             IEnumerable<Guid> productIds,
@@ -677,9 +700,9 @@ namespace ECommerceBackend.Application.Services
             InventoryTransactionType transactionType,
             CancellationToken cancellationToken)
         {
-            await _context.Entry(order)
-                .Collection(candidate => candidate.OrderDetails)
-                .LoadAsync(cancellationToken);
+            await _orderRepository.LoadDetailsAsync(
+                order,
+                cancellationToken);
             var products = await LoadProductsForUpdateAsync(
                 order.OrderDetails.Select(detail => detail.ProductId),
                 cancellationToken);
@@ -690,7 +713,7 @@ namespace ECommerceBackend.Application.Services
                 var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
                     InventoryPolicy.Release(product, detail.Quantity));
 
-                _context.InventoryTransactions.Add(new InventoryTransaction
+                _inventoryRepository.AddTransaction(new InventoryTransaction
                 {
                     Id = Guid.NewGuid(),
                     ProductId = product.Id,
@@ -730,7 +753,7 @@ namespace ECommerceBackend.Application.Services
             var statusChange = DomainRuleGuard.AsConflict(() =>
                 payment.ChangeStatus(nextStatus.Value, occurredAt));
 
-            _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+            _paymentRepository.AddStatusHistory(new PaymentStatusHistory
             {
                 Id = Guid.NewGuid(),
                 PaymentId = payment.Id,
@@ -751,7 +774,7 @@ namespace ECommerceBackend.Application.Services
             string? note,
             DateTime occurredAt)
         {
-            _context.OrderStatusHistories.Add(new OrderStatusHistory
+            _orderRepository.AddStatusHistory(new OrderStatusHistory
             {
                 Id = Guid.NewGuid(),
                 OrderId = order.Id,

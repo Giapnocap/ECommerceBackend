@@ -35,6 +35,22 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                     .ThenInclude(product => product!.Images)
                 .LoadAsync(cancellationToken);
 
+        public Task LoadItemsAsync(
+            Cart cart,
+            CancellationToken cancellationToken = default)
+            => _context.Entry(cart)
+                .Collection(candidate => candidate.CartItems)
+                .LoadAsync(cancellationToken);
+
+        public async Task<IReadOnlyList<Guid>> GetProductIdsAsync(
+            Guid cartId,
+            CancellationToken cancellationToken = default)
+            => await _context.CartItems
+                .AsNoTracking()
+                .Where(item => item.CartId == cartId)
+                .Select(item => item.ProductId)
+                .ToListAsync(cancellationToken);
+
         public Task AddAsync(
             Cart cart,
             CancellationToken cancellationToken = default)

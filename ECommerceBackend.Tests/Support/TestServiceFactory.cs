@@ -121,7 +121,11 @@ internal static class TestServiceFactory
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null)
     {
-        var queries = new OrderQueryUseCase(new OrderRepository(context));
+        var orderRepository = new OrderRepository(context);
+        var paymentRepository = new PaymentRepository(context);
+        var cartRepository = new CartRepository(context);
+        var inventoryRepository = new InventoryRepository(context);
+        var queries = new OrderQueryUseCase(orderRepository);
         var consistency = Consistency(context);
         var providers = new PaymentProviderResolver(
             [new CashOnDeliveryPaymentProvider()]);
@@ -130,6 +134,10 @@ internal static class TestServiceFactory
         var options = Options.Create(
             lifecycleOptions ?? new OrderLifecycleOptions());
         var checkout = new OrderCheckoutUseCase(
+            orderRepository,
+            paymentRepository,
+            cartRepository,
+            inventoryRepository,
             context,
             consistency,
             providers,
@@ -138,6 +146,10 @@ internal static class TestServiceFactory
             clock,
             options);
         var commands = new OrderCommandService(
+            orderRepository,
+            paymentRepository,
+            cartRepository,
+            inventoryRepository,
             context,
             consistency,
             providers,
@@ -146,6 +158,7 @@ internal static class TestServiceFactory
             clock,
             options);
         var refund = new OrderRefundUseCase(
+            paymentRepository,
             context,
             consistency,
             outbox,
