@@ -94,7 +94,9 @@ public sealed class NotificationReliabilityTests
             CreatedAt = now.UtcDateTime
         };
         context.Users.Add(user);
-        new OutboxWriter(context, clock).EnqueueNotification(
+        new OutboxWriter(
+            new OutboxRepository(context),
+            clock).EnqueueNotification(
             user.Id,
             "Subject",
             "Message");

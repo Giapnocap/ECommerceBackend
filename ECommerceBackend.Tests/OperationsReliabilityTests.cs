@@ -340,7 +340,7 @@ public sealed class OperationsReliabilityTests
             new Claim(ClaimTypes.NameIdentifier, actorUserId.ToString())
         ], "Test"));
         return new AuditWriter(
-            context,
+            new AuditRepository(context),
             new HttpContextAccessor { HttpContext = httpContext },
             new FixedTimeProvider(Now));
     }
@@ -353,9 +353,15 @@ public sealed class OperationsReliabilityTests
         var audit = CreateAuditWriter(context, actorUserId);
         var clock = new FixedTimeProvider(Now);
         return new OperationsService(
-            new DeadLetterUseCase(context, consistency, audit, clock),
+            new DeadLetterUseCase(
+                new OutboxRepository(context),
+                context,
+                consistency,
+                audit,
+                clock),
             new AuditQueryUseCase(new AuditRepository(context)),
             new DataRetentionUseCase(
+                new DataRetentionRepository(context),
                 context,
                 consistency,
                 audit,

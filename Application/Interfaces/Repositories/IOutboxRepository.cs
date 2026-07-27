@@ -4,18 +4,13 @@ using ECommerceBackend.Domain.Entities;
 
 namespace ECommerceBackend.Application.Interfaces.Repositories
 {
-    public interface IAuditRepository
+    public interface IOutboxRepository
     {
-        void Add(AuditEvent auditEvent);
-
-        Task<PageSlice<AuditEventResponse>> QueryAsync(
-            Guid? actorUserId,
-            string? action,
-            string? entityType,
-            DateTime? from,
-            DateTime? to,
+        Task<PageSlice<DeadLetterResponse>> GetDeadLettersAsync(
             int skip,
             int take,
             CancellationToken cancellationToken = default);
+
+        void Add(OutboxMessage message);
     }
 }

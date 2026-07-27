@@ -256,8 +256,10 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
             services.AddScoped<ICartRepository, CartRepository>();
             services.AddScoped<ICategoryRepository, CategoryRepository>();
+            services.AddScoped<IDataRetentionRepository, DataRetentionRepository>();
             services.AddScoped<IInventoryRepository, InventoryRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IOutboxRepository, OutboxRepository>();
             services.AddScoped<IPaymentRepository, PaymentRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<IReportReadRepository, ReportReadRepository>();

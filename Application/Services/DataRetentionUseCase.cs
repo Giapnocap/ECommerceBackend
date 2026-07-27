@@ -5,8 +5,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
-using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
@@ -24,7 +24,8 @@ namespace ECommerceBackend.Application.Services
         private static readonly Histogram<double> RetentionDuration =
             Meter.CreateHistogram<double>("data_retention.duration", "ms");
 
-        private readonly IAppDbContext _context;
+        private readonly IDataRetentionRepository _retentionRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IAuditWriter _audit;
         private readonly TimeProvider _timeProvider;
@@ -32,14 +33,16 @@ namespace ECommerceBackend.Application.Services
         private readonly ILogger<DataRetentionUseCase> _logger;
 
         public DataRetentionUseCase(
-            IAppDbContext context,
+            IDataRetentionRepository retentionRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IAuditWriter audit,
             TimeProvider timeProvider,
             IOptions<DataRetentionOptions> retentionOptions,
             ILogger<DataRetentionUseCase> logger)
         {
-            _context = context;
+            _retentionRepository = retentionRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _audit = audit;
             _timeProvider = timeProvider;
@@ -69,7 +72,7 @@ namespace ECommerceBackend.Application.Services
             {
                 try
                 {
-                    var previewCandidates = await LoadRetentionCandidatesAsync(
+                    var previewCandidates = await _retentionRepository.LoadCandidatesAsync(
                         batchSize,
                         processedOutboxCutoff,
                         expiredRefreshTokenCutoff,
@@ -119,7 +122,7 @@ namespace ECommerceBackend.Application.Services
                     throw new ConflictException(
                         "Một tác vụ lưu giữ dữ liệu khác đang được thực hiện. Vui lòng thử lại sau.");
                 }
-                var candidates = await LoadRetentionCandidatesAsync(
+                var candidates = await _retentionRepository.LoadCandidatesAsync(
                     batchSize,
                     processedOutboxCutoff,
                     expiredRefreshTokenCutoff,
@@ -132,10 +135,7 @@ namespace ECommerceBackend.Application.Services
                     expiredRefreshTokenCutoff,
                     webhookPayloadCutoff);
 
-                _context.OutboxMessages.RemoveRange(candidates.ProcessedOutbox);
-                _context.RefreshTokens.RemoveRange(candidates.ExpiredRefreshTokens);
-                foreach (var webhook in candidates.WebhookPayloads)
-                    webhook.Payload = string.Empty;
+                _retentionRepository.Apply(candidates);
 
                 var changedRecordCount = candidates.ProcessedOutbox.Count
                     + candidates.ExpiredRefreshTokens.Count
@@ -159,7 +159,7 @@ namespace ECommerceBackend.Application.Services
                         });
                 }
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 completed = true;
 
@@ -209,7 +209,7 @@ namespace ECommerceBackend.Application.Services
                 tags);
         }
 
-        private static void RecordRetentionChanges(DataRetentionCandidates candidates)
+        private static void RecordRetentionChanges(DataRetentionBatch candidates)
         {
             RecordRetentionChange("processed_outbox", candidates.ProcessedOutbox.Count);
             RecordRetentionChange("expired_refresh_token", candidates.ExpiredRefreshTokens.Count);
@@ -228,7 +228,7 @@ namespace ECommerceBackend.Application.Services
 
         private static void SetRetentionActivityCounts(
             Activity? activity,
-            DataRetentionCandidates candidates)
+            DataRetentionBatch candidates)
         {
             activity?.SetTag("data_retention.processed_outbox_count", candidates.ProcessedOutbox.Count);
             activity?.SetTag("data_retention.expired_refresh_token_count", candidates.ExpiredRefreshTokens.Count);
@@ -242,37 +242,8 @@ namespace ECommerceBackend.Application.Services
                 ? "cancelled"
                 : "failed";
 
-        private async Task<DataRetentionCandidates> LoadRetentionCandidatesAsync(
-            int batchSize,
-            DateTime processedOutboxCutoff,
-            DateTime expiredRefreshTokenCutoff,
-            DateTime webhookPayloadCutoff,
-            CancellationToken cancellationToken)
-        {
-            var processedOutbox = await _context.OutboxMessages
-                .Where(message => message.ProcessedAt != null && message.ProcessedAt < processedOutboxCutoff)
-                .OrderBy(message => message.ProcessedAt)
-                .ThenBy(message => message.Id)
-                .Take(batchSize)
-                .ToListAsync(cancellationToken);
-            var expiredRefreshTokens = await _context.RefreshTokens
-                .Where(token => token.ExpiresAt < expiredRefreshTokenCutoff)
-                .OrderBy(token => token.ExpiresAt)
-                .ThenBy(token => token.Id)
-                .Take(batchSize)
-                .ToListAsync(cancellationToken);
-            var webhookPayloads = await _context.PaymentWebhookEvents
-                .Where(webhook => webhook.ReceivedAt < webhookPayloadCutoff && webhook.Payload != string.Empty)
-                .OrderBy(webhook => webhook.ReceivedAt)
-                .ThenBy(webhook => webhook.Id)
-                .Take(batchSize)
-                .ToListAsync(cancellationToken);
-
-            return new DataRetentionCandidates(processedOutbox, expiredRefreshTokens, webhookPayloads);
-        }
-
         private DataRetentionResponse CreateRetentionResponse(
-            DataRetentionCandidates candidates,
+            DataRetentionBatch candidates,
             bool dryRun,
             DateTime processedOutboxCutoff,
             DateTime expiredRefreshTokenCutoff,
@@ -289,9 +260,5 @@ namespace ECommerceBackend.Application.Services
                 WebhookPayloadCutoff = webhookPayloadCutoff
             };
 
-        private sealed record DataRetentionCandidates(
-            List<OutboxMessage> ProcessedOutbox,
-            List<RefreshToken> ExpiredRefreshTokens,
-            List<PaymentWebhookEvent> WebhookPayloads);
     }
 }

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
 
 namespace ECommerceBackend.Application.Services
@@ -10,26 +11,28 @@ namespace ECommerceBackend.Application.Services
         private const int MaxSubjectLength = 200;
         private const int MaxMessageLength = 4000;
         private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-        private readonly IAppDbContext _context;
+        private readonly IOutboxRepository _outboxRepository;
         private readonly TimeProvider _timeProvider;
         private readonly ISensitivePayloadProtector? _sensitivePayloadProtector;
 
-        public OutboxWriter(IAppDbContext context)
-            : this(context, TimeProvider.System, null)
-        {
-        }
-
-        public OutboxWriter(IAppDbContext context, TimeProvider timeProvider)
-            : this(context, timeProvider, null)
+        public OutboxWriter(IOutboxRepository outboxRepository)
+            : this(outboxRepository, TimeProvider.System, null)
         {
         }
 
         public OutboxWriter(
-            IAppDbContext context,
+            IOutboxRepository outboxRepository,
+            TimeProvider timeProvider)
+            : this(outboxRepository, timeProvider, null)
+        {
+        }
+
+        public OutboxWriter(
+            IOutboxRepository outboxRepository,
             TimeProvider timeProvider,
             ISensitivePayloadProtector? sensitivePayloadProtector)
         {
-            _context = context;
+            _outboxRepository = outboxRepository;
             _timeProvider = timeProvider;
             _sensitivePayloadProtector = sensitivePayloadProtector;
         }
@@ -58,7 +61,7 @@ namespace ECommerceBackend.Application.Services
                 orderId,
                 paymentId);
 
-            _context.OutboxMessages.Add(new OutboxMessage
+            _outboxRepository.Add(new OutboxMessage
             {
                 Id = Guid.NewGuid(),
                 Type = OutboxMessageTypes.NotificationRequested,
@@ -91,7 +94,7 @@ namespace ECommerceBackend.Application.Services
             var payload = JsonSerializer.Serialize(
                 new NotificationRequestedPayload(userId, subject, message),
                 SerializerOptions);
-            _context.OutboxMessages.Add(new OutboxMessage
+            _outboxRepository.Add(new OutboxMessage
             {
                 Id = Guid.NewGuid(),
                 Type = OutboxMessageTypes.ProtectedNotificationRequested,

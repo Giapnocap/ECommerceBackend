@@ -5,6 +5,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
@@ -15,7 +17,8 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class PaymentWebhookService : IPaymentWebhookService
     {
-        private readonly IAppDbContext _context;
+        private readonly IPaymentRepository _paymentRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IPaymentProviderResolver _providers;
         private readonly IOutboxWriter _outbox;
@@ -23,13 +26,15 @@ namespace ECommerceBackend.Application.Services
         private readonly TimeProvider _timeProvider;
 
         public PaymentWebhookService(
-            IAppDbContext context,
+            IPaymentRepository paymentRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPaymentProviderResolver providers,
             IOutboxWriter outbox,
             IOptions<PaymentWebhookOptions> options)
             : this(
-                context,
+                paymentRepository,
+                unitOfWork,
                 consistency,
                 providers,
                 outbox,
@@ -39,14 +44,16 @@ namespace ECommerceBackend.Application.Services
         }
 
         public PaymentWebhookService(
-            IAppDbContext context,
+            IPaymentRepository paymentRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPaymentProviderResolver providers,
             IOutboxWriter outbox,
             IOptions<PaymentWebhookOptions> options,
             TimeProvider timeProvider)
         {
-            _context = context;
+            _paymentRepository = paymentRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _providers = providers;
             _outbox = outbox;
@@ -136,7 +143,7 @@ namespace ECommerceBackend.Application.Services
                 var previousStatus = payment.Status;
                 var statusChanged = ApplyStatus(payment, verified);
                 var processedAt = UtcNow;
-                _context.PaymentWebhookEvents.Add(new PaymentWebhookEvent
+                _paymentRepository.AddWebhookEvent(new PaymentWebhookEvent
                 {
                     Id = Guid.NewGuid(),
                     PaymentId = payment.Id,
@@ -153,7 +160,7 @@ namespace ECommerceBackend.Application.Services
 
                 if (statusChanged)
                 {
-                    _context.PaymentStatusHistories.Add(new PaymentStatusHistory
+                    _paymentRepository.AddStatusHistory(new PaymentStatusHistory
                     {
                         Id = Guid.NewGuid(),
                         PaymentId = payment.Id,
@@ -174,7 +181,7 @@ namespace ECommerceBackend.Application.Services
                         payment.Id);
                 }
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
@@ -232,21 +239,19 @@ namespace ECommerceBackend.Application.Services
             string provider,
             string providerTransactionId,
             CancellationToken cancellationToken)
-            => await _context.Payments
-                .AsNoTracking()
-                .Where(payment => payment.Provider == provider
-                    && payment.ProviderTransactionId == providerTransactionId)
-                .Select(payment => (Guid?)payment.OrderId)
-                .SingleOrDefaultAsync(cancellationToken);
+            => await _paymentRepository.GetOrderIdByProviderTransactionAsync(
+                provider,
+                providerTransactionId,
+                cancellationToken);
 
         private async Task<PaymentWebhookEvent?> FindEventAsync(
             string provider,
             string eventId,
             CancellationToken cancellationToken)
-            => await _context.PaymentWebhookEvents
-                .AsNoTracking()
-                .FirstOrDefaultAsync(webhook => webhook.Provider == provider
-                    && webhook.ProviderEventId == eventId, cancellationToken);
+            => await _paymentRepository.GetWebhookEventAsync(
+                provider,
+                eventId,
+                cancellationToken);
 
         private static PaymentWebhookResponse BuildDuplicateResponse(
             PaymentWebhookEvent webhook,

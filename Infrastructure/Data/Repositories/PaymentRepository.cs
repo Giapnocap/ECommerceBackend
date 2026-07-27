@@ -14,6 +14,28 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             _context = context;
         }
 
+        public Task<Guid?> GetOrderIdByProviderTransactionAsync(
+            string provider,
+            string providerTransactionId,
+            CancellationToken cancellationToken = default)
+            => _context.Payments
+                .AsNoTracking()
+                .Where(payment => payment.Provider == provider
+                    && payment.ProviderTransactionId == providerTransactionId)
+                .Select(payment => (Guid?)payment.OrderId)
+                .SingleOrDefaultAsync(cancellationToken);
+
+        public Task<PaymentWebhookEvent?> GetWebhookEventAsync(
+            string provider,
+            string eventId,
+            CancellationToken cancellationToken = default)
+            => _context.PaymentWebhookEvents
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    webhook => webhook.Provider == provider
+                        && webhook.ProviderEventId == eventId,
+                    cancellationToken);
+
         public Task<PaymentStatusHistory?> GetRefundHistoryAsync(
             Guid paymentId,
             CancellationToken cancellationToken = default)
@@ -26,6 +48,9 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
 
         public void Add(Payment payment)
             => _context.Payments.Add(payment);
+
+        public void AddWebhookEvent(PaymentWebhookEvent webhookEvent)
+            => _context.PaymentWebhookEvents.Add(webhookEvent);
 
         public void AddStatusHistory(PaymentStatusHistory history)
             => _context.PaymentStatusHistories.Add(history);

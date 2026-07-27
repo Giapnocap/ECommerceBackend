@@ -4,7 +4,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
-using Microsoft.EntityFrameworkCore;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -14,18 +15,21 @@ namespace ECommerceBackend.Application.Services
             new("ECommerceBackend.Operations");
         private static readonly Counter<long> RedriveCounter =
             Meter.CreateCounter<long>("outbox.dead_letters.redriven");
-        private readonly IAppDbContext _context;
+        private readonly IOutboxRepository _outboxRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IAuditWriter _audit;
         private readonly TimeProvider _timeProvider;
 
         public DeadLetterUseCase(
-            IAppDbContext context,
+            IOutboxRepository outboxRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IAuditWriter audit,
             TimeProvider timeProvider)
         {
-            _context = context;
+            _outboxRepository = outboxRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _audit = audit;
             _timeProvider = timeProvider;
@@ -39,29 +43,13 @@ namespace ECommerceBackend.Application.Services
                 query.Page,
                 query.PageSize,
                 defaultSize: 20);
-            var messages = _context.OutboxMessages
-                .AsNoTracking()
-                .Where(message => message.DeadLetteredAt != null);
-            var totalCount = await messages.CountAsync(cancellationToken);
-            var items = await messages
-                .OrderByDescending(message => message.DeadLetteredAt)
-                .ThenBy(message => message.Id)
-                .Skip(Paging.GetSkipCount(paging))
-                .Take(paging.Size)
-                .Select(message => new DeadLetterResponse
-                {
-                    Id = message.Id,
-                    Type = message.Type,
-                    OccurredAt = message.OccurredAt,
-                    Attempts = message.Attempts,
-                    LastAttemptAt = message.LastAttemptAt,
-                    DeadLetteredAt = message.DeadLetteredAt,
-                    LastError = message.LastError
-                })
-                .ToListAsync(cancellationToken);
+            var page = await _outboxRepository.GetDeadLettersAsync(
+                Paging.GetSkipCount(paging),
+                paging.Size,
+                cancellationToken);
             return PagedResult<DeadLetterResponse>.Create(
-                items,
-                totalCount,
+                page.Items,
+                page.TotalCount,
                 paging.Page,
                 paging.Size);
         }
@@ -123,7 +111,7 @@ namespace ECommerceBackend.Application.Services
                         ["messageType"] = message.Type
                     });
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 completed = true;
                 RedriveCounter.Add(

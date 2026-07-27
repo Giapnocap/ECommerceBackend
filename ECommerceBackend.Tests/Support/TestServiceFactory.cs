@@ -75,7 +75,10 @@ internal static class TestServiceFactory
         var cartRepository = new CartRepository(context);
         var authSessionRepository = new AuthSessionRepository(context);
         var tokenIssuer = new AuthTokenIssuer(jwtOptions);
-        var outbox = new OutboxWriter(context, clock, protector);
+        var outbox = new OutboxWriter(
+            new OutboxRepository(context),
+            clock,
+            protector);
         return new AuthService(
             new AuthRegistrationUseCase(
                 userRepository,
@@ -129,7 +132,7 @@ internal static class TestServiceFactory
         var consistency = Consistency(context);
         var providers = new PaymentProviderResolver(
             [new CashOnDeliveryPaymentProvider()]);
-        var outbox = new OutboxWriter(context);
+        var outbox = new OutboxWriter(new OutboxRepository(context));
         var clock = timeProvider ?? TimeProvider.System;
         var options = Options.Create(
             lifecycleOptions ?? new OrderLifecycleOptions());

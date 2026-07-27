@@ -365,7 +365,8 @@ public sealed class SqlServerCommerceFlowTests
                     CreatedAt = DateTime.UtcNow
                 };
                 seedContext.Users.Add(user);
-                var writer = new OutboxWriter(seedContext);
+                var writer = new OutboxWriter(
+                    new OutboxRepository(seedContext));
                 for (var index = 0; index < 20; index++)
                     writer.EnqueueNotification(user.Id, $"Subject {index}", $"Message {index}");
 
@@ -654,18 +655,20 @@ public sealed class SqlServerCommerceFlowTests
                 await using var context = new AppDbContext(options);
                 var clock = new FixedTimeProvider(now);
                 var audit = new AuditWriter(
-                    context,
+                    new AuditRepository(context),
                     new HttpContextAccessor(),
                     clock);
                 var consistency = new EfDataConsistencyService(context);
                 var service = new OperationsService(
                     new DeadLetterUseCase(
+                        new OutboxRepository(context),
                         context,
                         consistency,
                         audit,
                         clock),
                     new AuditQueryUseCase(new AuditRepository(context)),
                     new DataRetentionUseCase(
+                        new DataRetentionRepository(context),
                         context,
                         consistency,
                         audit,
@@ -734,17 +737,19 @@ public sealed class SqlServerCommerceFlowTests
                 var clock = new FixedTimeProvider(now);
                 var consistency = new EfDataConsistencyService(context);
                 var audit = new AuditWriter(
-                    context,
+                    new AuditRepository(context),
                     new HttpContextAccessor(),
                     clock);
                 var service = new OperationsService(
                     new DeadLetterUseCase(
+                        new OutboxRepository(context),
                         context,
                         consistency,
                         audit,
                         clock),
                     new AuditQueryUseCase(new AuditRepository(context)),
                     new DataRetentionUseCase(
+                        new DataRetentionRepository(context),
                         context,
                         consistency,
                         audit,
@@ -1051,13 +1056,14 @@ public sealed class SqlServerCommerceFlowTests
                 orderContext,
                 clock);
             var webhookService = new PaymentWebhookService(
+                new PaymentRepository(webhookContext),
                 webhookContext,
                 new EfDataConsistencyService(webhookContext),
                 new PaymentProviderResolver(
                 [
                     new GenericHmacPaymentProvider(webhookOptions, clock)
                 ]),
-                new OutboxWriter(webhookContext),
+                new OutboxWriter(new OutboxRepository(webhookContext)),
                 webhookOptions,
                 clock);
 

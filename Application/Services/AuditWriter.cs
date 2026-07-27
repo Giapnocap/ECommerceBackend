@@ -2,6 +2,7 @@ using System.Diagnostics.Metrics;
 using System.Security.Claims;
 using System.Text.Json;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
 
 namespace ECommerceBackend.Application.Services
@@ -12,16 +13,16 @@ namespace ECommerceBackend.Application.Services
         private static readonly Meter Meter = new("ECommerceBackend.Operations");
         private static readonly Counter<long> AuditCounter = Meter.CreateCounter<long>("audit.events.enqueued");
 
-        private readonly IAppDbContext _context;
+        private readonly IAuditRepository _auditRepository;
         private readonly IHttpContextAccessor _httpContextAccessor;
         private readonly TimeProvider _timeProvider;
 
         public AuditWriter(
-            IAppDbContext context,
+            IAuditRepository auditRepository,
             IHttpContextAccessor httpContextAccessor,
             TimeProvider timeProvider)
         {
-            _context = context;
+            _auditRepository = auditRepository;
             _httpContextAccessor = httpContextAccessor;
             _timeProvider = timeProvider;
         }
@@ -41,7 +42,7 @@ namespace ECommerceBackend.Application.Services
             if (metadataJson?.Length > MaxMetadataLength)
                 metadataJson = JsonSerializer.Serialize(new { truncated = true });
 
-            _context.AuditEvents.Add(new AuditEvent
+            _auditRepository.Add(new AuditEvent
             {
                 Id = Guid.NewGuid(),
                 ActorUserId = resolvedActor,

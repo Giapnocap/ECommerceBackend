@@ -37,10 +37,11 @@ public class PaymentAndOutboxTests
         var receivedAt = new DateTimeOffset(2026, 7, 19, 14, 30, 0, TimeSpan.Zero);
         var provider = new GenericHmacPaymentProvider(options);
         var service = new PaymentWebhookService(
+            new PaymentRepository(context),
             context,
             new EfDataConsistencyService(context),
             new PaymentProviderResolver([provider]),
-            new OutboxWriter(context),
+            new OutboxWriter(new OutboxRepository(context)),
             options,
             new FixedTimeProvider(receivedAt));
         const string payload = "{\"providerTransactionId\":\"txn-001\",\"status\":\"paid\",\"amount\":100,\"occurredAt\":\"2026-07-17T10:00:00Z\"}";
@@ -71,10 +72,11 @@ public class PaymentAndOutboxTests
         var (payment, _) = await SeedPaymentAsync(context, "generic-hmac", "txn-retain-payload");
         var options = PaymentOptions(retainRawPayload: true);
         var service = new PaymentWebhookService(
+            new PaymentRepository(context),
             context,
             new EfDataConsistencyService(context),
             new PaymentProviderResolver([new GenericHmacPaymentProvider(options)]),
-            new OutboxWriter(context),
+            new OutboxWriter(new OutboxRepository(context)),
             options);
         const string payload = "{\"providerTransactionId\":\"txn-retain-payload\",\"status\":\"paid\",\"amount\":100}";
 
@@ -97,10 +99,11 @@ public class PaymentAndOutboxTests
         var (payment, _) = await SeedPaymentAsync(context, "generic-hmac", "txn-replay");
         var options = PaymentOptions();
         var service = new PaymentWebhookService(
+            new PaymentRepository(context),
             context,
             new EfDataConsistencyService(context),
             new PaymentProviderResolver([new GenericHmacPaymentProvider(options)]),
-            new OutboxWriter(context),
+            new OutboxWriter(new OutboxRepository(context)),
             options);
         const string paidPayload = "{\"providerTransactionId\":\"txn-replay\",\"status\":\"paid\",\"amount\":100}";
         const string refundPayload = "{\"providerTransactionId\":\"txn-replay\",\"status\":\"refunded\",\"amount\":100}";
@@ -126,10 +129,11 @@ public class PaymentAndOutboxTests
         var (_, _) = await SeedPaymentAsync(context, "generic-hmac", "txn-same-state");
         var options = PaymentOptions();
         var service = new PaymentWebhookService(
+            new PaymentRepository(context),
             context,
             new EfDataConsistencyService(context),
             new PaymentProviderResolver([new GenericHmacPaymentProvider(options)]),
-            new OutboxWriter(context),
+            new OutboxWriter(new OutboxRepository(context)),
             options);
         const string payload = "{\"providerTransactionId\":\"txn-same-state\",\"status\":\"paid\",\"amount\":100}";
 
@@ -272,10 +276,11 @@ public class PaymentAndOutboxTests
         var (payment, _) = await SeedPaymentAsync(context, "generic-hmac", "txn-amount-mismatch");
         var options = PaymentOptions();
         var service = new PaymentWebhookService(
+            new PaymentRepository(context),
             context,
             new EfDataConsistencyService(context),
             new PaymentProviderResolver([new GenericHmacPaymentProvider(options)]),
-            new OutboxWriter(context),
+            new OutboxWriter(new OutboxRepository(context)),
             options);
         const string payload = "{\"providerTransactionId\":\"txn-amount-mismatch\",\"status\":\"paid\",\"amount\":99}";
 
@@ -308,10 +313,11 @@ public class PaymentAndOutboxTests
         var options = PaymentOptions();
         var clock = new FixedTimeProvider(receivedAt);
         var service = new PaymentWebhookService(
+            new PaymentRepository(context),
             context,
             new EfDataConsistencyService(context),
             new PaymentProviderResolver([new GenericHmacPaymentProvider(options, clock)]),
-            new OutboxWriter(context),
+            new OutboxWriter(new OutboxRepository(context)),
             options,
             clock);
         const string payload = "{\"providerTransactionId\":\"txn-future\",\"status\":\"paid\",\"amount\":100,\"occurredAt\":\"2026-07-19T14:36:00Z\"}";
@@ -334,7 +340,9 @@ public class PaymentAndOutboxTests
     {
         await using var context = TestAppDbContext.Create();
         var now = new DateTimeOffset(2026, 7, 21, 8, 0, 0, TimeSpan.Zero);
-        var writer = new OutboxWriter(context, new FixedTimeProvider(now));
+        var writer = new OutboxWriter(
+            new OutboxRepository(context),
+            new FixedTimeProvider(now));
 
         writer.EnqueueNotification(Guid.NewGuid(), "Subject", "Message");
         await context.SaveChangesAsync();
@@ -355,7 +363,10 @@ public class PaymentAndOutboxTests
         var protector = new DataProtectionSensitivePayloadProtector(
             new EphemeralDataProtectionProvider());
         const string sensitiveMessage = "reset-token=not-for-database-plaintext";
-        var writer = new OutboxWriter(context, TimeProvider.System, protector);
+        var writer = new OutboxWriter(
+            new OutboxRepository(context),
+            TimeProvider.System,
+            protector);
 
         writer.EnqueueSensitiveNotification(
             user.Id,
@@ -392,7 +403,9 @@ public class PaymentAndOutboxTests
         var (_, user) = await SeedPaymentAsync(context, "generic-hmac", "txn-outbox-clock");
         var now = new DateTimeOffset(2026, 7, 21, 8, 0, 0, TimeSpan.Zero);
         var clock = new FixedTimeProvider(now);
-        new OutboxWriter(context, clock).EnqueueNotification(user.Id, "Subject", "Message");
+        new OutboxWriter(
+            new OutboxRepository(context),
+            clock).EnqueueNotification(user.Id, "Subject", "Message");
         await context.SaveChangesAsync();
         var processor = new OutboxProcessor(
             new EfOutboxStore(context),
@@ -425,7 +438,7 @@ public class PaymentAndOutboxTests
     {
         await using var context = TestAppDbContext.Create();
         var (_, user) = await SeedPaymentAsync(context, "generic-hmac", "txn-002");
-        var writer = new OutboxWriter(context);
+        var writer = new OutboxWriter(new OutboxRepository(context));
         writer.EnqueueNotification(user.Id, "Subject", "Message");
         await context.SaveChangesAsync();
         var sender = new RecordingNotificationSender();
@@ -460,7 +473,8 @@ public class PaymentAndOutboxTests
     {
         await using var context = TestAppDbContext.Create();
         var (_, user) = await SeedPaymentAsync(context, "generic-hmac", "txn-outbox-failure");
-        new OutboxWriter(context).EnqueueNotification(user.Id, "Subject", "Message");
+        new OutboxWriter(new OutboxRepository(context))
+            .EnqueueNotification(user.Id, "Subject", "Message");
         await context.SaveChangesAsync();
 
         var sender = new AlwaysFailingNotificationSender();
@@ -571,7 +585,8 @@ public class PaymentAndOutboxTests
     {
         await using var context = TestAppDbContext.Create();
         var (_, user) = await SeedPaymentAsync(context, "generic-hmac", "txn-outbox-stale");
-        new OutboxWriter(context).EnqueueNotification(user.Id, "Subject", "Message");
+        new OutboxWriter(new OutboxRepository(context))
+            .EnqueueNotification(user.Id, "Subject", "Message");
         await context.SaveChangesAsync();
 
         var message = await context.OutboxMessages.SingleAsync();

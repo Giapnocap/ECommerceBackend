@@ -1,6 +1,7 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces.Repositories;
+using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Infrastructure.Data.Repositories
@@ -13,6 +14,9 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
         {
             _context = context;
         }
+
+        public void Add(AuditEvent auditEvent)
+            => _context.AuditEvents.Add(auditEvent);
 
         public async Task<PageSlice<AuditEventResponse>> QueryAsync(
             Guid? actorUserId,
