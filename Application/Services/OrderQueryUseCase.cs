@@ -1,20 +1,18 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
-using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
-using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
     public sealed class OrderQueryUseCase
     {
-        private readonly IAppDbContext _context;
+        private readonly IOrderRepository _orderRepository;
 
-        public OrderQueryUseCase(IAppDbContext context)
+        public OrderQueryUseCase(IOrderRepository orderRepository)
         {
-            _context = context;
+            _orderRepository = orderRepository;
         }
 
         public async Task<PagedResult<OrderResponse>> GetMyOrdersAsync(
@@ -24,18 +22,14 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default)
         {
             var paging = Paging.Normalize(page, pageSize);
-            var query = BuildQuery()
-                .Where(order => order.UserId == userId)
-                .OrderByDescending(order => order.OrderDate)
-                .ThenByDescending(order => order.Id);
-            var totalCount = await query.CountAsync(cancellationToken);
-            var items = await query
-                .Skip(Paging.GetSkipCount(paging))
-                .Take(paging.Size)
-                .ToListAsync(cancellationToken);
+            var result = await _orderRepository.GetByUserAsync(
+                userId,
+                Paging.GetSkipCount(paging),
+                paging.Size,
+                cancellationToken);
             return PagedResult<OrderResponse>.Create(
-                items.Select(order => order.ToResponse()),
-                totalCount,
+                result.Items.Select(order => order.ToResponse()),
+                result.TotalCount,
                 paging.Page,
                 paging.Size);
         }
@@ -46,10 +40,10 @@ namespace ECommerceBackend.Application.Services
             bool canProcessOrders,
             CancellationToken cancellationToken = default)
         {
-            var query = BuildQuery().Where(order => order.Id == orderId);
-            if (!canProcessOrders)
-                query = query.Where(order => order.UserId == userId);
-            var order = await query.FirstOrDefaultAsync(cancellationToken)
+            var order = await _orderRepository.GetByIdAsync(
+                orderId,
+                canProcessOrders ? null : userId,
+                cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy đơn hàng.");
             return order.ToResponse();
         }
@@ -61,44 +55,17 @@ namespace ECommerceBackend.Application.Services
             var paging = Paging.Normalize(
                 queryParams.Page,
                 queryParams.PageSize);
-            var query = BuildQuery();
-            if (queryParams.Status.HasValue)
-            {
-                query = query.Where(
-                    order => order.Status == queryParams.Status.Value);
-            }
-            if (queryParams.UserId.HasValue)
-            {
-                query = query.Where(
-                    order => order.UserId == queryParams.UserId.Value);
-            }
-
-            var orderedQuery = query
-                .OrderByDescending(order => order.OrderDate)
-                .ThenByDescending(order => order.Id);
-            var totalCount = await orderedQuery.CountAsync(cancellationToken);
-            var items = await orderedQuery
-                .Skip(Paging.GetSkipCount(paging))
-                .Take(paging.Size)
-                .ToListAsync(cancellationToken);
+            var result = await _orderRepository.GetAllAsync(
+                queryParams.Status,
+                queryParams.UserId,
+                Paging.GetSkipCount(paging),
+                paging.Size,
+                cancellationToken);
             return PagedResult<OrderResponse>.Create(
-                items.Select(order => order.ToResponse()),
-                totalCount,
+                result.Items.Select(order => order.ToResponse()),
+                result.TotalCount,
                 paging.Page,
                 paging.Size);
         }
-
-        private IQueryable<Order> BuildQuery()
-            => _context.Orders
-                .AsNoTracking()
-                .Include(order => order.OrderDetails)
-                .Include(order => order.Payment)
-                    .ThenInclude(payment =>
-                        payment!.StatusHistory.OrderBy(
-                            history => history.CreatedAt))
-                .Include(order =>
-                    order.StatusHistory.OrderBy(
-                        history => history.CreatedAt))
-                .AsSplitQuery();
     }
 }

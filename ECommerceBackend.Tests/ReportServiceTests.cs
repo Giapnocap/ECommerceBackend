@@ -4,6 +4,7 @@ using ECommerceBackend.Application.Services;
 using ECommerceBackend.Application.Validation;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Tests.Support;
 
 namespace ECommerceBackend.Tests;
@@ -53,7 +54,8 @@ public class ReportServiceTests
             CreateStatusHistory(deliveredAfterDelay.Id, OrderStatus.Delivered, now.AddMinutes(-30)));
         await context.SaveChangesAsync();
 
-        var result = await new ReportService(context).GetSalesSummaryAsync(new SalesSummaryQuery
+        var result = await new ReportService(
+            new ReportReadRepository(context)).GetSalesSummaryAsync(new SalesSummaryQuery
         {
             From = now.AddDays(-1),
             To = now.AddDays(1),
@@ -112,7 +114,8 @@ public class ReportServiceTests
         });
         await context.SaveChangesAsync();
 
-        var result = await new ReportService(context).GetSalesSummaryAsync(new SalesSummaryQuery
+        var result = await new ReportService(
+            new ReportReadRepository(context)).GetSalesSummaryAsync(new SalesSummaryQuery
         {
             From = from,
             To = to
@@ -130,7 +133,7 @@ public class ReportServiceTests
     public async Task GetSalesSummaryAsync_RejectsUnsafeReadBoundsOutsideHttpValidation()
     {
         await using var context = TestAppDbContext.Create();
-        var service = new ReportService(context);
+        var service = new ReportService(new ReportReadRepository(context));
         var to = new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc);
 
         var invalidLimit = await Assert.ThrowsAsync<BusinessException>(() =>
@@ -171,7 +174,9 @@ public class ReportServiceTests
     {
         await using var context = TestAppDbContext.Create();
         var now = new DateTimeOffset(2026, 7, 20, 15, 45, 30, TimeSpan.Zero);
-        var service = new ReportService(context, new FixedTimeProvider(now));
+        var service = new ReportService(
+            new ReportReadRepository(context),
+            new FixedTimeProvider(now));
 
         var result = await service.GetSalesSummaryAsync(new SalesSummaryQuery());
 

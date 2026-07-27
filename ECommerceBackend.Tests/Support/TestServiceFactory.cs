@@ -3,6 +3,7 @@ using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Infrastructure.Data;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Security;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -102,7 +103,7 @@ internal static class TestServiceFactory
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null)
     {
-        var queries = new OrderQueryUseCase(context);
+        var queries = new OrderQueryUseCase(new OrderRepository(context));
         var consistency = Consistency(context);
         var providers = new PaymentProviderResolver(
             [new CashOnDeliveryPaymentProvider()]);

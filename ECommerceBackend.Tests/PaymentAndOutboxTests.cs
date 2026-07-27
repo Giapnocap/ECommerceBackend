@@ -7,6 +7,7 @@ using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Infrastructure.Data;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Security;
@@ -373,7 +374,7 @@ public class PaymentAndOutboxTests
 
         var sender = new RecordingNotificationSender();
         var handler = new NotificationOutboxMessageHandler(
-            context,
+            new UserRepository(context),
             sender,
             NullLogger<NotificationOutboxMessageHandler>.Instance,
             protector);
@@ -396,7 +397,7 @@ public class PaymentAndOutboxTests
         var processor = new OutboxProcessor(
             new EfOutboxStore(context),
             new NotificationOutboxMessageHandler(
-                context,
+                new UserRepository(context),
                 new AlwaysFailingNotificationSender(),
                 NullLogger<NotificationOutboxMessageHandler>.Instance),
             Options.Create(new OutboxOptions
@@ -429,7 +430,7 @@ public class PaymentAndOutboxTests
         await context.SaveChangesAsync();
         var sender = new RecordingNotificationSender();
         var handler = new NotificationOutboxMessageHandler(
-            context,
+            new UserRepository(context),
             sender,
             NullLogger<NotificationOutboxMessageHandler>.Instance);
         var processor = new OutboxProcessor(
@@ -669,7 +670,7 @@ public class PaymentAndOutboxTests
         => new(
             new EfOutboxStore(context),
             new NotificationOutboxMessageHandler(
-                context,
+                new UserRepository(context),
                 sender,
                 NullLogger<NotificationOutboxMessageHandler>.Instance),
             Options.Create(new OutboxOptions

@@ -6,6 +6,7 @@ using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Infrastructure.Data;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Tests.Support;
 using Microsoft.EntityFrameworkCore;
@@ -103,7 +104,7 @@ public sealed class NotificationReliabilityTests
             .SingleAsync();
         var sender = new RecordingNotificationSender();
         var handler = new NotificationOutboxMessageHandler(
-            context,
+            new UserRepository(context),
             sender,
             NullLogger<NotificationOutboxMessageHandler>.Instance);
         var crashStore = new CrashAfterDeliveryOutboxStore(

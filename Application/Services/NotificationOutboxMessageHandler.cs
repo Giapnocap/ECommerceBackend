@@ -1,34 +1,34 @@
 using System.Text.Json;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
     public sealed class NotificationOutboxMessageHandler : IOutboxMessageHandler
     {
         private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
-        private readonly IAppDbContext _context;
+        private readonly IUserRepository _userRepository;
         private readonly INotificationSender _sender;
         private readonly ILogger<NotificationOutboxMessageHandler> _logger;
         private readonly ISensitivePayloadProtector? _sensitivePayloadProtector;
 
         public NotificationOutboxMessageHandler(
-            IAppDbContext context,
+            IUserRepository userRepository,
             INotificationSender sender,
             ILogger<NotificationOutboxMessageHandler> logger)
-            : this(context, sender, logger, null)
+            : this(userRepository, sender, logger, null)
         {
         }
 
         public NotificationOutboxMessageHandler(
-            IAppDbContext context,
+            IUserRepository userRepository,
             INotificationSender sender,
             ILogger<NotificationOutboxMessageHandler> logger,
             ISensitivePayloadProtector? sensitivePayloadProtector)
         {
-            _context = context;
+            _userRepository = userRepository;
             _sender = sender;
             _logger = logger;
             _sensitivePayloadProtector = sensitivePayloadProtector;
@@ -54,11 +54,9 @@ namespace ECommerceBackend.Application.Services
                 serializedPayload,
                 SerializerOptions)
                 ?? throw new InvalidOperationException("Nội dung thông báo trong hàng đợi không hợp lệ.");
-            var recipientEmail = await _context.Users
-                .AsNoTracking()
-                .Where(user => user.Id == payload.UserId && !user.IsDeleted)
-                .Select(user => user.Email)
-                .SingleOrDefaultAsync(cancellationToken);
+            var recipientEmail = await _userRepository.GetActiveEmailAsync(
+                payload.UserId,
+                cancellationToken);
 
             if (string.IsNullOrWhiteSpace(recipientEmail))
             {

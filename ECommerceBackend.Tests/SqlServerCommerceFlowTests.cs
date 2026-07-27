@@ -12,6 +12,7 @@ using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Infrastructure.Data;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Tests.Support;
@@ -239,7 +240,8 @@ public sealed class SqlServerCommerceFlowTests
                 deliveryHistory.Select(history => history.FromStatus));
             Assert.Equal(4, await context.PaymentStatusHistories.CountAsync());
 
-            var report = await new ReportService(context).GetSalesSummaryAsync(new SalesSummaryQuery
+            var report = await new ReportService(
+                new ReportReadRepository(context)).GetSalesSummaryAsync(new SalesSummaryQuery
             {
                 From = DateTime.UtcNow.AddDays(-1),
                 To = DateTime.UtcNow.AddDays(1),
@@ -309,7 +311,7 @@ public sealed class SqlServerCommerceFlowTests
             var outboxProcessor = new OutboxProcessor(
                 new EfOutboxStore(context),
                 new NotificationOutboxMessageHandler(
-                    context,
+                    new UserRepository(context),
                     notificationSender,
                     NullLogger<NotificationOutboxMessageHandler>.Instance),
                 Options.Create(new OutboxOptions
@@ -378,7 +380,7 @@ public sealed class SqlServerCommerceFlowTests
                 var processor = new OutboxProcessor(
                     new EfOutboxStore(workerContext),
                     new NotificationOutboxMessageHandler(
-                        workerContext,
+                        new UserRepository(workerContext),
                         sender,
                         NullLogger<NotificationOutboxMessageHandler>.Instance),
                     Options.Create(new OutboxOptions
@@ -662,7 +664,7 @@ public sealed class SqlServerCommerceFlowTests
                         consistency,
                         audit,
                         clock),
-                    new AuditQueryUseCase(context),
+                    new AuditQueryUseCase(new AuditRepository(context)),
                     new DataRetentionUseCase(
                         context,
                         consistency,
@@ -741,7 +743,7 @@ public sealed class SqlServerCommerceFlowTests
                         consistency,
                         audit,
                         clock),
-                    new AuditQueryUseCase(context),
+                    new AuditQueryUseCase(new AuditRepository(context)),
                     new DataRetentionUseCase(
                         context,
                         consistency,
@@ -1452,7 +1454,8 @@ public sealed class SqlServerCommerceFlowTests
                 });
             await context.SaveChangesAsync();
 
-            var report = await new ReportService(context).GetSalesSummaryAsync(
+            var report = await new ReportService(
+                new ReportReadRepository(context)).GetSalesSummaryAsync(
                 new SalesSummaryQuery
                 {
                     From = from,

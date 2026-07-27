@@ -1,8 +1,8 @@
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -11,17 +11,19 @@ namespace ECommerceBackend.Application.Services
         private static readonly TimeSpan MaximumRange = TimeSpan.FromDays(366);
         private const int MaximumTopProductLimit = 100;
         private const int MaximumLowStockThreshold = 1_000_000;
-        private readonly IAppDbContext _context;
+        private readonly IReportReadRepository _reportRepository;
         private readonly TimeProvider _timeProvider;
 
-        public ReportService(IAppDbContext context)
-            : this(context, TimeProvider.System)
+        public ReportService(IReportReadRepository reportRepository)
+            : this(reportRepository, TimeProvider.System)
         {
         }
 
-        public ReportService(IAppDbContext context, TimeProvider timeProvider)
+        public ReportService(
+            IReportReadRepository reportRepository,
+            TimeProvider timeProvider)
         {
-            _context = context;
+            _reportRepository = reportRepository;
             _timeProvider = timeProvider;
         }
 
@@ -35,17 +37,11 @@ namespace ECommerceBackend.Application.Services
             var from = NormalizeUtc(query.From ?? to.AddDays(-30));
             ValidateQuery(query, from, to);
 
-            var orderStatusRows = await _context.Orders
-                .AsNoTracking()
-                .Where(order => order.OrderDate >= from && order.OrderDate < to)
-                .GroupBy(order => order.Status)
-                .Select(group => new
-                {
-                    Status = group.Key,
-                    Count = group.Count(),
-                    Amount = group.Sum(order => order.TotalAmount)
-                })
-                .ToListAsync(cancellationToken);
+            var orderStatusRows =
+                await _reportRepository.GetOrderStatusSummaryAsync(
+                    from,
+                    to,
+                    cancellationToken);
             var ordersByStatus = Enum.GetValues<OrderStatus>()
                 .Select(status =>
                 {
@@ -59,28 +55,24 @@ namespace ECommerceBackend.Application.Services
                 })
                 .ToList();
 
-            var deliveredOrders = await _context.OrderStatusHistories
-                .AsNoTracking()
-                .CountAsync(history => history.ToStatus == OrderStatus.Delivered
-                    && history.CreatedAt >= from
-                    && history.CreatedAt < to, cancellationToken);
-            var cancelledOrders = await _context.OrderStatusHistories
-                .AsNoTracking()
-                .CountAsync(history => history.ToStatus == OrderStatus.Cancelled
-                    && history.CreatedAt >= from
-                    && history.CreatedAt < to, cancellationToken);
+            var deliveredOrders =
+                await _reportRepository.CountOrderTransitionsAsync(
+                    OrderStatus.Delivered,
+                    from,
+                    to,
+                    cancellationToken);
+            var cancelledOrders =
+                await _reportRepository.CountOrderTransitionsAsync(
+                    OrderStatus.Cancelled,
+                    from,
+                    to,
+                    cancellationToken);
 
-            var paymentStatusRows = await _context.Payments
-                .AsNoTracking()
-                .Where(payment => payment.CreatedAt >= from && payment.CreatedAt < to)
-                .GroupBy(payment => payment.Status)
-                .Select(group => new
-                {
-                    Status = group.Key,
-                    Count = group.Count(),
-                    Amount = group.Sum(payment => payment.Amount)
-                })
-                .ToListAsync(cancellationToken);
+            var paymentStatusRows =
+                await _reportRepository.GetPaymentStatusSummaryAsync(
+                    from,
+                    to,
+                    cancellationToken);
             var paymentsByStatus = Enum.GetValues<PaymentStatus>()
                 .Select(status =>
                 {
@@ -94,63 +86,28 @@ namespace ECommerceBackend.Application.Services
                 })
                 .ToList();
 
-            var grossPaidAmount = await _context.Payments
-                .AsNoTracking()
-                .Where(payment => payment.PaidAt.HasValue
-                    && payment.PaidAt.Value >= from
-                    && payment.PaidAt.Value < to
-                    && (payment.Status == PaymentStatus.Paid
-                        || payment.Status == PaymentStatus.Refunded))
-                .SumAsync(payment => (decimal?)payment.Amount, cancellationToken) ?? 0;
-            var refundedAmount = await _context.PaymentStatusHistories
-                .AsNoTracking()
-                .Where(history => history.ToStatus == PaymentStatus.Refunded
-                    && history.OccurredAt >= from
-                    && history.OccurredAt < to)
-                .SumAsync(history => (decimal?)history.Payment!.Amount, cancellationToken) ?? 0;
+            var grossPaidAmount =
+                await _reportRepository.GetGrossPaidAmountAsync(
+                    from,
+                    to,
+                    cancellationToken);
+            var refundedAmount =
+                await _reportRepository.GetRefundedAmountAsync(
+                    from,
+                    to,
+                    cancellationToken);
             var netRevenue = grossPaidAmount - refundedAmount;
 
-            var lowStockCount = await _context.Products
-                .AsNoTracking()
-                .CountAsync(product => !product.IsDeleted
-                    && product.StockQuantity <= query.LowStockThreshold,
+            var lowStockCount =
+                await _reportRepository.CountLowStockProductsAsync(
+                    query.LowStockThreshold,
                     cancellationToken);
-            var eventFrom = from;
-            var eventTo = to;
-            var deliveredDetails =
-                from detail in _context.OrderDetails.AsNoTracking()
-                join deliveredHistory in _context.OrderStatusHistories.AsNoTracking()
-                    on detail.OrderId equals deliveredHistory.OrderId
-                where deliveredHistory.ToStatus == OrderStatus.Delivered
-                    && deliveredHistory.CreatedAt >= eventFrom
-                    && deliveredHistory.CreatedAt < eventTo
-                select new
-                {
-                    detail.ProductId,
-                    detail.ProductNameSnapshot,
-                    detail.Quantity,
-                    detail.UnitPrice,
-                    DeliveredAt = deliveredHistory.CreatedAt,
-                    detail.Id
-                };
-            var topProducts = await deliveredDetails
-                .GroupBy(detail => detail.ProductId)
-                .Select(group => new TopSellingProductResponse
-                {
-                    ProductId = group.Key,
-                    ProductName = group
-                        .OrderByDescending(detail => detail.DeliveredAt)
-                        .ThenByDescending(detail => detail.Id)
-                        .Select(detail => detail.ProductNameSnapshot)
-                        .First(),
-                    QuantitySold = group.Sum(detail => (long)detail.Quantity),
-                    Revenue = group.Sum(detail => detail.UnitPrice * detail.Quantity)
-                })
-                .OrderByDescending(product => product.QuantitySold)
-                .ThenByDescending(product => product.Revenue)
-                .ThenBy(product => product.ProductId)
-                .Take(query.TopProductLimit)
-                .ToListAsync(cancellationToken);
+            var topProducts =
+                await _reportRepository.GetTopSellingProductsAsync(
+                    from,
+                    to,
+                    query.TopProductLimit,
+                    cancellationToken);
 
             var pendingPayment = paymentsByStatus.Single(item => item.Status == nameof(PaymentStatus.Pending));
 

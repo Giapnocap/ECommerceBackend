@@ -5,6 +5,7 @@ using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Infrastructure.Data;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Tests.Support;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -352,7 +353,7 @@ public sealed class OperationsReliabilityTests
         var clock = new FixedTimeProvider(Now);
         return new OperationsService(
             new DeadLetterUseCase(context, consistency, audit, clock),
-            new AuditQueryUseCase(context),
+            new AuditQueryUseCase(new AuditRepository(context)),
             new DataRetentionUseCase(
                 context,
                 consistency,

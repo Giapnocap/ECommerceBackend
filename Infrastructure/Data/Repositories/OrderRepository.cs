@@ -1,0 +1,84 @@
+using ECommerceBackend.Application.Common;
+using ECommerceBackend.Application.Interfaces.Repositories;
+using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+
+namespace ECommerceBackend.Infrastructure.Data.Repositories
+{
+    public sealed class OrderRepository : IOrderRepository
+    {
+        private readonly AppDbContext _context;
+
+        public OrderRepository(AppDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<PageSlice<Order>> GetByUserAsync(
+            Guid userId,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+        {
+            var query = BuildReadQuery()
+                .Where(order => order.UserId == userId)
+                .OrderByDescending(order => order.OrderDate)
+                .ThenByDescending(order => order.Id);
+            var totalCount = await query.CountAsync(cancellationToken);
+            var items = await query
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(cancellationToken);
+            return new PageSlice<Order>(items, totalCount);
+        }
+
+        public Task<Order?> GetByIdAsync(
+            Guid orderId,
+            Guid? ownerUserId,
+            CancellationToken cancellationToken = default)
+        {
+            var query = BuildReadQuery().Where(order => order.Id == orderId);
+            if (ownerUserId.HasValue)
+                query = query.Where(order => order.UserId == ownerUserId.Value);
+            return query.FirstOrDefaultAsync(cancellationToken);
+        }
+
+        public async Task<PageSlice<Order>> GetAllAsync(
+            OrderStatus? status,
+            Guid? userId,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+        {
+            var query = BuildReadQuery();
+            if (status.HasValue)
+                query = query.Where(order => order.Status == status.Value);
+            if (userId.HasValue)
+                query = query.Where(order => order.UserId == userId.Value);
+
+            var orderedQuery = query
+                .OrderByDescending(order => order.OrderDate)
+                .ThenByDescending(order => order.Id);
+            var totalCount = await orderedQuery.CountAsync(cancellationToken);
+            var items = await orderedQuery
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(cancellationToken);
+            return new PageSlice<Order>(items, totalCount);
+        }
+
+        private IQueryable<Order> BuildReadQuery()
+            => _context.Orders
+                .AsNoTracking()
+                .Include(order => order.OrderDetails)
+                .Include(order => order.Payment)
+                    .ThenInclude(payment =>
+                        payment!.StatusHistory.OrderBy(
+                            history => history.CreatedAt))
+                .Include(order =>
+                    order.StatusHistory.OrderBy(
+                        history => history.CreatedAt))
+                .AsSplitQuery();
+    }
+}

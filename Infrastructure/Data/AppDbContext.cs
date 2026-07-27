@@ -1,11 +1,12 @@
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Infrastructure.Data
 {
-    public class AppDbContext : DbContext, IAppDbContext
+    public class AppDbContext : DbContext, IAppDbContext, IUnitOfWork
     {
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 

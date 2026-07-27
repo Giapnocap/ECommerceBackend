@@ -8,10 +8,13 @@ using ECommerceBackend.API.Health;
 using ECommerceBackend.API.Swagger;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Application.Validation;
 using ECommerceBackend.Infrastructure.Data;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Maintenance;
@@ -239,6 +242,7 @@ namespace ECommerceBackend.API.Extensions
                     provider.GetRequiredService<DatabaseTelemetryInterceptor>());
             });
             services.AddScoped<IAppDbContext>(provider => provider.GetRequiredService<AppDbContext>());
+            services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<AppDbContext>());
             services.AddScoped<IDataConsistencyService, EfDataConsistencyService>();
 
             return services;
@@ -248,6 +252,11 @@ namespace ECommerceBackend.API.Extensions
         {
             services.AddSingleton(TimeProvider.System);
             services.AddHttpContextAccessor();
+            services.AddScoped<IAuditRepository, AuditRepository>();
+            services.AddScoped<IInventoryRepository, InventoryRepository>();
+            services.AddScoped<IOrderRepository, OrderRepository>();
+            services.AddScoped<IReportReadRepository, ReportReadRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<AuthRegistrationUseCase>();
             services.AddScoped<AuthSessionService>();

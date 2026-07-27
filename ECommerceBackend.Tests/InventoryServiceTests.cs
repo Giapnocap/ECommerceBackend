@@ -3,6 +3,7 @@ using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Tests.Support;
 
 namespace ECommerceBackend.Tests;
@@ -13,7 +14,7 @@ public sealed class InventoryServiceTests
     public async Task GetTransactionsAsync_ThrowsNotFoundWhenProductDoesNotExist()
     {
         await using var context = TestAppDbContext.Create();
-        var service = new InventoryService(context);
+        var service = new InventoryService(new InventoryRepository(context));
 
         await Assert.ThrowsAsync<NotFoundException>(() => service.GetTransactionsAsync(
             Guid.NewGuid(),
@@ -52,7 +53,7 @@ public sealed class InventoryServiceTests
             });
         await context.SaveChangesAsync();
 
-        var service = new InventoryService(context);
+        var service = new InventoryService(new InventoryRepository(context));
         var result = await service.GetTransactionsAsync(product.Id, new InventoryQueryParams
         {
             Page = 1,
@@ -86,7 +87,7 @@ public sealed class InventoryServiceTests
             deletedProduct);
         await context.SaveChangesAsync();
 
-        var service = new InventoryService(context);
+        var service = new InventoryService(new InventoryRepository(context));
         var result = await service.GetLowStockAsync(new LowStockQueryParams
         {
             Threshold = 2,
