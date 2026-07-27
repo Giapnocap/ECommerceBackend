@@ -3,7 +3,8 @@ using System.Text.RegularExpressions;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
-using Microsoft.EntityFrameworkCore;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
@@ -15,7 +16,8 @@ namespace ECommerceBackend.Application.Services
         private static readonly Meter Meter = new("ECommerceBackend.Operations");
         private static readonly Counter<long> DeletedCounter = Meter.CreateCounter<long>("uploads.orphans.deleted");
 
-        private readonly IAppDbContext _context;
+        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IWebHostEnvironment _environment;
         private readonly IAuditWriter _audit;
         private readonly UploadOptions _options;
@@ -23,14 +25,16 @@ namespace ECommerceBackend.Application.Services
         private readonly ILogger<UploadReconciliationService> _logger;
 
         public UploadReconciliationService(
-            IAppDbContext context,
+            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             IWebHostEnvironment environment,
             IAuditWriter audit,
             IOptions<UploadOptions> options,
             TimeProvider timeProvider,
             ILogger<UploadReconciliationService> logger)
         {
-            _context = context;
+            _productRepository = productRepository;
+            _unitOfWork = unitOfWork;
             _environment = environment;
             _audit = audit;
             _options = options.Value;
@@ -47,10 +51,9 @@ namespace ECommerceBackend.Application.Services
             var folder = Path.Combine(_environment.ContentRootPath, "Uploads", "products");
             Directory.CreateDirectory(folder);
 
-            var referencedUrls = await _context.ProductImages
-                .AsNoTracking()
-                .Select(image => image.ImageUrl)
-                .ToListAsync(cancellationToken);
+            var referencedUrls =
+                await _productRepository.GetImageUrlsAsync(
+                    cancellationToken);
             var referencedNames = referencedUrls
                 .Where(url => url.StartsWith(RelativePrefix, StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileName)
@@ -112,7 +115,7 @@ namespace ECommerceBackend.Application.Services
                             ["batchSize"] = deleteCandidates.Count,
                             ["graceMinutes"] = _options.ReconciliationGraceMinutes
                         });
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                     DeletedCounter.Add(deleted);
                 }
             }

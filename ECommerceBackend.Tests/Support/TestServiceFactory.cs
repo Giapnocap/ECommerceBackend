@@ -18,12 +18,15 @@ internal static class TestServiceFactory
 
     public static ProductService CreateProductService(AppDbContext context, TimeProvider? timeProvider = null)
         => new(
+            new ProductRepository(context),
+            new InventoryRepository(context),
             context,
             Consistency(context),
             timeProvider ?? TimeProvider.System);
 
     public static CategoryService CreateCategoryService(AppDbContext context)
         => new(
+            new CategoryRepository(context),
             context,
             Consistency(context));
 
@@ -36,6 +39,7 @@ internal static class TestServiceFactory
         AppDbContext context,
         TestWebHostEnvironment environment)
         => new(
+            new ProductRepository(context),
             context,
             Consistency(context),
             environment,

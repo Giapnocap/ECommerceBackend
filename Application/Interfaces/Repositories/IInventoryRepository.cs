@@ -1,5 +1,6 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
+using ECommerceBackend.Domain.Entities;
 
 namespace ECommerceBackend.Application.Interfaces.Repositories
 {
@@ -20,5 +21,7 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             int skip,
             int take,
             CancellationToken cancellationToken = default);
+
+        void AddTransaction(InventoryTransaction transaction);
     }
 }

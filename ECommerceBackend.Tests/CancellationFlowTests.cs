@@ -3,6 +3,7 @@ using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Tests.Support;
 
 namespace ECommerceBackend.Tests;
@@ -16,6 +17,7 @@ public sealed class CancellationFlowTests
         using var cancellation = new CancellationTokenSource();
         var consistency = new CancelAfterBeginConsistencyService(cancellation);
         var service = new CategoryService(
+            new CategoryRepository(context),
             context,
             consistency);
 

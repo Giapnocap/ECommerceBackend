@@ -133,6 +133,7 @@ public sealed class OperationsReliabilityTests
                 });
             await context.SaveChangesAsync();
             var service = new UploadReconciliationService(
+                new ProductRepository(context),
                 context,
                 new TestWebHostEnvironment(root),
                 CreateAuditWriter(context, actorUserId),

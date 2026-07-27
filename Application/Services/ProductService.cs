@@ -5,6 +5,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Policies;
@@ -22,25 +24,38 @@ namespace ECommerceBackend.Application.Services
         private static readonly Histogram<long> CatalogQueryResultCount =
             CatalogMeter.CreateHistogram<long>("catalog.query.result_count", "item");
 
-        private readonly IAppDbContext _context;
+        private readonly IProductRepository _productRepository;
+        private readonly IInventoryRepository _inventoryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly TimeProvider _timeProvider;
         private readonly IAuditWriter _audit;
 
         public ProductService(
-            IAppDbContext context,
+            IProductRepository productRepository,
+            IInventoryRepository inventoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency)
-            : this(context, consistency, TimeProvider.System)
+            : this(
+                productRepository,
+                inventoryRepository,
+                unitOfWork,
+                consistency,
+                TimeProvider.System)
         {
         }
 
         public ProductService(
-            IAppDbContext context,
+            IProductRepository productRepository,
+            IInventoryRepository inventoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
-            _context = context;
+            _productRepository = productRepository;
+            _inventoryRepository = inventoryRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _timeProvider = timeProvider;
             _audit = auditWriter ?? NullAuditWriter.Instance;
@@ -54,51 +69,14 @@ namespace ECommerceBackend.Application.Services
         {
             var stopwatch = Stopwatch.StartNew();
             var paging = Paging.Normalize(queryParams.Page, queryParams.PageSize);
-            var query = _context.Products
-                .AsNoTracking()
-                .Where(product => !product.IsDeleted
-                    && product.Category != null
-                    && !product.Category.IsDeleted)
-                .Include(product => product.Category)
-                .Include(product => product.Images)
-                .AsSplitQuery()
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(queryParams.Keyword))
-            {
-                var keyword = queryParams.Keyword.Trim();
-                query = query.Where(product => product.Name.Contains(keyword)
-                    || product.Description.Contains(keyword));
-            }
-
-            if (queryParams.CategoryId.HasValue)
-                query = query.Where(product => product.CategoryId == queryParams.CategoryId.Value);
-
-            if (queryParams.MinPrice.HasValue)
-                query = query.Where(product => product.Price >= queryParams.MinPrice.Value);
-
-            if (queryParams.MaxPrice.HasValue)
-                query = query.Where(product => product.Price <= queryParams.MaxPrice.Value);
-
-            query = (queryParams.SortBy?.ToLowerInvariant(), queryParams.SortOrder?.ToLowerInvariant()) switch
-            {
-                ("price", "desc") => query.OrderByDescending(product => product.Price).ThenBy(product => product.Id),
-                ("price", _) => query.OrderBy(product => product.Price).ThenBy(product => product.Id),
-                ("name", "desc") => query.OrderByDescending(product => product.Name).ThenBy(product => product.Id),
-                ("name", _) => query.OrderBy(product => product.Name).ThenBy(product => product.Id),
-                ("createdat", "asc") => query.OrderBy(product => product.CreatedAt).ThenBy(product => product.Id),
-                _ => query.OrderByDescending(product => product.CreatedAt).ThenByDescending(product => product.Id)
-            };
-
-            int totalCount;
-            List<Product> items;
+            PageSlice<Product> result;
             try
             {
-                totalCount = await query.CountAsync(cancellationToken);
-                items = await query
-                    .Skip(Paging.GetSkipCount(paging))
-                    .Take(paging.Size)
-                    .ToListAsync(cancellationToken);
+                result = await _productRepository.GetPageAsync(
+                    queryParams,
+                    Paging.GetSkipCount(paging),
+                    paging.Size,
+                    cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -111,11 +89,15 @@ namespace ECommerceBackend.Application.Services
                 throw;
             }
 
-            RecordCatalogQuery(queryParams, stopwatch, "success", items.Count);
+            RecordCatalogQuery(
+                queryParams,
+                stopwatch,
+                "success",
+                result.Items.Count);
 
             return PagedResult<ProductResponse>.Create(
-                items.Select(product => product.ToResponse()),
-                totalCount,
+                result.Items.Select(product => product.ToResponse()),
+                result.TotalCount,
                 paging.Page,
                 paging.Size);
         }
@@ -144,16 +126,9 @@ namespace ECommerceBackend.Application.Services
             Guid id,
             CancellationToken cancellationToken = default)
         {
-            var product = await _context.Products
-                .AsNoTracking()
-                .Include(candidate => candidate.Category)
-                .Include(candidate => candidate.Images)
-                .AsSplitQuery()
-                .FirstOrDefaultAsync(candidate => !candidate.IsDeleted
-                    && candidate.Category != null
-                    && !candidate.Category.IsDeleted
-                    && candidate.Id == id,
-                    cancellationToken)
+            var product = await _productRepository.GetActiveByIdAsync(
+                id,
+                cancellationToken)
                 ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
 
             return product.ToResponse();
@@ -191,10 +166,10 @@ namespace ECommerceBackend.Application.Services
                     InventoryPolicy.AdjustTo(product, request.StockQuantity));
                 productId = product.Id;
 
-                await _context.Products.AddAsync(product, cancellationToken);
+                await _productRepository.AddAsync(product, cancellationToken);
                 if (inventoryMutation.QuantityChange != 0)
                 {
-                    _context.InventoryTransactions.Add(new InventoryTransaction
+                    _inventoryRepository.AddTransaction(new InventoryTransaction
                     {
                         Id = Guid.NewGuid(),
                         ProductId = product.Id,
@@ -216,7 +191,7 @@ namespace ECommerceBackend.Application.Services
                         ["categoryId"] = product.CategoryId,
                         ["initialStock"] = product.StockQuantity
                     });
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (Exception ex) when (_consistency.IsDeadlock(ex))
@@ -264,7 +239,7 @@ namespace ECommerceBackend.Application.Services
 
                 if (inventoryMutation.QuantityChange != 0)
                 {
-                    _context.InventoryTransactions.Add(new InventoryTransaction
+                    _inventoryRepository.AddTransaction(new InventoryTransaction
                     {
                         Id = Guid.NewGuid(),
                         ProductId = product.Id,
@@ -289,7 +264,7 @@ namespace ECommerceBackend.Application.Services
                         ["stockBalance"] = inventoryMutation.BalanceAfter
                     });
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
@@ -330,7 +305,7 @@ namespace ECommerceBackend.Application.Services
 
                 product.IsDeleted = true;
                 _audit.Write("product.delete", "Product", product.Id.ToString(), actorUserId);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)

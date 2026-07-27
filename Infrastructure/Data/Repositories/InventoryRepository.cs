@@ -1,6 +1,7 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces.Repositories;
+using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Infrastructure.Data.Repositories
@@ -84,5 +85,8 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
 
             return new PageSlice<LowStockProductResponse>(items, totalCount);
         }
+
+        public void AddTransaction(InventoryTransaction transaction)
+            => _context.InventoryTransactions.Add(transaction);
     }
 }

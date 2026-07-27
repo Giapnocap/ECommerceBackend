@@ -2,6 +2,8 @@ using System.Data;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,16 +12,19 @@ namespace ECommerceBackend.Application.Services
 {
     public class CategoryService : ICategoryService
     {
-        private readonly IAppDbContext _context;
+        private readonly ICategoryRepository _categoryRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IAuditWriter _audit;
 
         public CategoryService(
-            IAppDbContext context,
+            ICategoryRepository categoryRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IAuditWriter? auditWriter = null)
         {
-            _context = context;
+            _categoryRepository = categoryRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _audit = auditWriter ?? NullAuditWriter.Instance;
         }
@@ -27,14 +32,9 @@ namespace ECommerceBackend.Application.Services
         public async Task<IEnumerable<CategoryResponse>> GetAllAsync(
             CancellationToken cancellationToken = default)
         {
-            var categories = await _context.Categories
-                .AsNoTracking()
-                .Include(category => category.Children.Where(child => !child.IsDeleted))
-                .Include(category => category.Parent)
-                .Where(category => !category.IsDeleted && category.ParentId == null)
-                .OrderBy(category => category.Name)
-                .ThenBy(category => category.Id)
-                .ToListAsync(cancellationToken);
+            var categories =
+                await _categoryRepository.GetRootCategoriesAsync(
+                    cancellationToken);
 
             return categories.Select(category => category.ToResponse());
         }
@@ -43,13 +43,9 @@ namespace ECommerceBackend.Application.Services
             Guid id,
             CancellationToken cancellationToken = default)
         {
-            var category = await _context.Categories
-                .AsNoTracking()
-                .Include(candidate => candidate.Children.Where(child => !child.IsDeleted))
-                .Include(candidate => candidate.Parent)
-                .FirstOrDefaultAsync(
-                    candidate => !candidate.IsDeleted && candidate.Id == id,
-                    cancellationToken)
+            var category = await _categoryRepository.GetActiveByIdAsync(
+                id,
+                cancellationToken)
                 ?? throw new NotFoundException($"Không tìm thấy danh mục với Id '{id}'.");
 
             return category.ToResponse();
@@ -73,9 +69,10 @@ namespace ECommerceBackend.Application.Services
                     request.ParentId,
                     cancellationToken: cancellationToken);
 
-                if (await _context.Categories.AnyAsync(category => !category.IsDeleted
-                    && category.NormalizedName == normalizedName
-                    && category.ParentId == request.ParentId,
+                if (await _categoryRepository.ExistsAtLevelAsync(
+                    normalizedName,
+                    request.ParentId,
+                    excludedCategoryId: null,
                     cancellationToken))
                 {
                     throw new ConflictException($"Danh mục '{name}' đã tồn tại trong cùng cấp.");
@@ -90,14 +87,14 @@ namespace ECommerceBackend.Application.Services
                 };
                 categoryId = category.Id;
 
-                await _context.Categories.AddAsync(category, cancellationToken);
+                await _categoryRepository.AddAsync(category, cancellationToken);
                 _audit.Write(
                     "category.create",
                     "Category",
                     category.Id.ToString(),
                     actorUserId,
                     new Dictionary<string, object?> { ["parentId"] = category.ParentId });
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
@@ -147,19 +144,19 @@ namespace ECommerceBackend.Application.Services
                     throw new NotFoundException("Danh mục cha không tồn tại.");
                 }
 
-                await _context.Entry(category)
-                    .Collection(candidate => candidate.Children)
-                    .LoadAsync(cancellationToken);
+                await _categoryRepository.LoadChildrenAsync(
+                    category,
+                    cancellationToken);
 
                 await ValidateParentAsync(request.ParentId, id, cancellationToken);
 
                 if (category.Children.Any(child => !child.IsDeleted) && request.ParentId.HasValue)
                     throw new BusinessException("Không thể chuyển danh mục có con thành danh mục con.");
 
-                if (await _context.Categories.AnyAsync(candidate => !candidate.IsDeleted
-                    && candidate.NormalizedName == normalizedName
-                    && candidate.ParentId == request.ParentId
-                    && candidate.Id != id,
+                if (await _categoryRepository.ExistsAtLevelAsync(
+                    normalizedName,
+                    request.ParentId,
+                    id,
                     cancellationToken))
                 {
                     throw new ConflictException($"Danh mục '{name}' đã tồn tại trong cùng cấp.");
@@ -174,7 +171,7 @@ namespace ECommerceBackend.Application.Services
                     category.Id.ToString(),
                     actorUserId,
                     new Dictionary<string, object?> { ["parentId"] = category.ParentId });
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
@@ -218,12 +215,9 @@ namespace ECommerceBackend.Application.Services
             {
                 var category = await LoadCategoryForUpdateAsync(id, cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy danh mục với Id '{id}'.");
-                await _context.Entry(category)
-                    .Collection(candidate => candidate.Children)
-                    .LoadAsync(cancellationToken);
-                await _context.Entry(category)
-                    .Collection(candidate => candidate.Products)
-                    .LoadAsync(cancellationToken);
+                await _categoryRepository.LoadChildrenAndProductsAsync(
+                    category,
+                    cancellationToken);
 
                 if (category.Children.Any(child => !child.IsDeleted))
                     throw new BusinessException("Không thể xóa danh mục đang có danh mục con.");
@@ -233,7 +227,7 @@ namespace ECommerceBackend.Application.Services
 
                 category.IsDeleted = true;
                 _audit.Write("category.delete", "Category", category.Id.ToString(), actorUserId);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)

@@ -2,6 +2,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +18,8 @@ namespace ECommerceBackend.Application.Services
 
         private static readonly string[] AllowedExtensions = [".jpg", ".jpeg", ".png", ".webp"];
 
-        private readonly IAppDbContext _context;
+        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IWebHostEnvironment _environment;
         private readonly ILogger<UploadService> _logger;
@@ -24,14 +27,16 @@ namespace ECommerceBackend.Application.Services
         private readonly IAuditWriter _audit;
 
         public UploadService(
-            IAppDbContext context,
+            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IWebHostEnvironment environment,
             IOptions<UploadOptions> options,
             ILogger<UploadService> logger,
             IAuditWriter? auditWriter = null)
         {
-            _context = context;
+            _productRepository = productRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _environment = environment;
             _logger = logger;
@@ -46,9 +51,10 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default,
             Guid? actorUserId = null)
         {
-            var productExists = await _context.Products
-                .AsNoTracking()
-                .AnyAsync(product => !product.IsDeleted && product.Id == productId, cancellationToken);
+            var productExists =
+                await _productRepository.ActiveProductExistsAsync(
+                    productId,
+                    cancellationToken);
             if (!productExists)
                 throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{productId}'.");
 
@@ -112,35 +118,36 @@ namespace ECommerceBackend.Application.Services
             {
                 _ = await _consistency.LockProductAsync(productId, activeOnly: true, cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{productId}'.");
-                var image = await _context.ProductImages
-                    .FirstOrDefaultAsync(candidate => candidate.Id == imageId
-                        && candidate.ProductId == productId, cancellationToken)
+                var image = await _productRepository.GetImageAsync(
+                    productId,
+                    imageId,
+                    cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy ảnh sản phẩm.");
                 imageUrl = image.ImageUrl;
 
                 ProductImage? replacement = null;
                 if (image.IsMain)
                 {
-                    replacement = await _context.ProductImages
-                        .Where(candidate => candidate.ProductId == productId
-                            && candidate.Id != imageId)
-                        .OrderBy(candidate => candidate.Id)
-                        .FirstOrDefaultAsync(cancellationToken);
+                    replacement =
+                        await _productRepository.GetReplacementImageAsync(
+                            productId,
+                            imageId,
+                            cancellationToken);
                 }
 
-                _context.ProductImages.Remove(image);
+                _productRepository.RemoveImage(image);
                 _audit.Write(
                     "product.image.delete",
                     "ProductImage",
                     image.Id.ToString(),
                     actorUserId,
                     new Dictionary<string, object?> { ["productId"] = productId });
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 if (replacement != null)
                 {
                     replacement.IsMain = true;
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
                 await transaction.CommitAsync(cancellationToken);
@@ -180,9 +187,9 @@ namespace ECommerceBackend.Application.Services
                         activeOnly: true,
                         cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{productId}'.");
-                await _context.Entry(product)
-                    .Collection(candidate => candidate.Images)
-                    .LoadAsync(cancellationToken);
+                await _productRepository.LoadImagesAsync(
+                    product,
+                    cancellationToken);
 
                 var imageIsMain = isMain || !product.Images.Any(image => image.IsMain);
                 if (imageIsMain)
@@ -192,7 +199,7 @@ namespace ECommerceBackend.Application.Services
                         currentMain.IsMain = false;
 
                     if (currentMainImages.Count > 0)
-                        await _context.SaveChangesAsync(cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
                 }
 
                 var image = new ProductImage
@@ -203,7 +210,7 @@ namespace ECommerceBackend.Application.Services
                     IsMain = imageIsMain
                 };
 
-                await _context.ProductImages.AddAsync(image, cancellationToken);
+                await _productRepository.AddImageAsync(image, cancellationToken);
                 _audit.Write(
                     "product.image.upload",
                     "ProductImage",
@@ -214,7 +221,7 @@ namespace ECommerceBackend.Application.Services
                         ["productId"] = productId,
                         ["isMain"] = image.IsMain
                     });
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
 
                 return image.ToUploadImageResponse();
