@@ -1,4 +1,5 @@
 using System.Data;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using ECommerceBackend.Application.Common;
@@ -26,6 +27,7 @@ namespace ECommerceBackend.Application.Services
         private readonly IDataConsistencyService _consistency;
         private readonly IPaymentProviderResolver _paymentProviders;
         private readonly IOutboxWriter _outbox;
+        private readonly OrderPricingUseCase _pricing;
         private readonly OrderQueryUseCase _queries;
         private readonly TimeProvider _timeProvider;
         private readonly OrderLifecycleOptions _options;
@@ -39,6 +41,7 @@ namespace ECommerceBackend.Application.Services
             IDataConsistencyService consistency,
             IPaymentProviderResolver paymentProviders,
             IOutboxWriter outbox,
+            OrderPricingUseCase pricing,
             OrderQueryUseCase queries,
             TimeProvider timeProvider,
             IOptions<OrderLifecycleOptions> options)
@@ -51,6 +54,7 @@ namespace ECommerceBackend.Application.Services
             _consistency = consistency;
             _paymentProviders = paymentProviders;
             _outbox = outbox;
+            _pricing = pricing;
             _queries = queries;
             _timeProvider = timeProvider;
             _options = options.Value;
@@ -175,13 +179,21 @@ namespace ECommerceBackend.Application.Services
                 }
 
                 var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
-                var subtotal = DomainRuleGuard.AsBusiness(() =>
-                    OrderPricingPolicy.CalculateSubtotal(
-                        cart.CartItems.Select(item =>
-                            new OrderPricingLine(
-                                item.Product?.Name ?? string.Empty,
-                                item.Product?.Price ?? 0,
-                                item.Quantity))));
+                var pricing = await _pricing.CalculateForCheckoutAsync(
+                    userId,
+                    cart.CartItems,
+                    request.PromotionCode,
+                    request.ShippingMethod,
+                    occurredAt,
+                    cancellationToken);
+                if (request.ExpectedTotalAmount.HasValue
+                    && request.ExpectedTotalAmount.Value
+                        != pricing.Amounts.Total)
+                {
+                    throw new ConflictException(
+                        "checkout_price_changed",
+                        "Tổng tiền đã thay đổi. Vui lòng tải lại báo giá trước khi đặt hàng.");
+                }
                 var order = new Order
                 {
                     Id = Guid.NewGuid(),
@@ -189,16 +201,20 @@ namespace ECommerceBackend.Application.Services
                     OrderNumber = CreateOrderNumber(occurredAt),
                     IdempotencyKey = normalizedKey,
                     IdempotencyRequestHash = requestHash,
+                    PromotionId = pricing.Promotion?.Id,
+                    PromotionCodeSnapshot = pricing.Promotion?.Code,
+                    ShippingMethod = request.ShippingMethod,
+                    Currency = pricing.Currency,
                     OrderDate = occurredAt,
                     ShippingAddress = request.ShippingAddress.Trim(),
                     Note = NormalizeOptional(request.Note)
                 };
                 DomainRuleGuard.AsBusiness(() =>
                     order.SetPricing(
-                        subtotal,
-                        discount: 0,
-                        shipping: 0,
-                        tax: 0));
+                        pricing.Amounts.Subtotal,
+                        pricing.Amounts.Discount,
+                        pricing.Amounts.Shipping,
+                        pricing.Amounts.Tax));
                 DomainRuleGuard.AsBusiness(() =>
                     order.SetPendingExpiration(
                         occurredAt.AddMinutes(
@@ -239,6 +255,12 @@ namespace ECommerceBackend.Application.Services
                     cart,
                     userId,
                     occurredAt);
+                await _pricing.RedeemAsync(
+                    pricing,
+                    order,
+                    userId,
+                    occurredAt,
+                    cancellationToken);
                 _outbox.EnqueueNotification(
                     userId,
                     "Đặt hàng thành công",
@@ -433,11 +455,36 @@ namespace ECommerceBackend.Application.Services
 
         private static string HashRequest(PlaceOrderRequest request)
         {
-            var canonical = string.Join(
+            var baseCanonical = string.Join(
                 '\n',
                 request.ShippingAddress.Trim(),
                 NormalizeOptional(request.Note) ?? string.Empty,
                 ((int)request.PaymentMethod).ToString());
+            var normalizedPromotionCode =
+                string.IsNullOrWhiteSpace(request.PromotionCode)
+                    ? null
+                    : DomainRuleGuard.AsBusiness(() =>
+                        Promotion.NormalizeCode(
+                            request.PromotionCode));
+            var canonical =
+                request.ShippingMethod == ShippingMethod.Standard
+                && normalizedPromotionCode == null
+                && !request.ExpectedTotalAmount.HasValue
+                    ? baseCanonical
+                    : string.Join(
+                        '\n',
+                        baseCanonical,
+                        ((int)request.ShippingMethod).ToString(),
+                        normalizedPromotionCode ?? string.Empty);
+            if (request.ExpectedTotalAmount.HasValue)
+            {
+                canonical = string.Join(
+                    '\n',
+                    canonical,
+                    request.ExpectedTotalAmount.Value.ToString(
+                        "0.00",
+                        CultureInfo.InvariantCulture));
+            }
             return Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(canonical)));
         }

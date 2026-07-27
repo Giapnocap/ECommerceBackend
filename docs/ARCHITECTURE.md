@@ -67,6 +67,7 @@ Database checks, unique indexes and row versions remain defense-in-depth beneath
 - Catalog: category hierarchy, products, images, search, filtering and paging.
 - Cart: one cart per user, unique product lines and current-price availability checks.
 - Orders: idempotent checkout, order snapshots, state transitions and cancellation.
+- Pricing: server-side quote, shipping/tax policy, promotion limits and immutable redemption records.
 - Payments: centralized state machine, immutable status history, COD adapter and signed/idempotent webhook processing.
 - Inventory: current balance plus immutable stock movement ledger.
 - Reports: bounded UTC order/payment cohorts, cash flow, delivered-product ranking and low-stock snapshot.
@@ -89,8 +90,11 @@ Idempotency-Key lookup
   -> lock cart
   -> repeat idempotency lookup
   -> lock products in stable ID order
-  -> validate active products, price and stock
+  -> lock promotion and recheck global/customer limits
+  -> validate active products, price, stock and server-side quote
   -> create Pending Order + OrderDetails snapshots + Payment + StatusHistory
+  -> snapshot promotion, shipping method and all monetary components
+  -> increment promotion usage + append PromotionRedemption
   -> set a bounded inventory hold expiration
   -> reserve stock + append InventoryTransactions
   -> clear cart
@@ -98,7 +102,14 @@ Idempotency-Key lookup
 ```
 
 The same user and idempotency key return the original order. Reusing that key with a
-different address, note or payment method returns `409 Conflict`.
+different address, note, payment method, shipping method or promotion returns `409 Conflict`.
+`POST /api/orders/quote` is informational and expires after the configured interval. Checkout
+never trusts a total from the client: it recalculates the quote after locking the relevant rows.
+Promotion usage is consumed when the order is committed and is not restored by cancellation.
+Clients may send the optional `ExpectedTotalAmount` from the latest quote. Checkout returns
+`409 checkout_price_changed` before mutating state when the authoritative total no longer matches.
+The free-standard-shipping threshold and configured tax rate apply to merchandise subtotal after
+discount; shipping itself is not included in the taxable amount.
 
 ## Order And Payment State
 
@@ -235,6 +246,8 @@ product-name snapshots.
 Top products include only orders delivered in the range, aggregate once per `ProductId`, and use
 the latest historical name snapshot in that cohort. Low-stock count is a current inventory snapshot
 using the requested threshold, not a historical value.
+Top-product revenue is gross merchandise value from `OrderDetails` snapshots; order-level
+discounts, shipping fees and taxes are intentionally not allocated across individual lines.
 
 ## Authorization
 

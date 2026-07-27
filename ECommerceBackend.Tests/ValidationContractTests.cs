@@ -25,8 +25,29 @@ public sealed class ValidationContractTests
             new PlaceOrderRequest
             {
                 ShippingAddress = string.Empty,
-                PaymentMethod = (PaymentMethod)999
+                PaymentMethod = (PaymentMethod)999,
+                ShippingMethod = (ShippingMethod)999,
+                PromotionCode = "?"
             }));
+        yield return Case("order quote", () => new OrderQuoteRequestValidator().Validate(
+            new OrderQuoteRequest
+            {
+                ShippingMethod = (ShippingMethod)999,
+                PromotionCode = "?"
+            }));
+        yield return Case("promotion create", () => new CreatePromotionRequestValidator().Validate(
+            new CreatePromotionRequest
+            {
+                Code = "?",
+                Type = (PromotionType)999,
+                Value = 0,
+                StartsAt = DateTime.UtcNow,
+                EndsAt = DateTime.UtcNow.AddMinutes(-1),
+                UsageLimit = 0,
+                UsageLimitPerCustomer = 0
+            }));
+        yield return Case("promotion query", () => new PromotionQueryParamsValidator().Validate(
+            new PromotionQueryParams { Page = 0, PageSize = 101 }));
         yield return Case("category", () => new CreateCategoryRequestValidator().Validate(
             new CreateCategoryRequest { Name = string.Empty }));
         yield return Case("category update", () => new UpdateCategoryRequestValidator().Validate(

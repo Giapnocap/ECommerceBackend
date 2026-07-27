@@ -114,6 +114,13 @@ namespace ECommerceBackend.API.Extensions
                 .Validate(IsValidOrderLifecycleOptions, "Order lifecycle config is invalid.")
                 .ValidateOnStart();
 
+            services.AddOptions<PricingOptions>()
+                .Bind(configuration.GetSection(PricingOptions.SectionName))
+                .Validate(
+                    IsValidPricingOptions,
+                    "Pricing config is invalid.")
+                .ValidateOnStart();
+
             services.AddOptions<SmtpOptions>()
                 .Bind(configuration.GetSection(SmtpOptions.SectionName))
                 .Validate(
@@ -123,6 +130,27 @@ namespace ECommerceBackend.API.Extensions
 
             return services;
         }
+
+        private static bool IsValidPricingOptions(
+            PricingOptions options)
+            => options.Currency is { Length: 3 }
+                && options.Currency.All(
+                    character => character is >= 'A' and <= 'Z')
+                && options.QuoteValidityMinutes is >= 1 and <= 60
+                && IsValidMoney(options.StandardShippingFee)
+                && IsValidMoney(options.ExpressShippingFee)
+                && IsValidMoney(
+                    options.FreeStandardShippingMinimum)
+                && IsValidMoney(options.TaxRatePercent)
+                && options.TaxRatePercent <= 100;
+
+        private static bool IsValidMoney(decimal value)
+            => value >= 0
+                && value <= CommerceLimits.MaxMoneyAmount
+                && decimal.Round(
+                    value,
+                    CommerceLimits.MoneyScale,
+                    MidpointRounding.ToEven) == value;
 
         private static bool IsValidJwtOptions(
             JwtOptions options,

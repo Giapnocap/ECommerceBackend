@@ -41,6 +41,34 @@ public sealed class DatabaseConfigurationTests
     }
 
     [Fact]
+    public void PromotionUsage_HasCodeAndOrderUniqueness()
+    {
+        using var context = TestAppDbContext.Create();
+
+        var promotionCode = context.Model
+            .FindEntityType(typeof(Promotion))!
+            .GetIndexes()
+            .Single(index =>
+                index.GetDatabaseName()
+                    == "UX_Promotions_NormalizedCode");
+        var redemptionOrder = context.Model
+            .FindEntityType(typeof(PromotionRedemption))!
+            .GetIndexes()
+            .Single(index =>
+                index.GetDatabaseName()
+                    == "UX_PromotionRedemptions_OrderId");
+
+        Assert.True(promotionCode.IsUnique);
+        Assert.Equal(
+            nameof(Promotion.NormalizedCode),
+            Assert.Single(promotionCode.Properties).Name);
+        Assert.True(redemptionOrder.IsUnique);
+        Assert.Equal(
+            nameof(PromotionRedemption.OrderId),
+            Assert.Single(redemptionOrder.Properties).Name);
+    }
+
+    [Fact]
     public void PersistenceExceptionClassification_IsOwnedByEfAdapter()
     {
         using var context = TestAppDbContext.Create();

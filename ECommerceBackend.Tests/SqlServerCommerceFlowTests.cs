@@ -251,9 +251,9 @@ public sealed class SqlServerCommerceFlowTests
             Assert.Equal(2, report.TotalOrders);
             Assert.Equal(1, report.DeliveredOrders);
             Assert.Equal(1, report.CancelledOrders);
-            Assert.Equal(125.50m, report.GrossPaidAmount);
+            Assert.Equal(30_125.50m, report.GrossPaidAmount);
             Assert.Equal(0m, report.RefundedAmount);
-            Assert.Equal(125.50m, report.NetRevenue);
+            Assert.Equal(30_125.50m, report.NetRevenue);
             Assert.Equal(0m, report.PendingPaymentAmount);
             Assert.Equal(1, report.LowStockProductCount);
             Assert.Equal(1, report.OrdersByStatus
@@ -1615,8 +1615,200 @@ public sealed class SqlServerCommerceFlowTests
         }
     }
 
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task ConcurrentPromotionCheckouts_RespectGlobalUsageLimit()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName =
+            $"ECommerceBackendIntegration_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        var now = new DateTimeOffset(
+            2026,
+            7,
+            28,
+            8,
+            0,
+            0,
+            TimeSpan.Zero);
+
+        try
+        {
+            Guid firstUserId;
+            Guid secondUserId;
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.MigrateAsync();
+                var category = new Category
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Promotion concurrency",
+                    NormalizedName = "PROMOTION CONCURRENCY"
+                };
+                var firstUser = CreatePromotionCustomer(
+                    "promo_first",
+                    now);
+                var secondUser = CreatePromotionCustomer(
+                    "promo_second",
+                    now);
+                firstUserId = firstUser.Id;
+                secondUserId = secondUser.Id;
+                var firstCart = new Cart
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = firstUser.Id
+                };
+                var secondCart = new Cart
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = secondUser.Id
+                };
+                var firstProduct = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = category.Id,
+                    Name = "Promotion product one",
+                    Price = 600_000m,
+                    StockQuantity = 1,
+                    CreatedAt = now.UtcDateTime
+                };
+                var secondProduct = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = category.Id,
+                    Name = "Promotion product two",
+                    Price = 600_000m,
+                    StockQuantity = 1,
+                    CreatedAt = now.UtcDateTime
+                };
+                setupContext.AddRange(
+                    category,
+                    firstUser,
+                    secondUser,
+                    firstCart,
+                    secondCart,
+                    firstProduct,
+                    secondProduct,
+                    new CartItem
+                    {
+                        Id = Guid.NewGuid(),
+                        CartId = firstCart.Id,
+                        ProductId = firstProduct.Id,
+                        Quantity = 1,
+                        UnitPrice = firstProduct.Price
+                    },
+                    new CartItem
+                    {
+                        Id = Guid.NewGuid(),
+                        CartId = secondCart.Id,
+                        ProductId = secondProduct.Id,
+                        Quantity = 1,
+                        UnitPrice = secondProduct.Price
+                    },
+                    Promotion.Create(
+                        Guid.NewGuid(),
+                        "LASTONE",
+                        PromotionType.FixedAmount,
+                        100_000m,
+                        500_000m,
+                        maximumDiscountAmount: null,
+                        now.UtcDateTime.AddDays(-1),
+                        now.UtcDateTime.AddDays(1),
+                        usageLimit: 1,
+                        usageLimitPerCustomer: 1,
+                        now.UtcDateTime));
+                await setupContext.SaveChangesAsync();
+            }
+
+            async Task<Exception?> CheckoutAsync(
+                Guid userId,
+                string key)
+            {
+                await using var context = new AppDbContext(options);
+                var service = TestServiceFactory.CreateOrderService(
+                    context,
+                    new FixedTimeProvider(now));
+                return await Record.ExceptionAsync(() =>
+                    service.PlaceOrderAsync(
+                        userId,
+                        new PlaceOrderRequest
+                        {
+                            ShippingAddress =
+                                "1 Promotion Concurrency Street",
+                            PaymentMethod =
+                                PaymentMethod.CashOnDelivery,
+                            PromotionCode = "LASTONE"
+                        },
+                        key));
+            }
+
+            var outcomes = await Task.WhenAll(
+                CheckoutAsync(
+                    firstUserId,
+                    "promotion-first"),
+                CheckoutAsync(
+                    secondUserId,
+                    "promotion-second"));
+
+            Assert.Single(
+                outcomes,
+                outcome => outcome is null);
+            var rejected = Assert.IsType<ConflictException>(
+                Assert.Single(
+                    outcomes,
+                    outcome => outcome is not null));
+            Assert.Equal(
+                "promotion_usage_limit_reached",
+                rejected.Code);
+
+            await using var verificationContext =
+                new AppDbContext(options);
+            Assert.Equal(
+                1,
+                await verificationContext.Promotions
+                    .Select(promotion => promotion.UsedCount)
+                    .SingleAsync());
+            Assert.Equal(
+                1,
+                await verificationContext.PromotionRedemptions
+                    .CountAsync());
+            Assert.Equal(
+                1,
+                await verificationContext.Orders.CountAsync());
+            Assert.Equal(
+                1,
+                await verificationContext.CartItems.CountAsync());
+        }
+        finally
+        {
+            await using var cleanupContext =
+                new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
     private static OrderService CreateOrderService(AppDbContext context)
         => TestServiceFactory.CreateOrderService(context);
+
+    private static User CreatePromotionCustomer(
+        string userName,
+        DateTimeOffset now)
+        => new()
+        {
+            Id = Guid.NewGuid(),
+            UserName = userName,
+            NormalizedUserName = userName.ToUpperInvariant(),
+            Email = $"{userName}@example.com",
+            NormalizedEmail =
+                $"{userName}@example.com".ToUpperInvariant(),
+            FullName = userName,
+            PasswordHash = "hash",
+            CreatedAt = now.UtcDateTime
+        };
 
     private static string BuildConnectionString(string databaseName)
         => SqlServerIntegrationTestGate.CreateTestDatabaseConnectionString(databaseName);

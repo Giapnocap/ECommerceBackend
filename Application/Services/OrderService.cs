@@ -10,17 +10,20 @@ namespace ECommerceBackend.Application.Services
         private readonly OrderCommandService _commands;
         private readonly OrderRefundUseCase _refund;
         private readonly OrderQueryUseCase _queries;
+        private readonly OrderPricingUseCase _pricing;
 
         public OrderService(
             OrderCheckoutUseCase checkout,
             OrderCommandService commands,
             OrderRefundUseCase refund,
-            OrderQueryUseCase queries)
+            OrderQueryUseCase queries,
+            OrderPricingUseCase pricing)
         {
             _checkout = checkout;
             _commands = commands;
             _refund = refund;
             _queries = queries;
+            _pricing = pricing;
         }
 
         public Task<OrderResponse> PlaceOrderAsync(
@@ -32,6 +35,15 @@ namespace ECommerceBackend.Application.Services
                 userId,
                 request,
                 idempotencyKey,
+                cancellationToken);
+
+        public Task<OrderQuoteResponse> GetQuoteAsync(
+            Guid userId,
+            OrderQuoteRequest request,
+            CancellationToken cancellationToken = default)
+            => _pricing.GetQuoteAsync(
+                userId,
+                request,
                 cancellationToken);
 
         public Task<PagedResult<OrderResponse>> GetMyOrdersAsync(

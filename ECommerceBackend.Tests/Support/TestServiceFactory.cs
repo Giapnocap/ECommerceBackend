@@ -122,12 +122,14 @@ internal static class TestServiceFactory
     public static OrderService CreateOrderService(
         AppDbContext context,
         TimeProvider? timeProvider = null,
-        OrderLifecycleOptions? lifecycleOptions = null)
+        OrderLifecycleOptions? lifecycleOptions = null,
+        PricingOptions? pricingOptions = null)
     {
         var orderRepository = new OrderRepository(context);
         var paymentRepository = new PaymentRepository(context);
         var cartRepository = new CartRepository(context);
         var inventoryRepository = new InventoryRepository(context);
+        var promotionRepository = new PromotionRepository(context);
         var queries = new OrderQueryUseCase(orderRepository);
         var consistency = Consistency(context);
         var providers = new PaymentProviderResolver(
@@ -136,6 +138,12 @@ internal static class TestServiceFactory
         var clock = timeProvider ?? TimeProvider.System;
         var options = Options.Create(
             lifecycleOptions ?? new OrderLifecycleOptions());
+        var pricing = new OrderPricingUseCase(
+            cartRepository,
+            promotionRepository,
+            clock,
+            Options.Create(
+                pricingOptions ?? new PricingOptions()));
         var checkout = new OrderCheckoutUseCase(
             orderRepository,
             paymentRepository,
@@ -145,6 +153,7 @@ internal static class TestServiceFactory
             consistency,
             providers,
             outbox,
+            pricing,
             queries,
             clock,
             options);
@@ -164,8 +173,23 @@ internal static class TestServiceFactory
             outbox,
             queries,
             clock);
-        return new OrderService(checkout, commands, refund, queries);
+        return new OrderService(
+            checkout,
+            commands,
+            refund,
+            queries,
+            pricing);
     }
+
+    public static PromotionService CreatePromotionService(
+        AppDbContext context,
+        TimeProvider? timeProvider = null)
+        => new(
+            new PromotionRepository(context),
+            context,
+            Consistency(context),
+            NullAuditWriter.Instance,
+            timeProvider ?? TimeProvider.System);
 }
 
 internal sealed class TestSensitivePayloadProtector : ISensitivePayloadProtector

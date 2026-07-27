@@ -19,6 +19,7 @@ REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NE
 - CRUD danh mục, sản phẩm và ảnh sản phẩm.
 - Tìm kiếm, lọc, sắp xếp và phân trang sản phẩm.
 - Giỏ hàng và checkout có `Idempotency-Key`.
+- Báo giá checkout phía server, phí giao hàng cấu hình được và promotion có giới hạn tổng/theo khách.
 - Vòng đời đơn hàng gồm giao lại, giao thất bại, hoàn hàng và tự động hết hạn đơn `Pending`.
 - Giữ/hoàn tồn kho có inventory ledger riêng cho hủy đơn và nhận hàng hoàn.
 - Payment state machine, COD, ghi nhận hoàn tiền thủ công và HMAC webhook chống replay.
@@ -145,10 +146,14 @@ Script có thể chạy lại an toàn và không ghi đè dữ liệu đã phá
 | `Customer` | `demo.customer` | `Customer@ECommerce2026!` |
 
 Các tài khoản và mật khẩu trên chỉ dùng cho database development local.
+Demo seed còn tạo mã `WELCOME10`: giảm 10%, tối đa 100.000 đ, cho đơn từ
+500.000 đ và mỗi khách sử dụng một lần.
 
 ## Kiểm Thử API
 
 - Swagger hỗ trợ Bearer authentication và mô tả success/error contracts.
+- `POST /api/orders/quote` tính giá hiện tại; `POST /api/orders` luôn tính lại trong transaction.
+- Admin quản lý promotion qua `/api/promotions` bằng quyền quản lý sản phẩm.
 - [ECommerceBackend.http](ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
 - API error sử dụng `application/problem+json`, có `code` và `traceId` ổn định.
 

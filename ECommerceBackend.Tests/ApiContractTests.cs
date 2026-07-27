@@ -64,6 +64,14 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         var checkout = paths.GetProperty("/api/orders").GetProperty("post");
         Assert.True(checkout.TryGetProperty("security", out _));
         AssertRequiredParameter(checkout, "Idempotency-Key", "header");
+        var quote = paths
+            .GetProperty("/api/orders/quote")
+            .GetProperty("post");
+        Assert.True(quote.TryGetProperty("security", out _));
+        var promotions = paths
+            .GetProperty("/api/promotions")
+            .GetProperty("get");
+        Assert.True(promotions.TryGetProperty("security", out _));
 
         var publicProducts = paths.GetProperty("/api/products").GetProperty("get");
         Assert.False(publicProducts.TryGetProperty("security", out _));
@@ -197,6 +205,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         {
             "/api/users?page=1&pageSize=10",
             "/api/orders?page=1&pageSize=10",
+            "/api/promotions?page=1&pageSize=10",
             "/api/inventory/low-stock?page=1&pageSize=10",
             "/api/reports/sales-summary",
             "/api/operations/outbox/dead-letters?page=1&pageSize=10",
@@ -217,6 +226,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         await AssertStatusAsync(client, "/api/orders?page=1&pageSize=10", HttpStatusCode.OK);
         await AssertStatusAsync(client, "/api/inventory/low-stock?page=1&pageSize=10", HttpStatusCode.OK);
         await AssertStatusAsync(client, "/api/users?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/promotions?page=1&pageSize=10", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/reports/sales-summary", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/operations/audit-events", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/health/details", HttpStatusCode.Forbidden);

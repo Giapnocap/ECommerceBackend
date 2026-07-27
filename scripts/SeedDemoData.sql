@@ -40,7 +40,7 @@ BEGIN TRY
     (
         SELECT 1
         FROM dbo.__EFMigrationsHistory
-        WHERE MigrationId = N'20260721121836_AddPrivilegedAuditTrail'
+        WHERE MigrationId = N'20260727180607_AddPricingAndPromotions'
     )
         THROW 51001, 'Apply all EF Core migrations before seeding demo data.', 1;
 
@@ -128,6 +128,30 @@ BEGIN TRY
     IF NOT EXISTS (SELECT 1 FROM dbo.Carts WHERE UserId = @CustomerUserId)
         INSERT dbo.Carts (Id, UserId)
         VALUES ('d1000000-0000-0000-0000-000000000002', @CustomerUserId);
+
+    IF NOT EXISTS
+    (
+        SELECT 1
+        FROM dbo.Promotions
+        WHERE NormalizedCode = N'WELCOME10'
+    )
+    BEGIN
+        INSERT dbo.Promotions
+        (
+            Id, Code, NormalizedCode, Type, Value, MinimumSubtotal,
+            MaximumDiscountAmount, StartsAt, EndsAt, UsageLimit,
+            UsageLimitPerCustomer, UsedCount, IsActive, CreatedAt,
+            UpdatedAt
+        )
+        VALUES
+        (
+            'd2000000-0000-0000-0000-000000000001',
+            N'WELCOME10', N'WELCOME10', 1, 10, 500000,
+            100000, CONVERT(datetime2, '2020-01-01T00:00:00'),
+            CONVERT(datetime2, '2099-12-31T23:59:59'),
+            1000, 1, 0, 1, @Now, NULL
+        );
+    END;
 
     DECLARE @Categories table
     (

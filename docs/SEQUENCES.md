@@ -36,6 +36,7 @@ sequenceDiagram
     actor Customer
     participant API as OrderController
     participant Checkout as OrderCheckoutUseCase
+    participant Pricing as OrderPricingUseCase
     participant Rules as Domain Policies
     participant DB as SQL Server
     participant Outbox as Outbox Dispatcher
@@ -45,9 +46,11 @@ sequenceDiagram
     Checkout->>DB: Begin transaction
     Checkout->>DB: Check key, lock cart, recheck key
     Checkout->>DB: Lock products in stable ID order
-    Checkout->>Rules: Validate price, stock and order totals
+    Checkout->>DB: Lock promotion and count customer redemptions
+    Checkout->>Pricing: Recalculate discount, shipping, tax and total
+    Pricing->>Rules: Validate promotion, price, stock and order totals
     Checkout->>Rules: Reserve inventory
-    Checkout->>DB: Insert order snapshots, payment, histories, ledger
+    Checkout->>DB: Insert order snapshots, promotion redemption, payment, histories, ledger
     Checkout->>DB: Clear cart and append outbox message
     Checkout->>DB: Commit
     Checkout-->>API: OrderResponse

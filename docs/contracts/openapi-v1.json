@@ -385,6 +385,48 @@
         },
         "type": "object"
       },
+      "CreatePromotionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "nullable": true,
+            "type": "string"
+          },
+          "endsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "maximumDiscountAmount": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "minimumSubtotal": {
+            "format": "double",
+            "type": "number"
+          },
+          "startsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PromotionType"
+          },
+          "usageLimit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "usageLimitPerCustomer": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "DataRetentionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -743,6 +785,65 @@
         },
         "type": "object"
       },
+      "OrderQuoteRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "promotionCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "shippingMethod": {
+            "$ref": "#/components/schemas/ShippingMethod"
+          }
+        },
+        "type": "object"
+      },
+      "OrderQuoteResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "calculatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "currency": {
+            "nullable": true,
+            "type": "string"
+          },
+          "discountAmount": {
+            "format": "double",
+            "type": "number"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "promotionCode": {
+            "nullable": true,
+            "type": "string"
+          },
+          "shippingFee": {
+            "format": "double",
+            "type": "number"
+          },
+          "shippingMethod": {
+            "nullable": true,
+            "type": "string"
+          },
+          "subtotalAmount": {
+            "format": "double",
+            "type": "number"
+          },
+          "taxAmount": {
+            "format": "double",
+            "type": "number"
+          },
+          "totalAmount": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
       "OrderResponse": {
         "additionalProperties": false,
         "properties": {
@@ -752,6 +853,10 @@
           },
           "cancelledAt": {
             "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "currency": {
             "nullable": true,
             "type": "string"
           },
@@ -795,6 +900,10 @@
           "payment": {
             "$ref": "#/components/schemas/PaymentResponse"
           },
+          "promotionCode": {
+            "nullable": true,
+            "type": "string"
+          },
           "shippingAddress": {
             "nullable": true,
             "type": "string"
@@ -802,6 +911,10 @@
           "shippingFee": {
             "format": "double",
             "type": "number"
+          },
+          "shippingMethod": {
+            "nullable": true,
+            "type": "string"
           },
           "status": {
             "nullable": true,
@@ -1048,6 +1161,11 @@
       "PlaceOrderRequest": {
         "additionalProperties": false,
         "properties": {
+          "expectedTotalAmount": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
           "note": {
             "nullable": true,
             "type": "string"
@@ -1055,9 +1173,16 @@
           "paymentMethod": {
             "$ref": "#/components/schemas/PaymentMethod"
           },
+          "promotionCode": {
+            "nullable": true,
+            "type": "string"
+          },
           "shippingAddress": {
             "nullable": true,
             "type": "string"
+          },
+          "shippingMethod": {
+            "$ref": "#/components/schemas/ShippingMethod"
           }
         },
         "type": "object"
@@ -1166,6 +1291,115 @@
           }
         },
         "type": "object"
+      },
+      "PromotionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "endsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "maximumDiscountAmount": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "minimumSubtotal": {
+            "format": "double",
+            "type": "number"
+          },
+          "startsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "nullable": true,
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "usageLimit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "usageLimitPerCustomer": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "usedCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "PromotionResponsePagedResult": {
+        "additionalProperties": false,
+        "properties": {
+          "hasNextPage": {
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "hasPreviousPage": {
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PromotionResponse"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "readOnly": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PromotionType": {
+        "enum": [
+          0,
+          1
+        ],
+        "format": "int32",
+        "type": "integer"
       },
       "RecordOrderRefundRequest": {
         "additionalProperties": false,
@@ -1323,6 +1557,14 @@
         },
         "type": "object"
       },
+      "ShippingMethod": {
+        "enum": [
+          0,
+          1
+        ],
+        "format": "int32",
+        "type": "integer"
+      },
       "StatusBreakdownResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1437,6 +1679,47 @@
           "phone": {
             "nullable": true,
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdatePromotionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "endsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "maximumDiscountAmount": {
+            "format": "double",
+            "nullable": true,
+            "type": "number"
+          },
+          "minimumSubtotal": {
+            "format": "double",
+            "type": "number"
+          },
+          "startsAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/PromotionType"
+          },
+          "usageLimit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "usageLimitPerCustomer": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
           }
         },
         "type": "object"
@@ -3915,6 +4198,100 @@
         ]
       }
     },
+    "/api/orders/quote": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderQuoteRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderQuoteRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderQuoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderQuoteResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "429": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "T\u00EDnh l\u1EA1i gi\u00E1 gi\u1ECF h\u00E0ng theo promotion v\u00E0 ph\u01B0\u01A1ng th\u1EE9c giao h\u00E0ng",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
     "/api/orders/{id}": {
       "get": {
         "parameters": [
@@ -5199,6 +5576,451 @@
         "summary": "[Admin] X\u00F3a \u1EA3nh s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
+        ]
+      }
+    },
+    "/api/promotions": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "IsActive",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Page",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponsePagedResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Admin] L\u1EA5y danh s\u00E1ch m\u00E3 khuy\u1EBFn m\u00E3i",
+        "tags": [
+          "Promotion"
+        ]
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromotionRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromotionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePromotionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Admin] T\u1EA1o m\u00E3 khuy\u1EBFn m\u00E3i",
+        "tags": [
+          "Promotion"
+        ]
+      }
+    },
+    "/api/promotions/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Admin] Ng\u1EEBng s\u1EED d\u1EE5ng m\u00E3 khuy\u1EBFn m\u00E3i",
+        "tags": [
+          "Promotion"
+        ]
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Admin] L\u1EA5y chi ti\u1EBFt m\u00E3 khuy\u1EBFn m\u00E3i",
+        "tags": [
+          "Promotion"
+        ]
+      },
+      "put": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromotionRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromotionRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromotionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PromotionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Admin] C\u1EADp nh\u1EADt ch\u00EDnh s\u00E1ch m\u00E3 khuy\u1EBFn m\u00E3i",
+        "tags": [
+          "Promotion"
         ]
       }
     },

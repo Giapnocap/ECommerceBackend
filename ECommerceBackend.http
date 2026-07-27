@@ -11,6 +11,7 @@
 @ProductImageId =
 @CartItemId =
 @OrderId =
+@PromotionId =
 @UserId =
 @IdempotencyKey = checkout-demo-001
 @PaymentProvider = generic-hmac
@@ -89,7 +90,7 @@ Authorization: Bearer {{AdminToken}}
 
 {
   "name": "Demo Product",
-  "price": 199000.00,
+  "price": 599000.00,
   "stockQuantity": 10,
   "description": "Demo product for the HTTP request collection.",
   "categoryId": "{{CategoryId}}"
@@ -110,7 +111,7 @@ Authorization: Bearer {{AdminToken}}
 
 {
   "name": "Demo Product Updated",
-  "price": 209000.00,
+  "price": 609000.00,
   "stockQuantity": 12,
   "description": "Updated demo product for the HTTP request collection.",
   "categoryId": "{{CategoryId}}"
@@ -213,6 +214,35 @@ Authorization: Bearer {{CustomerToken}}
   "quantity": 1
 }
 
+### Create promotion - Admin
+# @name createPromotion
+POST {{BaseUrl}}/api/promotions
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "code": "WELCOME10",
+  "type": 1,
+  "value": 10,
+  "minimumSubtotal": 500000,
+  "maximumDiscountAmount": 100000,
+  "startsAt": "2026-01-01T00:00:00Z",
+  "endsAt": "2027-01-01T00:00:00Z",
+  "usageLimit": 1000,
+  "usageLimitPerCustomer": 1
+}
+
+### Quote current cart
+# @name quoteOrder
+POST {{BaseUrl}}/api/orders/quote
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "shippingMethod": 0,
+  "promotionCode": "WELCOME10"
+}
+
 ### Place order
 # @name placeOrder
 POST {{BaseUrl}}/api/orders
@@ -223,7 +253,10 @@ Idempotency-Key: {{IdempotencyKey}}
 {
   "shippingAddress": "123 Demo Street, District 1, Ho Chi Minh City",
   "note": "Demo checkout from ECommerceBackend.http",
-  "paymentMethod": 0
+  "paymentMethod": 0,
+  "shippingMethod": 0,
+  "promotionCode": "WELCOME10",
+  "expectedTotalAmount": {{quoteOrder.response.body.$.totalAmount}}
 }
 
 ### My orders

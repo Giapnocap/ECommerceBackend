@@ -18,6 +18,42 @@ namespace ECommerceBackend.Application.Validation
 
             RuleFor(x => x.PaymentMethod)
                 .IsInEnum().WithMessage("Phương thức thanh toán không hợp lệ.");
+
+            RuleFor(x => x.ShippingMethod)
+                .IsInEnum().WithMessage("Phương thức giao hàng không hợp lệ.");
+
+            RuleFor(x => x.PromotionCode)
+                .Matches("^[A-Za-z0-9_-]{3,32}$")
+                .WithMessage(
+                    "Mã khuyến mãi phải có 3-32 ký tự gồm chữ cái, số, dấu gạch ngang hoặc gạch dưới.")
+                .When(x => !string.IsNullOrWhiteSpace(x.PromotionCode));
+
+            RuleFor(x => x.ExpectedTotalAmount)
+                .GreaterThan(0)
+                .LessThanOrEqualTo(CommerceLimits.MaxMoneyAmount)
+                .PrecisionScale(
+                    CommerceLimits.MoneyPrecision,
+                    CommerceLimits.MoneyScale,
+                    true)
+                .WithMessage(
+                    "Tổng tiền dự kiến phải lớn hơn 0 và có tối đa 2 chữ số thập phân.")
+                .When(x => x.ExpectedTotalAmount.HasValue);
+        }
+    }
+
+    public sealed class OrderQuoteRequestValidator
+        : AbstractValidator<OrderQuoteRequest>
+    {
+        public OrderQuoteRequestValidator()
+        {
+            RuleFor(x => x.ShippingMethod)
+                .IsInEnum().WithMessage("Phương thức giao hàng không hợp lệ.");
+
+            RuleFor(x => x.PromotionCode)
+                .Matches("^[A-Za-z0-9_-]{3,32}$")
+                .WithMessage(
+                    "Mã khuyến mãi phải có 3-32 ký tự gồm chữ cái, số, dấu gạch ngang hoặc gạch dưới.")
+                .When(x => !string.IsNullOrWhiteSpace(x.PromotionCode));
         }
     }
 

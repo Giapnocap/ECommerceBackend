@@ -11,6 +11,11 @@ namespace ECommerceBackend.Application.Interfaces
             string idempotencyKey,
             CancellationToken cancellationToken = default);
 
+        Task<OrderQuoteResponse> GetQuoteAsync(
+            Guid userId,
+            OrderQuoteRequest request,
+            CancellationToken cancellationToken = default);
+
         Task<PagedResult<OrderResponse>> GetMyOrdersAsync(
             Guid userId,
             int page,

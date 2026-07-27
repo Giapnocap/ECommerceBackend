@@ -225,6 +225,23 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void Pricing_WithInvalidCurrencyOrTaxRate_FailsValidation()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Pricing:Currency"] = "vnd",
+            ["Pricing:TaxRatePercent"] = "101"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<PricingOptions>>()
+                .Value);
+    }
+
+    [Fact]
     public void ProductionPasswordResetUrl_MustUsePublicHttps()
     {
         var values = new Dictionary<string, string?>

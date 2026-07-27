@@ -40,12 +40,32 @@ try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
     try {
+        $forbiddenPrefixes = @(
+            'app/Application/',
+            'app/Domain/',
+            'app/Infrastructure/',
+            'app/ECommerceBackend.Tests/',
+            'app/TestResults/',
+            'app/PerformanceResults/',
+            'app/ReleasePackage/',
+            'app/MigrationArtifacts/',
+            'app/docs/',
+            'app/scripts/',
+            'app/DataProtectionKeys/',
+            'app/logs/',
+            'app/uploads/'
+        )
         foreach ($entry in $archive.Entries) {
             $entryPath = $entry.FullName.Replace('\', '/')
             if ([string]::IsNullOrWhiteSpace($entryPath) -or
                 $entryPath.StartsWith('/') -or
                 $entryPath -match '(^|/)\.\.(/|$)') {
                 throw "Release archive contains an unsafe entry '$entryPath'."
+            }
+
+            if ($forbiddenPrefixes |
+                Where-Object { $entryPath.StartsWith($_, [StringComparison]::OrdinalIgnoreCase) }) {
+                throw "Release archive contains source or runtime data '$entryPath'."
             }
         }
     }

@@ -11,6 +11,10 @@ namespace ECommerceBackend.Domain.Entities
         public string OrderNumber { get; set; } = string.Empty;
         public string IdempotencyKey { get; set; } = string.Empty;
         public string IdempotencyRequestHash { get; set; } = string.Empty;
+        public Guid? PromotionId { get; set; }
+        public string? PromotionCodeSnapshot { get; set; }
+        public ShippingMethod ShippingMethod { get; set; }
+        public string Currency { get; set; } = "VND";
         public DateTime OrderDate { get; set; } = DateTime.UtcNow;
         public decimal SubtotalAmount { get; private set; }
         public decimal DiscountAmount { get; private set; }
@@ -31,6 +35,8 @@ namespace ECommerceBackend.Domain.Entities
         public ICollection<OrderStatusHistory> StatusHistory { get; set; } = new List<OrderStatusHistory>();
         public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
         public Payment? Payment { get; set; }
+        public Promotion? Promotion { get; set; }
+        public PromotionRedemption? PromotionRedemption { get; set; }
 
         public void SetPricing(
             decimal subtotal,

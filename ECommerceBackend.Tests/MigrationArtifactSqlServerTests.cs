@@ -78,6 +78,92 @@ public sealed class MigrationArtifactSqlServerTests
     }
 
     [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task GeneratedRollback_RejectsDestructivePromotionData()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var artifactsDirectory =
+            Environment.GetEnvironmentVariable(
+                ArtifactsDirectoryVariable);
+        Assert.False(
+            string.IsNullOrWhiteSpace(artifactsDirectory),
+            $"{ArtifactsDirectoryVariable} must point to generated migration artifacts.");
+
+        var manifest = await ReadAndVerifyManifestAsync(
+            Path.Combine(
+                artifactsDirectory,
+                "migration-manifest.json"));
+        var forwardScript = await File.ReadAllTextAsync(
+            GetArtifactPath(
+                artifactsDirectory,
+                manifest,
+                "migrate-up.sql"));
+        var rollbackScript = await File.ReadAllTextAsync(
+            GetArtifactPath(
+                artifactsDirectory,
+                manifest,
+                "rollback-last.sql"));
+        var databaseName =
+            $"ECommerceBackendMigrationArtifact_{Guid.NewGuid():N}";
+        var connectionString =
+            SqlServerIntegrationTestGate
+                .CreateTestDatabaseConnectionString(databaseName);
+        var databaseCreated = false;
+
+        try
+        {
+            await CreateDatabaseAsync(
+                connectionString,
+                databaseName);
+            databaseCreated = true;
+            await ExecuteScriptAsync(
+                connectionString,
+                forwardScript);
+            await ExecuteScriptAsync(
+                connectionString,
+                """
+                INSERT dbo.Promotions
+                (
+                    Id, Code, NormalizedCode, Type, Value,
+                    MinimumSubtotal, MaximumDiscountAmount,
+                    StartsAt, EndsAt, UsageLimit,
+                    UsageLimitPerCustomer, UsedCount,
+                    IsActive, CreatedAt, UpdatedAt
+                )
+                VALUES
+                (
+                    NEWID(), N'ROLLBACK-GUARD', N'ROLLBACK-GUARD',
+                    0, 10000, 0, NULL,
+                    DATEADD(DAY, -1, SYSUTCDATETIME()),
+                    DATEADD(DAY, 1, SYSUTCDATETIME()),
+                    1, 1, 0, 1, SYSUTCDATETIME(), NULL
+                );
+                """);
+
+            var exception = await Assert.ThrowsAsync<SqlException>(
+                () => ExecuteScriptAsync(
+                    connectionString,
+                    rollbackScript));
+
+            Assert.Equal(51030, exception.Number);
+            Assert.True(
+                await HasMigrationAsync(
+                    connectionString,
+                    manifest.LatestMigration));
+        }
+        finally
+        {
+            if (databaseCreated)
+            {
+                await DeleteDatabaseAsync(
+                    connectionString,
+                    databaseName);
+            }
+        }
+    }
+
+    [Fact]
     [Trait("Category", "SqlServerRecoveryIntegration")]
     public async Task BackupRestore_RecoversLatestSchemaAndCommittedData()
     {

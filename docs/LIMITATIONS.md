@@ -7,8 +7,8 @@ following boundaries are intentional and visible in the design.
 
 - Checkout supports cash on delivery only. The generic signed webhook demonstrates a provider
   contract but is not a complete integration with a real payment gateway.
-- Discount, shipping fee and tax snapshots exist, but checkout keeps them at zero until concrete
-  promotion, carrier and tax rules are defined.
+- Checkout supports configurable shipping/tax rules and bounded promotion codes. It does not
+  calculate carrier-specific live rates, stack multiple promotions or model jurisdictional tax.
 - Product variants, vouchers, shipment-provider integration and multi-warehouse inventory are
   outside the current domain.
 - Email verification is not required for sign-in. Password reset, lockout and session revocation

@@ -58,6 +58,9 @@ namespace ECommerceBackend.Application.DTOs
         public decimal ShippingFee { get; set; }
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
+        public string Currency { get; set; } = "VND";
+        public string ShippingMethod { get; set; } = string.Empty;
+        public string? PromotionCode { get; set; }
         public string Status { get; set; } = string.Empty;
         public string ShippingAddress { get; set; } = string.Empty;
         public string? Note { get; set; }
@@ -75,6 +78,29 @@ namespace ECommerceBackend.Application.DTOs
         public string ShippingAddress { get; set; } = string.Empty;
         public string? Note { get; set; }
         public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.CashOnDelivery;
+        public ShippingMethod ShippingMethod { get; set; } = ShippingMethod.Standard;
+        public string? PromotionCode { get; set; }
+        public decimal? ExpectedTotalAmount { get; set; }
+    }
+
+    public sealed class OrderQuoteRequest
+    {
+        public ShippingMethod ShippingMethod { get; set; } = ShippingMethod.Standard;
+        public string? PromotionCode { get; set; }
+    }
+
+    public sealed class OrderQuoteResponse
+    {
+        public decimal SubtotalAmount { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal ShippingFee { get; set; }
+        public decimal TaxAmount { get; set; }
+        public decimal TotalAmount { get; set; }
+        public string Currency { get; set; } = string.Empty;
+        public string ShippingMethod { get; set; } = string.Empty;
+        public string? PromotionCode { get; set; }
+        public DateTime CalculatedAt { get; set; }
+        public DateTime ExpiresAt { get; set; }
     }
 
     public class UpdateOrderStatusRequest

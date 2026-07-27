@@ -92,6 +92,7 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IOutboxRepository, OutboxRepository>();
             services.AddScoped<IPaymentRepository, PaymentRepository>();
+            services.AddScoped<IPromotionRepository, PromotionRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
             services.AddScoped<IReportReadRepository, ReportReadRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
@@ -106,11 +107,13 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IOrderService, OrderService>();
             services.AddScoped<OrderCheckoutUseCase>();
+            services.AddScoped<OrderPricingUseCase>();
             services.AddScoped<OrderCommandService>();
             services.AddScoped<OrderRefundUseCase>();
             services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();
             services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<IPromotionService, PromotionService>();
             services.AddScoped<AuthTokenIssuer>();
             services.AddScoped<IOutboxWriter, OutboxWriter>();
             services.AddScoped<IAuditWriter, AuditWriter>();

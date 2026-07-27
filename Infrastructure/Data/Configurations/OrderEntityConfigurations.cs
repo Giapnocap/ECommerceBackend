@@ -13,6 +13,9 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             builder.Property(order => order.DiscountAmount).HasPrecision(18, 2);
             builder.Property(order => order.ShippingFee).HasPrecision(18, 2);
             builder.Property(order => order.TaxAmount).HasPrecision(18, 2);
+            builder.Property(order => order.Currency)
+                .HasMaxLength(3)
+                .HasDefaultValue("VND");
             builder.Property(order => order.RowVersion).IsRowVersion();
 
             builder.HasIndex(order => order.OrderNumber).IsUnique();
@@ -29,12 +32,23 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             builder.Property(order => order.OrderNumber).HasMaxLength(32);
             builder.Property(order => order.IdempotencyKey).HasMaxLength(100);
             builder.Property(order => order.IdempotencyRequestHash).HasMaxLength(64);
+            builder.Property(order => order.PromotionCodeSnapshot)
+                .HasMaxLength(32);
             builder.Property(order => order.CancellationReason).HasMaxLength(200);
 
             builder.ToTable(table =>
             {
                 table.HasCheckConstraint("CK_Orders_TotalAmount_Positive", "[TotalAmount] > 0");
                 table.HasCheckConstraint("CK_Orders_Status_Valid", "[Status] BETWEEN 0 AND 6");
+                table.HasCheckConstraint(
+                    "CK_Orders_ShippingMethod_Valid",
+                    "[ShippingMethod] BETWEEN 0 AND 1");
+                table.HasCheckConstraint(
+                    "CK_Orders_Currency_Valid",
+                    "LEN([Currency]) = 3 AND [Currency] = UPPER([Currency])");
+                table.HasCheckConstraint(
+                    "CK_Orders_PromotionSnapshot_Consistent",
+                    "([PromotionId] IS NULL AND [PromotionCodeSnapshot] IS NULL) OR ([PromotionId] IS NOT NULL AND [PromotionCodeSnapshot] IS NOT NULL)");
                 table.HasCheckConstraint(
                     "CK_Orders_Amounts_NonNegative",
                     "[SubtotalAmount] >= 0 AND [DiscountAmount] >= 0 AND [ShippingFee] >= 0 AND [TaxAmount] >= 0");
@@ -55,6 +69,11 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             builder.HasOne(order => order.User)
                 .WithMany(user => user.Orders)
                 .HasForeignKey(order => order.UserId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            builder.HasOne(order => order.Promotion)
+                .WithMany(promotion => promotion.Orders)
+                .HasForeignKey(order => order.PromotionId)
                 .OnDelete(DeleteBehavior.NoAction);
         }
     }

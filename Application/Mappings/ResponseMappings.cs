@@ -106,6 +106,9 @@ public static class ResponseMappings
             ShippingFee = order.ShippingFee,
             TaxAmount = order.TaxAmount,
             TotalAmount = order.TotalAmount,
+            Currency = order.Currency,
+            ShippingMethod = order.ShippingMethod.ToString(),
+            PromotionCode = order.PromotionCodeSnapshot,
             Status = order.Status.ToString(),
             ShippingAddress = order.ShippingAddress,
             Note = order.Note,
@@ -116,6 +119,25 @@ public static class ResponseMappings
             Payment = order.Payment?.ToResponse(),
             OrderDetails = order.OrderDetails.Select(ToResponse).ToArray(),
             StatusHistory = order.StatusHistory.Select(ToResponse).ToArray()
+        };
+
+    public static PromotionResponse ToResponse(this Promotion promotion)
+        => new()
+        {
+            Id = promotion.Id,
+            Code = promotion.Code,
+            Type = promotion.Type.ToString(),
+            Value = promotion.Value,
+            MinimumSubtotal = promotion.MinimumSubtotal,
+            MaximumDiscountAmount = promotion.MaximumDiscountAmount,
+            StartsAt = promotion.StartsAt,
+            EndsAt = promotion.EndsAt,
+            UsageLimit = promotion.UsageLimit,
+            UsageLimitPerCustomer = promotion.UsageLimitPerCustomer,
+            UsedCount = promotion.UsedCount,
+            IsActive = promotion.IsActive,
+            CreatedAt = promotion.CreatedAt,
+            UpdatedAt = promotion.UpdatedAt
         };
 
     public static OrderDetailResponse ToResponse(this OrderDetail detail)

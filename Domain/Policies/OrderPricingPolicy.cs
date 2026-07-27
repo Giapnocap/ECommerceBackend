@@ -1,4 +1,5 @@
 using ECommerceBackend.Domain.Common;
+using ECommerceBackend.Domain.Enums;
 
 namespace ECommerceBackend.Domain.Policies
 {
@@ -13,6 +14,12 @@ namespace ECommerceBackend.Domain.Policies
         decimal Shipping,
         decimal Tax,
         decimal Total);
+
+    public readonly record struct OrderPricingRules(
+        decimal StandardShippingFee,
+        decimal ExpressShippingFee,
+        decimal FreeStandardShippingMinimum,
+        decimal TaxRatePercent);
 
     public static class OrderPricingPolicy
     {
@@ -128,6 +135,82 @@ namespace ECommerceBackend.Domain.Policies
 
             return new OrderAmounts(subtotal, discount, shipping, tax, total);
         }
+
+        public static OrderAmounts CalculateQuote(
+            decimal subtotal,
+            decimal discount,
+            ShippingMethod shippingMethod,
+            OrderPricingRules rules)
+        {
+            if (!Enum.IsDefined(shippingMethod))
+            {
+                throw new DomainRuleViolationException(
+                    "shipping_method_invalid",
+                    "Phương thức giao hàng không hợp lệ.");
+            }
+
+            EnsureMoney(
+                rules.StandardShippingFee,
+                "standard_shipping_fee_invalid",
+                "Phí giao hàng tiêu chuẩn");
+            EnsureMoney(
+                rules.ExpressShippingFee,
+                "express_shipping_fee_invalid",
+                "Phí giao hàng nhanh");
+            EnsureMoney(
+                rules.FreeStandardShippingMinimum,
+                "free_shipping_minimum_invalid",
+                "Ngưỡng miễn phí giao hàng");
+            EnsureMoney(
+                rules.TaxRatePercent,
+                "tax_rate_invalid",
+                "Thuế suất");
+            if (rules.TaxRatePercent > 100)
+            {
+                throw new DomainRuleViolationException(
+                    "tax_rate_invalid",
+                    "Thuế suất không được vượt quá 100 phần trăm.");
+            }
+
+            var taxableAmount = subtotal - discount;
+            var shipping = shippingMethod switch
+            {
+                ShippingMethod.Standard
+                    when taxableAmount >= rules.FreeStandardShippingMinimum
+                    => 0,
+                ShippingMethod.Standard => rules.StandardShippingFee,
+                ShippingMethod.Express => rules.ExpressShippingFee,
+                _ => throw new DomainRuleViolationException(
+                    "shipping_method_invalid",
+                    "Phương thức giao hàng không hợp lệ.")
+            };
+            decimal tax;
+            try
+            {
+                tax = decimal.Round(
+                    taxableAmount * rules.TaxRatePercent / 100m,
+                    2,
+                    MidpointRounding.AwayFromZero);
+            }
+            catch (OverflowException)
+            {
+                throw new DomainRuleViolationException(
+                    "order_tax_exceeded",
+                    "Tiền thuế vượt quá giới hạn cho phép.");
+            }
+
+            return CalculateAmounts(
+                subtotal,
+                discount,
+                shipping,
+                tax);
+        }
+
+        public static void EnsureMoneyValue(
+            decimal value,
+            string code,
+            string fieldName)
+            => EnsureMoney(value, code, fieldName);
 
         private static void EnsureMoney(decimal value, string code, string fieldName)
         {

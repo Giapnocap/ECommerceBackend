@@ -76,8 +76,12 @@ erDiagram
     ORDERS {
         uniqueidentifier Id PK
         uniqueidentifier UserId FK
+        uniqueidentifier PromotionId FK
         nvarchar OrderNumber UK
         nvarchar IdempotencyKey
+        nvarchar PromotionCodeSnapshot
+        int ShippingMethod
+        nvarchar Currency
         int Status
         decimal TotalAmount
         datetime2 ExpiresAt
@@ -97,6 +101,26 @@ erDiagram
         uniqueidentifier ChangedByUserId FK
         int FromStatus
         int ToStatus
+        datetime2 CreatedAt
+    }
+    PROMOTIONS {
+        uniqueidentifier Id PK
+        nvarchar NormalizedCode UK
+        int Type
+        decimal Value
+        decimal MinimumSubtotal
+        int UsageLimit
+        int UsedCount
+        datetime2 StartsAt
+        datetime2 EndsAt
+        rowversion RowVersion
+    }
+    PROMOTION_REDEMPTIONS {
+        uniqueidentifier Id PK
+        uniqueidentifier PromotionId FK
+        uniqueidentifier OrderId FK,UK
+        uniqueidentifier UserId FK
+        decimal DiscountAmount
         datetime2 CreatedAt
     }
     PAYMENTS {
@@ -154,6 +178,7 @@ erDiagram
     USERS ||--o{ REFRESH_TOKENS : sessions
     USERS ||--o{ PASSWORD_RESET_TOKENS : resets
     USERS ||--o{ ORDERS : places
+    USERS ||--o{ PROMOTION_REDEMPTIONS : redeems
     CATEGORIES o|--o{ CATEGORIES : parent
     CATEGORIES ||--o{ PRODUCTS : groups
     PRODUCTS ||--o{ PRODUCT_IMAGES : has
@@ -162,6 +187,9 @@ erDiagram
     ORDERS ||--|{ ORDER_DETAILS : snapshots
     PRODUCTS ||--o{ ORDER_DETAILS : references
     ORDERS ||--o{ ORDER_STATUS_HISTORIES : records
+    PROMOTIONS o|--o{ ORDERS : snapshots
+    PROMOTIONS ||--o{ PROMOTION_REDEMPTIONS : limits
+    ORDERS ||--o| PROMOTION_REDEMPTIONS : consumes
     ORDERS ||--|| PAYMENTS : payment
     PAYMENTS ||--o{ PAYMENT_STATUS_HISTORIES : records
     PAYMENTS ||--o{ PAYMENT_WEBHOOK_EVENTS : receives

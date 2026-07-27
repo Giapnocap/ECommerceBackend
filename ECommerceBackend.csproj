@@ -7,6 +7,23 @@
     <!-- XML docs cho Swagger -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <DefaultItemExcludes>
+      $(DefaultItemExcludes);
+      Application\**;
+      Domain\**;
+      Infrastructure\**;
+      ECommerceBackend.Tests\**;
+      TestResults\**;
+      PerformanceResults\**;
+      ReleasePackage\**;
+      MigrationArtifacts\**;
+      .tools\**;
+      docs\**;
+      scripts\**;
+      DataProtectionKeys\**;
+      logs\**;
+      uploads\**
+    </DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

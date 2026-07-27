@@ -39,6 +39,22 @@ namespace ECommerceBackend.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
 
+        /// <summary>Tính lại giá giỏ hàng theo promotion và phương thức giao hàng</summary>
+        [HttpPost("quote")]
+        [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
+        [EnableRateLimiting("checkout")]
+        [ProducesResponseType(typeof(OrderQuoteResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetQuote(
+            [FromBody] OrderQuoteRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.GetQuoteAsync(
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>Lấy danh sách đơn hàng của tôi</summary>
         [HttpGet("my")]
         [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
