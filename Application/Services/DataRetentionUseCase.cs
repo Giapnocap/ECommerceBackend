@@ -7,6 +7,7 @@ using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services

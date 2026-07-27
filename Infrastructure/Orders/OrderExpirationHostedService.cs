@@ -1,6 +1,9 @@
 using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Infrastructure.Orders

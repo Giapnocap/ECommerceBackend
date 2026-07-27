@@ -122,10 +122,18 @@ namespace ECommerceBackend.API.Extensions
                 options.OperationFilter<RequestContractOperationFilter>();
                 options.OperationFilter<DefaultResponseOperationFilter>();
 
-                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-                if (File.Exists(xmlPath))
-                    options.IncludeXmlComments(xmlPath);
+                var documentedAssemblies = new[]
+                {
+                    Assembly.GetExecutingAssembly(),
+                    typeof(RegisterRequestValidator).Assembly
+                };
+                foreach (var assembly in documentedAssemblies.Distinct())
+                {
+                    var xmlFile = $"{assembly.GetName().Name}.xml";
+                    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                    if (File.Exists(xmlPath))
+                        options.IncludeXmlComments(xmlPath);
+                }
             });
 
             return services;

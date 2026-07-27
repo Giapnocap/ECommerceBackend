@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Mail;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Infrastructure.Notifications

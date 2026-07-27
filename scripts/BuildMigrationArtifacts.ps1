@@ -9,7 +9,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$projectPath = Join-Path $repositoryRoot 'ECommerceBackend.csproj'
+$migrationsProjectPath = Join-Path $repositoryRoot 'Infrastructure/ECommerceBackend.Infrastructure.csproj'
+$startupProjectPath = Join-Path $repositoryRoot 'ECommerceBackend.csproj'
 $resolvedOutputDirectory = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 }
@@ -47,8 +48,8 @@ function Invoke-EfCommand {
 
 New-Item -ItemType Directory -Path $resolvedOutputDirectory -Force | Out-Null
 $commonArguments = @(
-    '--project', $projectPath,
-    '--startup-project', $projectPath,
+    '--project', $migrationsProjectPath,
+    '--startup-project', $startupProjectPath,
     '--configuration', 'Release',
     '--no-build'
 )

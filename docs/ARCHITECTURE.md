@@ -2,8 +2,11 @@
 
 ## Scope
 
-The system is a modular monolith: one ASP.NET Core API and one SQL Server database.
+The system is a modular monolith: one ASP.NET Core API process and one SQL Server database.
 Client applications and container orchestration are intentionally outside this repository.
+
+The solution uses separate `Domain`, `Application`, `Infrastructure`, API host and test projects.
+Project references enforce the dependency direction while deployment remains a single process.
 
 ## Dependency Direction
 
@@ -30,6 +33,8 @@ Application code uses repositories, `IUnitOfWork`, `IDataConsistencyService` and
 provider exception types are implemented only in Infrastructure. An architecture regression test
 rejects EF Core references under `Application`.
 
+The compiler enforces `Application -> Domain` and
+`Infrastructure -> Application + Domain`; the API host references both to compose the process.
 Composition registration is split by responsibility across
 `ServiceCollectionExtensions.Configuration`, `.Infrastructure`, `.Security` and `.Web`.
 `AppDbContext` discovers per-entity `IEntityTypeConfiguration<T>` implementations from

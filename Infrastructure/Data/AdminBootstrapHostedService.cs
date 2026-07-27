@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 namespace ECommerceBackend.Infrastructure.Data
 {
     public sealed class AdminBootstrapHostedService : IHostedService

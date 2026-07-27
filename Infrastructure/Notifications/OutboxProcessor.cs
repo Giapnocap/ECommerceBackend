@@ -2,6 +2,7 @@ using ECommerceBackend.Application.Common;
 using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Observability;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Infrastructure.Notifications

@@ -31,7 +31,12 @@ jobs:
       - run: dotnet format ECommerceBackend.sln --no-restore --verify-no-changes
       - run: dotnet build ECommerceBackend.sln --configuration Release --no-restore
       - run: dotnet tool install dotnet-ef --tool-path ./.tools --version 8.0.20
-      - run: ./.tools/dotnet-ef migrations has-pending-model-changes --no-build --configuration Release
+      - run: >-
+          ./.tools/dotnet-ef migrations has-pending-model-changes
+          --project Infrastructure/ECommerceBackend.Infrastructure.csproj
+          --startup-project ECommerceBackend.csproj
+          --no-build
+          --configuration Release
       - shell: pwsh
         run: >-
           ./scripts/BuildMigrationArtifacts.ps1

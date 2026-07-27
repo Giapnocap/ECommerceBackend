@@ -58,6 +58,11 @@ Infrastructure/
 ECommerceBackend.Tests/  Unit, contract và SQL Server integration tests
 ```
 
+Solution gồm năm project: API host `ECommerceBackend.csproj`, `Domain`, `Application`,
+`Infrastructure` và `ECommerceBackend.Tests`. Khi chạy bằng Visual Studio, đặt project
+`ECommerceBackend` ở root làm Startup Project; các project layer là class library và không chạy
+độc lập.
+
 `Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
 
 Đăng ký dependency được chia theo trách nhiệm trong
@@ -108,7 +113,9 @@ Khởi tạo và chạy:
 
 ```powershell
 dotnet restore
-dotnet ef database update
+dotnet ef database update `
+  --project Infrastructure/ECommerceBackend.Infrastructure.csproj `
+  --startup-project ECommerceBackend.csproj
 dotnet run
 ```
 

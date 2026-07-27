@@ -10,14 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.3.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.20" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.20" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.20">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.20">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.20" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
@@ -30,9 +29,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="Application\**\*.cs" />
+    <Compile Remove="Domain\**\*.cs" />
+    <Compile Remove="Infrastructure\**\*.cs" />
     <Compile Remove="ECommerceBackend.Tests\**\*.cs" />
     <Content Remove="ECommerceBackend.Tests\**\*" />
     <None Remove="ECommerceBackend.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="Application\ECommerceBackend.Application.csproj" />
+    <ProjectReference Include="Domain\ECommerceBackend.Domain.csproj" />
+    <ProjectReference Include="Infrastructure\ECommerceBackend.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

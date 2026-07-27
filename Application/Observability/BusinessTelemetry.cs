@@ -3,7 +3,7 @@ using System.Diagnostics.Metrics;
 
 namespace ECommerceBackend.Application.Observability
 {
-    internal static class BusinessTelemetry
+    public static class BusinessTelemetry
     {
         public const string ActivitySourceName = "ECommerceBackend.Business";
         public const string MeterName = "ECommerceBackend.Business";
@@ -28,7 +28,7 @@ namespace ECommerceBackend.Application.Observability
                 OperationDuration);
     }
 
-    internal sealed class BusinessOperation : IDisposable
+    public sealed class BusinessOperation : IDisposable
     {
         private readonly string _operationName;
         private readonly CancellationToken _cancellationToken;

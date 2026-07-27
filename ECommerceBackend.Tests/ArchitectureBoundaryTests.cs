@@ -67,7 +67,14 @@ public sealed class ArchitectureBoundaryTests
     [Fact]
     public void RemovedGenericRepository_IsNotPartOfApplicationOrInfrastructure()
     {
-        var productionTypes = typeof(AuthService).Assembly.GetTypes();
+        var productionTypes = new[]
+            {
+                typeof(AuthService).Assembly,
+                typeof(AppDbContext).Assembly
+            }
+            .Distinct()
+            .SelectMany(assembly => assembly.GetTypes())
+            .ToArray();
 
         Assert.DoesNotContain(
             productionTypes,
@@ -81,6 +88,29 @@ public sealed class ArchitectureBoundaryTests
             parameter => parameter.ParameterType.Name.Contains(
                 "GenericRepository",
                 StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void LayerAssemblies_EnforceDependencyDirection()
+    {
+        var domainAssembly = typeof(ECommerceBackend.Domain.Entities.User).Assembly;
+        var applicationAssembly = typeof(AuthService).Assembly;
+        var infrastructureAssembly = typeof(AppDbContext).Assembly;
+
+        var domainReferences = ReferencedAssemblyNames(domainAssembly);
+        var applicationReferences = ReferencedAssemblyNames(applicationAssembly);
+        var infrastructureReferences = ReferencedAssemblyNames(infrastructureAssembly);
+
+        Assert.DoesNotContain(
+            domainReferences,
+            name => name.StartsWith("ECommerceBackend.", StringComparison.Ordinal));
+        Assert.Contains(domainAssembly.GetName().Name!, applicationReferences);
+        Assert.DoesNotContain(infrastructureAssembly.GetName().Name!, applicationReferences);
+        Assert.DoesNotContain(
+            applicationReferences,
+            name => name.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));
+        Assert.Contains(applicationAssembly.GetName().Name!, infrastructureReferences);
+        Assert.Contains(domainAssembly.GetName().Name!, infrastructureReferences);
     }
 
     [Fact]
@@ -222,4 +252,9 @@ public sealed class ArchitectureBoundaryTests
 
         throw new DirectoryNotFoundException("Could not locate the repository root.");
     }
+
+    private static string[] ReferencedAssemblyNames(System.Reflection.Assembly assembly)
+        => assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name!)
+            .ToArray();
 }

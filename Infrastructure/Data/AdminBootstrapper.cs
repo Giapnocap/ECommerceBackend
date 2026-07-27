@@ -3,6 +3,7 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Infrastructure.Data

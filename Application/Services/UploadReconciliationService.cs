@@ -5,6 +5,8 @@ using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services

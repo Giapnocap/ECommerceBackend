@@ -3,6 +3,7 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace ECommerceBackend.Application.Services
 {

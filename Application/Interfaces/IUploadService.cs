@@ -1,4 +1,5 @@
 using ECommerceBackend.Application.DTOs;
+using Microsoft.AspNetCore.Http;
 
 namespace ECommerceBackend.Application.Interfaces
 {
