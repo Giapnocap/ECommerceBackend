@@ -7,7 +7,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
@@ -221,7 +220,7 @@ namespace ECommerceBackend.Application.Services
                 telemetry.Complete();
                 return response;
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 if (!transactionCompleted)
                     await transaction.RollbackAsync(CancellationToken.None);
@@ -335,7 +334,7 @@ namespace ECommerceBackend.Application.Services
                 transactionCompleted = true;
                 telemetry.Complete();
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 if (!transactionCompleted)
                     await transaction.RollbackAsync(CancellationToken.None);

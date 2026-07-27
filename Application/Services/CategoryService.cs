@@ -6,7 +6,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -97,7 +96,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
@@ -174,13 +173,13 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
                 throw new ConflictException($"Danh mục '{name}' vừa được cập nhật bởi một yêu cầu khác.", ex);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
@@ -230,7 +229,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 

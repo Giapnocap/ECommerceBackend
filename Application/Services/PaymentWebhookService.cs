@@ -10,7 +10,6 @@ using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
@@ -197,7 +196,7 @@ namespace ECommerceBackend.Application.Services
                 telemetry.Complete();
                 return response;
             }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 if (!transactionCompleted)
                     await transaction.RollbackAsync(CancellationToken.None);

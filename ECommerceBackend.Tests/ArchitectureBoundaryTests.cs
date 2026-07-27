@@ -104,6 +104,32 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [Fact]
+    public void ApplicationSource_DoesNotReferenceEntityFramework()
+    {
+        var applicationDirectory = Path.Combine(
+            FindRepositoryRoot(),
+            "Application");
+        var forbiddenReferences = Directory
+            .EnumerateFiles(applicationDirectory, "*.cs", SearchOption.AllDirectories)
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = index + 1,
+                    Text = line
+                }))
+            .Where(source => source.Text.Contains(
+                "Microsoft.EntityFrameworkCore",
+                StringComparison.Ordinal)
+                || source.Text.Contains("DbUpdateException", StringComparison.Ordinal)
+                || source.Text.Contains("DbUpdateConcurrencyException", StringComparison.Ordinal))
+            .Select(source => $"{source.File}:{source.Line}")
+            .ToArray();
+
+        Assert.Empty(forbiddenReferences);
+    }
+
+    [Fact]
     public void RepositoryContracts_DoNotExposeQueryableOrDbSet()
     {
         var repositoryContracts = typeof(IOrderRepository).Assembly
@@ -181,5 +207,19 @@ public sealed class ArchitectureBoundaryTests
         }
 
         return false;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory != null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "ECommerceBackend.sln")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the repository root.");
     }
 }

@@ -6,7 +6,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -110,7 +109,7 @@ namespace ECommerceBackend.Application.Services
             {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex)
+            catch (Exception ex)
                 when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 throw new ConflictException(

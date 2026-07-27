@@ -104,6 +104,8 @@ public sealed class CancellationFlowTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public bool IsConcurrencyConflict(Exception exception) => false;
+
         public bool IsDeadlock(Exception exception) => false;
 
         public bool IsUniqueConstraintViolation(Exception exception) => false;

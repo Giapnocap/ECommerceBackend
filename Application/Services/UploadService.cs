@@ -6,7 +6,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
@@ -85,7 +84,7 @@ namespace ECommerceBackend.Application.Services
                     cancellationToken,
                     actorUserId);
             }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 DeleteGeneratedFile(filePath);
                 _logger.LogWarning(ex, "Could not persist product image for product {ProductId}.", productId);
@@ -152,7 +151,7 @@ namespace ECommerceBackend.Application.Services
 
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
                 throw ImageConcurrencyConflict(ex);

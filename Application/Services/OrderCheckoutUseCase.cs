@@ -12,7 +12,6 @@ using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Domain.Policies;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Application.Services
@@ -250,7 +249,7 @@ namespace ECommerceBackend.Application.Services
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 if (!transactionCompleted)
                     await transaction.RollbackAsync(CancellationToken.None);
@@ -259,7 +258,7 @@ namespace ECommerceBackend.Application.Services
                     + "giỏ hàng và thử lại.",
                     ex);
             }
-            catch (DbUpdateException ex)
+            catch (Exception ex)
                 when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 if (!transactionCompleted)

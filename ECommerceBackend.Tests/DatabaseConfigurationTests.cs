@@ -40,6 +40,17 @@ public sealed class DatabaseConfigurationTests
         AssertIndex(context, typeof(PaymentWebhookEvent), "IX_PaymentWebhookEvents_ReceivedAt", nameof(PaymentWebhookEvent.ReceivedAt));
     }
 
+    [Fact]
+    public void PersistenceExceptionClassification_IsOwnedByEfAdapter()
+    {
+        using var context = TestAppDbContext.Create();
+        var consistency = new EfDataConsistencyService(context);
+
+        Assert.True(consistency.IsConcurrencyConflict(new DbUpdateConcurrencyException()));
+        Assert.False(consistency.IsConcurrencyConflict(new InvalidOperationException()));
+        Assert.False(consistency.IsUniqueConstraintViolation(new DbUpdateException()));
+    }
+
     private static void AssertIndex(
         AppDbContext context,
         Type entityType,

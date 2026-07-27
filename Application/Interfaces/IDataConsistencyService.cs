@@ -26,6 +26,7 @@ namespace ECommerceBackend.Application.Interfaces
         Task<RefreshToken?> LockRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken = default);
         Task<User?> LockUserAsync(Guid userId, bool activeOnly, CancellationToken cancellationToken = default);
 
+        bool IsConcurrencyConflict(Exception exception);
         bool IsDeadlock(Exception exception);
         bool IsUniqueConstraintViolation(Exception exception);
     }

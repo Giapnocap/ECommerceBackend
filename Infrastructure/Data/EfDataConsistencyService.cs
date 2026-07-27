@@ -224,13 +224,21 @@ namespace ECommerceBackend.Infrastructure.Data
                 cancellationToken);
         }
 
+        public bool IsConcurrencyConflict(Exception exception)
+            => exception is DbUpdateConcurrencyException;
+
         public bool IsDeadlock(Exception exception)
             => exception is SqlException { Number: 1205 }
                 || exception.InnerException != null && IsDeadlock(exception.InnerException);
 
         public bool IsUniqueConstraintViolation(Exception exception)
+            => exception is DbUpdateException
+                && ContainsUniqueConstraintSqlError(exception);
+
+        private static bool ContainsUniqueConstraintSqlError(Exception exception)
             => exception is SqlException { Number: 2601 or 2627 }
-                || exception.InnerException != null && IsUniqueConstraintViolation(exception.InnerException);
+                || exception.InnerException != null
+                    && ContainsUniqueConstraintSqlError(exception.InnerException);
 
         private sealed class EfAppTransaction : IAppTransaction
         {

@@ -10,7 +10,6 @@ using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Policies;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -267,7 +266,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
@@ -308,7 +307,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 

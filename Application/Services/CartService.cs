@@ -6,7 +6,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -80,12 +79,12 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
                 throw new ConflictException("Giỏ hàng vừa được cập nhật bởi thao tác khác. Vui lòng thử lại.", ex);
             }
-            catch (DbUpdateException ex) when (_consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (_consistency.IsUniqueConstraintViolation(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
                 throw new ConflictException("Sản phẩm đã được thêm vào giỏ hàng bởi thao tác khác. Vui lòng thử lại.", ex);
@@ -139,7 +138,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
                 throw new ConflictException("Giỏ hàng vừa được cập nhật bởi thao tác khác. Vui lòng thử lại.", ex);
@@ -177,7 +176,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
                 throw new ConflictException("Giỏ hàng vừa được cập nhật bởi thao tác khác. Vui lòng thử lại.", ex);
@@ -213,7 +212,7 @@ namespace ECommerceBackend.Application.Services
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
                 throw new ConflictException("Giỏ hàng vừa được cập nhật bởi thao tác khác. Vui lòng thử lại.", ex);
@@ -263,7 +262,7 @@ namespace ECommerceBackend.Application.Services
             {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException ex) when (!lockForUpdate && _consistency.IsUniqueConstraintViolation(ex))
+            catch (Exception ex) when (!lockForUpdate && _consistency.IsUniqueConstraintViolation(ex))
             {
                 _cartRepository.Detach(cart);
 

@@ -7,7 +7,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
-using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -83,7 +82,7 @@ namespace ECommerceBackend.Application.Services
             {
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 throw new ConflictException("Thông tin người dùng vừa được cập nhật bởi yêu cầu khác.", ex);
             }
@@ -127,7 +126,7 @@ namespace ECommerceBackend.Application.Services
 
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
@@ -250,7 +249,7 @@ namespace ECommerceBackend.Application.Services
 
                 await transaction.CommitAsync(cancellationToken);
             }
-            catch (DbUpdateConcurrencyException ex)
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
