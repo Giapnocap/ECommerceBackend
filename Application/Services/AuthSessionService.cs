@@ -3,6 +3,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +14,9 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class AuthSessionService
     {
-        private readonly IAppDbContext _context;
+        private readonly IUserRepository _userRepository;
+        private readonly IAuthSessionRepository _authSessionRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IAuditWriter _audit;
@@ -21,7 +25,9 @@ namespace ECommerceBackend.Application.Services
         private readonly TimeProvider _timeProvider;
 
         public AuthSessionService(
-            IAppDbContext context,
+            IUserRepository userRepository,
+            IAuthSessionRepository authSessionRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             AuthTokenIssuer tokenIssuer,
             IOptions<AuthSecurityOptions> securityOptions,
@@ -29,7 +35,9 @@ namespace ECommerceBackend.Application.Services
             IAuditWriter audit,
             TimeProvider timeProvider)
         {
-            _context = context;
+            _userRepository = userRepository;
+            _authSessionRepository = authSessionRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _passwordHasher = passwordHasher;
             _audit = audit;
@@ -46,11 +54,10 @@ namespace ECommerceBackend.Application.Services
         {
             using var telemetry = BusinessTelemetry.Start("auth.login", cancellationToken);
             var normalizedUserName = Normalize(request.UserName);
-            var userId = await _context.Users
-                .AsNoTracking()
-                .Where(user => !user.IsDeleted && user.NormalizedUserName == normalizedUserName)
-                .Select(user => (Guid?)user.Id)
-                .SingleOrDefaultAsync(cancellationToken);
+            var userId =
+                await _userRepository.GetActiveUserIdByUserNameAsync(
+                    normalizedUserName,
+                    cancellationToken);
             if (!userId.HasValue)
             {
                 _ = _passwordHasher.Verify(request.Password, null);
@@ -101,7 +108,7 @@ namespace ECommerceBackend.Application.Services
                             });
                     }
 
-                    await _context.SaveChangesAsync(cancellationToken);
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
                     await transaction.CommitAsync(cancellationToken);
                     transactionCompleted = true;
                     throw Unauthorized();
@@ -113,8 +120,10 @@ namespace ECommerceBackend.Application.Services
                     user.Id,
                     Guid.NewGuid(),
                     occurredAt);
-                await _context.RefreshTokens.AddAsync(refreshToken.Entity, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _authSessionRepository.AddRefreshTokenAsync(
+                    refreshToken.Entity,
+                    cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
 
@@ -175,7 +184,7 @@ namespace ECommerceBackend.Application.Services
                             "Refresh token reuse detected",
                             occurredAt,
                             cancellationToken);
-                        await _context.SaveChangesAsync(cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
                         await transaction.CommitAsync(cancellationToken);
                         transactionCompleted = true;
                     }
@@ -193,8 +202,10 @@ namespace ECommerceBackend.Application.Services
                     occurredAt);
                 DomainRuleGuard.AsConflict(() =>
                     storedToken.Rotate(occurredAt, newRefreshToken.Entity.TokenHash));
-                await _context.RefreshTokens.AddAsync(newRefreshToken.Entity, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _authSessionRepository.AddRefreshTokenAsync(
+                    newRefreshToken.Entity,
+                    cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
@@ -268,7 +279,7 @@ namespace ECommerceBackend.Application.Services
                             "Logout",
                             UtcNow,
                             cancellationToken);
-                        await _context.SaveChangesAsync(cancellationToken);
+                        await _unitOfWork.SaveChangesAsync(cancellationToken);
                     }
                 }
 
@@ -319,7 +330,7 @@ namespace ECommerceBackend.Application.Services
                     occurredAt,
                     cancellationToken);
                 DomainRuleGuard.AsConflict(user.InvalidateSessions);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
                 telemetry.Complete();
@@ -356,11 +367,9 @@ namespace ECommerceBackend.Application.Services
         private async Task<Guid?> FindRefreshTokenOwnerIdAsync(
             string tokenHash,
             CancellationToken cancellationToken)
-            => await _context.RefreshTokens
-                .AsNoTracking()
-                .Where(token => token.TokenHash == tokenHash)
-                .Select(token => (Guid?)token.UserId)
-                .SingleOrDefaultAsync(cancellationToken);
+            => await _authSessionRepository.GetRefreshTokenOwnerIdAsync(
+                tokenHash,
+                cancellationToken);
 
         private async Task<RefreshToken?> LoadRefreshTokenForUpdateAsync(
             string tokenHash,
@@ -374,11 +383,11 @@ namespace ECommerceBackend.Application.Services
             DateTime occurredAt,
             CancellationToken cancellationToken)
         {
-            var tokens = await _context.RefreshTokens
-                .Where(token => token.UserId == userId
-                    && token.FamilyId == familyId
-                    && token.RevokedAt == null)
-                .ToListAsync(cancellationToken);
+            var tokens =
+                await _authSessionRepository.GetActiveRefreshTokenFamilyAsync(
+                    userId,
+                    familyId,
+                    cancellationToken);
             RevokeTokens(tokens, reason, occurredAt);
         }
 
@@ -388,9 +397,10 @@ namespace ECommerceBackend.Application.Services
             DateTime occurredAt,
             CancellationToken cancellationToken)
         {
-            var tokens = await _context.RefreshTokens
-                .Where(token => token.UserId == userId && token.RevokedAt == null)
-                .ToListAsync(cancellationToken);
+            var tokens =
+                await _authSessionRepository.GetActiveRefreshTokensAsync(
+                    userId,
+                    cancellationToken);
             RevokeTokens(tokens, reason, occurredAt);
         }
 
@@ -408,13 +418,10 @@ namespace ECommerceBackend.Application.Services
         private async Task LoadRolesAndPermissionsAsync(
             User user,
             CancellationToken cancellationToken)
-            => await _context.Entry(user)
-                .Collection(candidate => candidate.UserRoles)
-                .Query()
-                .Include(userRole => userRole.Role)
-                    .ThenInclude(role => role!.RolePermissions)
-                        .ThenInclude(rolePermission => rolePermission.Permission)
-                .LoadAsync(cancellationToken);
+            => await _userRepository.LoadRolesAsync(
+                user,
+                includePermissions: true,
+                cancellationToken);
         private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 
         private static IEnumerable<string> GetRoles(User user)

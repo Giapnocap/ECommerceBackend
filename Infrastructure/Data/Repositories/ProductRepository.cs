@@ -86,6 +86,13 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                     product => !product.IsDeleted && product.Id == productId,
                     cancellationToken);
 
+        public Task<Product?> GetActiveForCartAsync(
+            Guid productId,
+            CancellationToken cancellationToken = default)
+            => _context.Products.FirstOrDefaultAsync(
+                product => !product.IsDeleted && product.Id == productId,
+                cancellationToken);
+
         public Task AddAsync(
             Product product,
             CancellationToken cancellationToken = default)

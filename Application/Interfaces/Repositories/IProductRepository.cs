@@ -20,6 +20,10 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             Guid productId,
             CancellationToken cancellationToken = default);
 
+        Task<Product?> GetActiveForCartAsync(
+            Guid productId,
+            CancellationToken cancellationToken = default);
+
         Task AddAsync(
             Product product,
             CancellationToken cancellationToken = default);

@@ -2,6 +2,8 @@ using System.Data;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,14 +12,20 @@ namespace ECommerceBackend.Application.Services
 {
     public class CartService : ICartService
     {
-        private readonly IAppDbContext _context;
+        private readonly ICartRepository _cartRepository;
+        private readonly IProductRepository _productRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
 
         public CartService(
-            IAppDbContext context,
+            ICartRepository cartRepository,
+            IProductRepository productRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency)
         {
-            _context = context;
+            _cartRepository = cartRepository;
+            _productRepository = productRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
         }
 
@@ -42,8 +50,9 @@ namespace ECommerceBackend.Application.Services
             try
             {
                 var cart = await GetOrCreateCartAsync(userId, cancellationToken, lockForUpdate: true);
-                var product = await _context.Products
-                    .FirstOrDefaultAsync(p => !p.IsDeleted && p.Id == request.ProductId, cancellationToken)
+                var product = await _productRepository.GetActiveForCartAsync(
+                    request.ProductId,
+                    cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy sản phẩm.");
 
                 var existingItem = cart.CartItems.FirstOrDefault(item => item.ProductId == request.ProductId);
@@ -58,7 +67,7 @@ namespace ECommerceBackend.Application.Services
                 else
                 {
                     EnsureStockAvailable(product, request.Quantity);
-                    await _context.CartItems.AddAsync(new CartItem
+                    await _cartRepository.AddItemAsync(new CartItem
                     {
                         Id = Guid.NewGuid(),
                         CartId = cart.Id,
@@ -68,7 +77,7 @@ namespace ECommerceBackend.Application.Services
                     }, cancellationToken);
                 }
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
@@ -114,7 +123,7 @@ namespace ECommerceBackend.Application.Services
 
                 if (request.Quantity == 0)
                 {
-                    _context.CartItems.Remove(item);
+                    _cartRepository.RemoveItem(item);
                 }
                 else
                 {
@@ -127,7 +136,7 @@ namespace ECommerceBackend.Application.Services
                     item.UnitPrice = product.Price;
                 }
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
@@ -164,8 +173,8 @@ namespace ECommerceBackend.Application.Services
                 var item = cart.CartItems.FirstOrDefault(cartItem => cartItem.Id == cartItemId)
                     ?? throw new NotFoundException("Không tìm thấy sản phẩm trong giỏ hàng.");
 
-                _context.CartItems.Remove(item);
-                await _context.SaveChangesAsync(cancellationToken);
+                _cartRepository.RemoveItem(item);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
@@ -199,9 +208,9 @@ namespace ECommerceBackend.Application.Services
             {
                 var cart = await GetOrCreateCartAsync(userId, cancellationToken, lockForUpdate: true);
                 foreach (var item in cart.CartItems.ToList())
-                    _context.CartItems.Remove(item);
+                    _cartRepository.RemoveItem(item);
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
@@ -233,43 +242,34 @@ namespace ECommerceBackend.Application.Services
 
                 if (cart != null)
                 {
-                    await _context.Entry(cart)
-                        .Collection(c => c.CartItems)
-                        .Query()
-                        .Include(ci => ci.Product)
-                            .ThenInclude(p => p!.Images)
-                        .LoadAsync(cancellationToken);
+                    await _cartRepository.LoadItemsWithProductsAsync(
+                        cart,
+                        cancellationToken);
                 }
             }
             else
             {
-                cart = await _context.Carts
-                    .Include(c => c.CartItems)
-                        .ThenInclude(ci => ci.Product)
-                            .ThenInclude(p => p!.Images)
-                    .AsSplitQuery()
-                    .FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
+                cart = await _cartRepository.GetByUserIdAsync(
+                    userId,
+                    cancellationToken);
             }
 
             if (cart != null)
                 return cart;
 
             cart = new Cart { Id = Guid.NewGuid(), UserId = userId };
-            await _context.Carts.AddAsync(cart, cancellationToken);
+            await _cartRepository.AddAsync(cart, cancellationToken);
             try
             {
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (!lockForUpdate && _consistency.IsUniqueConstraintViolation(ex))
             {
-                _context.Entry(cart).State = EntityState.Detached;
+                _cartRepository.Detach(cart);
 
-                var existingCart = await _context.Carts
-                    .Include(c => c.CartItems)
-                        .ThenInclude(ci => ci.Product)
-                            .ThenInclude(p => p!.Images)
-                    .AsSplitQuery()
-                    .FirstOrDefaultAsync(c => c.UserId == userId, cancellationToken);
+                var existingCart = await _cartRepository.GetByUserIdAsync(
+                    userId,
+                    cancellationToken);
 
                 if (existingCart != null)
                     return existingCart;

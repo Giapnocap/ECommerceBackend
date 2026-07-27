@@ -2,6 +2,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -10,20 +12,29 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class AuthRegistrationUseCase
     {
-        private readonly IAppDbContext _context;
+        private readonly IUserRepository _userRepository;
+        private readonly ICartRepository _cartRepository;
+        private readonly IAuthSessionRepository _authSessionRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IPasswordHasher _passwordHasher;
         private readonly AuthTokenIssuer _tokenIssuer;
         private readonly TimeProvider _timeProvider;
 
         public AuthRegistrationUseCase(
-            IAppDbContext context,
+            IUserRepository userRepository,
+            ICartRepository cartRepository,
+            IAuthSessionRepository authSessionRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPasswordHasher passwordHasher,
             AuthTokenIssuer tokenIssuer,
             TimeProvider timeProvider)
         {
-            _context = context;
+            _userRepository = userRepository;
+            _cartRepository = cartRepository;
+            _authSessionRepository = authSessionRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _passwordHasher = passwordHasher;
             _tokenIssuer = tokenIssuer;
@@ -43,8 +54,8 @@ namespace ECommerceBackend.Application.Services
             var normalizedUserName = Normalize(userName);
             var normalizedEmail = Normalize(email);
 
-            if (await _context.Users.AnyAsync(
-                user => user.NormalizedUserName == normalizedUserName,
+            if (await _userRepository.UserNameExistsAsync(
+                normalizedUserName,
                 cancellationToken))
             {
                 throw new ConflictException(
@@ -52,8 +63,8 @@ namespace ECommerceBackend.Application.Services
                     $"Tên đăng nhập '{userName}' đã tồn tại.");
             }
 
-            if (await _context.Users.AnyAsync(
-                user => user.NormalizedEmail == normalizedEmail,
+            if (await _userRepository.EmailExistsAsync(
+                normalizedEmail,
                 cancellationToken))
             {
                 throw new ConflictException(
@@ -61,12 +72,10 @@ namespace ECommerceBackend.Application.Services
                     $"Email '{email}' đã được sử dụng.");
             }
 
-            var customerRole = await _context.Roles
-                .Include(role => role.RolePermissions)
-                    .ThenInclude(rolePermission => rolePermission.Permission)
-                .FirstOrDefaultAsync(
-                    role => role.Name == RoleNames.Customer,
-                    cancellationToken)
+            var customerRole = await _userRepository.GetRoleAsync(
+                RoleNames.Customer,
+                includePermissions: true,
+                cancellationToken)
                 ?? throw new NotFoundException(
                     "Không tìm thấy vai trò khách hàng. "
                     + "Hãy áp dụng bản cập nhật cơ sở dữ liệu.");
@@ -82,24 +91,24 @@ namespace ECommerceBackend.Application.Services
                 PasswordHash = _passwordHasher.Hash(request.Password),
                 CreatedAt = occurredAt
             };
-            await _context.Users.AddAsync(user, cancellationToken);
-            await _context.UserRoles.AddAsync(
+            await _userRepository.AddAsync(user, cancellationToken);
+            await _userRepository.AddRoleAsync(
                 new UserRole { UserId = user.Id, RoleId = customerRole.Id },
                 cancellationToken);
-            await _context.Carts.AddAsync(
+            await _cartRepository.AddAsync(
                 new Cart { Id = Guid.NewGuid(), UserId = user.Id },
                 cancellationToken);
             var refreshToken = _tokenIssuer.CreateRefreshToken(
                 user.Id,
                 Guid.NewGuid(),
                 occurredAt);
-            await _context.RefreshTokens.AddAsync(
+            await _authSessionRepository.AddRefreshTokenAsync(
                 refreshToken.Entity,
                 cancellationToken);
 
             try
             {
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateException ex)
                 when (_consistency.IsUniqueConstraintViolation(ex))

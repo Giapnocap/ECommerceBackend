@@ -3,6 +3,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -11,28 +13,38 @@ namespace ECommerceBackend.Application.Services
 {
     public class UserService : IUserService
     {
-        private readonly IAppDbContext _context;
+        private readonly IUserRepository _userRepository;
+        private readonly IAuthSessionRepository _authSessionRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly TimeProvider _timeProvider;
         private readonly IAuditWriter _audit;
 
         public UserService(
-            IAppDbContext context,
+            IUserRepository userRepository,
+            IAuthSessionRepository authSessionRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency)
             : this(
-                context,
+                userRepository,
+                authSessionRepository,
+                unitOfWork,
                 consistency,
                 TimeProvider.System)
         {
         }
 
         public UserService(
-            IAppDbContext context,
+            IUserRepository userRepository,
+            IAuthSessionRepository authSessionRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             TimeProvider timeProvider,
             IAuditWriter? auditWriter = null)
         {
-            _context = context;
+            _userRepository = userRepository;
+            _authSessionRepository = authSessionRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _timeProvider = timeProvider;
             _audit = auditWriter ?? NullAuditWriter.Instance;
@@ -44,13 +56,10 @@ namespace ECommerceBackend.Application.Services
             Guid userId,
             CancellationToken cancellationToken = default)
         {
-            var user = await _context.Users
-                .AsNoTracking()
-                .Include(candidate => candidate.UserRoles)
-                    .ThenInclude(userRole => userRole.Role)
-                .FirstOrDefaultAsync(
-                    candidate => !candidate.IsDeleted && candidate.Id == userId,
-                    cancellationToken)
+            var user = await _userRepository.GetProfileAsync(
+                userId,
+                tracking: false,
+                cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
             return user.ToResponse();
@@ -61,12 +70,10 @@ namespace ECommerceBackend.Application.Services
             UpdateProfileRequest request,
             CancellationToken cancellationToken = default)
         {
-            var user = await _context.Users
-                .Include(candidate => candidate.UserRoles)
-                    .ThenInclude(userRole => userRole.Role)
-                .FirstOrDefaultAsync(
-                    candidate => !candidate.IsDeleted && candidate.Id == userId,
-                    cancellationToken)
+            var user = await _userRepository.GetProfileAsync(
+                userId,
+                tracking: true,
+                cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
             user.FullName = request.FullName.Trim();
@@ -74,7 +81,7 @@ namespace ECommerceBackend.Application.Services
 
             try
             {
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -116,7 +123,7 @@ namespace ECommerceBackend.Application.Services
                     "Password changed",
                     occurredAt,
                     cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
             }
@@ -148,40 +155,15 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default)
         {
             var paging = Paging.Normalize(queryParams.Page, queryParams.PageSize, defaultSize: 20);
-            var query = _context.Users
-                .AsNoTracking()
-                .Where(user => !user.IsDeleted);
-
-            if (!string.IsNullOrWhiteSpace(queryParams.Keyword))
-            {
-                var keyword = queryParams.Keyword.Trim();
-                var normalizedKeyword = keyword.ToUpperInvariant();
-                query = query.Where(user => user.NormalizedUserName.Contains(normalizedKeyword)
-                    || user.NormalizedEmail.Contains(normalizedKeyword)
-                    || user.FullName.Contains(keyword));
-            }
-
-            if (!string.IsNullOrWhiteSpace(queryParams.Role))
-            {
-                var role = queryParams.Role.Trim();
-                query = query.Where(user => user.UserRoles.Any(userRole => userRole.Role != null
-                    && userRole.Role.Name == role));
-            }
-
-            var totalCount = await query.CountAsync(cancellationToken);
-            var users = await query
-                .OrderBy(user => user.FullName)
-                .ThenBy(user => user.Id)
-                .Skip(Paging.GetSkipCount(paging))
-                .Take(paging.Size)
-                .Include(user => user.UserRoles)
-                    .ThenInclude(userRole => userRole.Role)
-                .AsSplitQuery()
-                .ToListAsync(cancellationToken);
+            var result = await _userRepository.GetPageAsync(
+                queryParams,
+                Paging.GetSkipCount(paging),
+                paging.Size,
+                cancellationToken);
 
             return PagedResult<UserResponse>.Create(
-                users.Select(user => user.ToResponse()),
-                totalCount,
+                result.Items.Select(user => user.ToResponse()),
+                result.TotalCount,
                 paging.Page,
                 paging.Size);
         }
@@ -200,16 +182,15 @@ namespace ECommerceBackend.Application.Services
             {
                 var user = await LoadUserForUpdateAsync(userId, cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy người dùng.");
-                await _context.Entry(user)
-                    .Collection(candidate => candidate.UserRoles)
-                    .Query()
-                    .Include(userRole => userRole.Role)
-                    .LoadAsync(cancellationToken);
+                await _userRepository.LoadRolesAsync(
+                    user,
+                    includePermissions: false,
+                    cancellationToken);
 
-                var role = await _context.Roles
-                    .FirstOrDefaultAsync(
-                        candidate => candidate.Name == request.RoleName,
-                        cancellationToken)
+                var role = await _userRepository.GetRoleAsync(
+                    request.RoleName,
+                    includePermissions: false,
+                    cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy vai trò được yêu cầu.");
                 var currentRoles = user.UserRoles.ToList();
 
@@ -226,11 +207,8 @@ namespace ECommerceBackend.Application.Services
                 var currentlyAdmin = currentRoles.Any(userRole => userRole.Role?.Name == RoleNames.Admin);
                 if (currentlyAdmin && role.Name != RoleNames.Admin)
                 {
-                    var activeAdminCount = await _context.UserRoles
-                        .CountAsync(userRole => userRole.Role != null
-                            && userRole.Role.Name == RoleNames.Admin
-                            && userRole.User != null
-                            && !userRole.User.IsDeleted,
+                    var activeAdminCount =
+                        await _userRepository.CountActiveAdminsAsync(
                             cancellationToken);
 
                     if (activeAdminCount <= 1)
@@ -243,9 +221,9 @@ namespace ECommerceBackend.Application.Services
                 }
 
                 foreach (var userRole in currentRoles)
-                    _context.UserRoles.Remove(userRole);
+                    _userRepository.RemoveRole(userRole);
 
-                await _context.UserRoles.AddAsync(
+                await _userRepository.AddRoleAsync(
                     new UserRole { UserId = userId, RoleId = role.Id },
                     cancellationToken);
                 var occurredAt = UtcNow;
@@ -268,7 +246,7 @@ namespace ECommerceBackend.Application.Services
                             .ToArray(),
                         ["assignedRole"] = role.Name
                     });
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
             }
@@ -309,9 +287,10 @@ namespace ECommerceBackend.Application.Services
             DateTime occurredAt,
             CancellationToken cancellationToken)
         {
-            var tokens = await _context.RefreshTokens
-                .Where(token => token.UserId == userId && token.RevokedAt == null)
-                .ToListAsync(cancellationToken);
+            var tokens =
+                await _authSessionRepository.GetActiveRefreshTokensAsync(
+                    userId,
+                    cancellationToken);
 
             foreach (var token in tokens)
             {

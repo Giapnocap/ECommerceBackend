@@ -5,6 +5,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Interfaces.Persistence;
+using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +16,9 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class PasswordResetUseCase
     {
-        private readonly IAppDbContext _context;
+        private readonly IUserRepository _userRepository;
+        private readonly IAuthSessionRepository _authSessionRepository;
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IPasswordHasher _passwordHasher;
         private readonly IOutboxWriter _outbox;
@@ -23,7 +27,9 @@ namespace ECommerceBackend.Application.Services
         private readonly TimeProvider _timeProvider;
 
         public PasswordResetUseCase(
-            IAppDbContext context,
+            IUserRepository userRepository,
+            IAuthSessionRepository authSessionRepository,
+            IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IPasswordHasher passwordHasher,
             IOutboxWriter outbox,
@@ -31,7 +37,9 @@ namespace ECommerceBackend.Application.Services
             IOptions<AuthSecurityOptions> options,
             TimeProvider timeProvider)
         {
-            _context = context;
+            _userRepository = userRepository;
+            _authSessionRepository = authSessionRepository;
+            _unitOfWork = unitOfWork;
             _consistency = consistency;
             _passwordHasher = passwordHasher;
             _outbox = outbox;
@@ -48,13 +56,10 @@ namespace ECommerceBackend.Application.Services
                 "auth.password_reset.request",
                 cancellationToken);
             var normalizedEmail = request.Email.Trim().ToUpperInvariant();
-            var userId = await _context.Users
-                .AsNoTracking()
-                .Where(user =>
-                    !user.IsDeleted
-                    && user.NormalizedEmail == normalizedEmail)
-                .Select(user => (Guid?)user.Id)
-                .SingleOrDefaultAsync(cancellationToken);
+            var userId =
+                await _userRepository.GetActiveUserIdByEmailAsync(
+                    normalizedEmail,
+                    cancellationToken);
             if (!userId.HasValue)
             {
                 telemetry.Complete();
@@ -86,11 +91,12 @@ namespace ECommerceBackend.Application.Services
                     exceptTokenId: null,
                     occurredAt,
                     cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
 
                 var rawToken = Convert.ToBase64String(
                     RandomNumberGenerator.GetBytes(48));
-                _context.PasswordResetTokens.Add(new PasswordResetToken
+                _authSessionRepository.AddPasswordResetToken(
+                    new PasswordResetToken
                 {
                     Id = Guid.NewGuid(),
                     UserId = user.Id,
@@ -108,7 +114,7 @@ namespace ECommerceBackend.Application.Services
                     nameof(User),
                     user.Id.ToString());
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
                 telemetry.Complete();
@@ -129,11 +135,10 @@ namespace ECommerceBackend.Application.Services
                 "auth.password_reset.complete",
                 cancellationToken);
             var tokenHash = HashToken(request.Token.Trim());
-            var userId = await _context.PasswordResetTokens
-                .AsNoTracking()
-                .Where(token => token.TokenHash == tokenHash)
-                .Select(token => (Guid?)token.UserId)
-                .SingleOrDefaultAsync(cancellationToken)
+            var userId =
+                await _authSessionRepository.GetPasswordResetTokenOwnerIdAsync(
+                    tokenHash,
+                    cancellationToken)
                 ?? throw InvalidToken();
             await using var transaction =
                 await _consistency.BeginTransactionAsync(
@@ -148,9 +153,9 @@ namespace ECommerceBackend.Application.Services
                     activeOnly: true,
                     cancellationToken)
                     ?? throw InvalidToken();
-                var token = await _context.PasswordResetTokens
-                    .SingleOrDefaultAsync(
-                        candidate => candidate.TokenHash == tokenHash,
+                var token =
+                    await _authSessionRepository.GetPasswordResetTokenAsync(
+                        tokenHash,
                         cancellationToken)
                     ?? throw InvalidToken();
                 var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
@@ -184,7 +189,7 @@ namespace ECommerceBackend.Application.Services
                     nameof(User),
                     user.Id.ToString());
 
-                await _context.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
                 transactionCompleted = true;
                 telemetry.Complete();
@@ -219,11 +224,10 @@ namespace ECommerceBackend.Application.Services
             DateTime occurredAt,
             CancellationToken cancellationToken)
         {
-            var tokens = await _context.RefreshTokens
-                .Where(token =>
-                    token.UserId == userId
-                    && token.RevokedAt == null)
-                .ToListAsync(cancellationToken);
+            var tokens =
+                await _authSessionRepository.GetActiveRefreshTokensAsync(
+                    userId,
+                    cancellationToken);
             foreach (var token in tokens)
             {
                 DomainRuleGuard.AsConflict(() =>
@@ -237,14 +241,11 @@ namespace ECommerceBackend.Application.Services
             DateTime occurredAt,
             CancellationToken cancellationToken)
         {
-            var tokens = await _context.PasswordResetTokens
-                .Where(token =>
-                    token.UserId == userId
-                    && token.ConsumedAt == null
-                    && token.RevokedAt == null
-                    && (!exceptTokenId.HasValue
-                        || token.Id != exceptTokenId.Value))
-                .ToListAsync(cancellationToken);
+            var tokens =
+                await _authSessionRepository.GetActivePasswordResetTokensAsync(
+                    userId,
+                    exceptTokenId,
+                    cancellationToken);
             foreach (var token in tokens)
                 DomainRuleGuard.AsConflict(() => token.Revoke(occurredAt));
         }

@@ -253,6 +253,8 @@ namespace ECommerceBackend.API.Extensions
             services.AddSingleton(TimeProvider.System);
             services.AddHttpContextAccessor();
             services.AddScoped<IAuditRepository, AuditRepository>();
+            services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
+            services.AddScoped<ICartRepository, CartRepository>();
             services.AddScoped<ICategoryRepository, CategoryRepository>();
             services.AddScoped<IInventoryRepository, InventoryRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();

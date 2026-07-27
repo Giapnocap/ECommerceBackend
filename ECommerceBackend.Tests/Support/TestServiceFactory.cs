@@ -32,6 +32,8 @@ internal static class TestServiceFactory
 
     public static CartService CreateCartService(AppDbContext context)
         => new(
+            new CartRepository(context),
+            new ProductRepository(context),
             context,
             Consistency(context));
 
@@ -69,16 +71,24 @@ internal static class TestServiceFactory
         var hasher = passwordHasher ?? new BCryptPasswordHasher();
         var audit = auditWriter ?? NullAuditWriter.Instance;
         var consistency = Consistency(context);
+        var userRepository = new UserRepository(context);
+        var cartRepository = new CartRepository(context);
+        var authSessionRepository = new AuthSessionRepository(context);
         var tokenIssuer = new AuthTokenIssuer(jwtOptions);
         var outbox = new OutboxWriter(context, clock, protector);
         return new AuthService(
             new AuthRegistrationUseCase(
+                userRepository,
+                cartRepository,
+                authSessionRepository,
                 context,
                 consistency,
                 hasher,
                 tokenIssuer,
                 clock),
             new AuthSessionService(
+                userRepository,
+                authSessionRepository,
                 context,
                 consistency,
                 tokenIssuer,
@@ -87,6 +97,8 @@ internal static class TestServiceFactory
                 audit,
                 clock),
             new PasswordResetUseCase(
+                userRepository,
+                authSessionRepository,
                 context,
                 consistency,
                 hasher,
@@ -98,6 +110,8 @@ internal static class TestServiceFactory
 
     public static UserService CreateUserService(AppDbContext context, TimeProvider? timeProvider = null)
         => new(
+            new UserRepository(context),
+            new AuthSessionRepository(context),
             context,
             Consistency(context),
             timeProvider ?? TimeProvider.System);
