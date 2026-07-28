@@ -213,6 +213,29 @@ public sealed class SqlServerPerformanceTests
             INSERT dbo.Categories (Id, Name, ParentId, IsDeleted, NormalizedName)
             VALUES (@CategoryId, N'Performance Catalog', NULL, 0, N'PERFORMANCE CATALOG');
 
+            ;WITH Digits (Value) AS
+            (
+                SELECT Value
+                FROM (VALUES
+                    (0), (1), (2), (3), (4),
+                    (5), (6), (7), (8), (9)
+                ) AS values_source (Value)
+            ),
+            Numbers (Value) AS
+            (
+                SELECT
+                    ones.Value
+                    + (tens.Value * 10)
+                    + (hundreds.Value * 100)
+                    + (thousands.Value * 1000)
+                    + (ten_thousands.Value * 10000)
+                    + 1
+                FROM Digits AS ones
+                CROSS JOIN Digits AS tens
+                CROSS JOIN Digits AS hundreds
+                CROSS JOIN Digits AS thousands
+                CROSS JOIN Digits AS ten_thousands
+            )
             INSERT dbo.Products
                 (Id, CategoryId, Name, Price, StockQuantity, Description, IsDeleted, CreatedAt)
             SELECT
@@ -224,13 +247,8 @@ public sealed class SqlServerPerformanceTests
                 N'Representative catalog description',
                 CASE WHEN numbers.Value % 100 = 0 THEN 1 ELSE 0 END,
                 DATEADD(second, -numbers.Value, SYSUTCDATETIME())
-            FROM
-            (
-                SELECT TOP (@ProductCount)
-                    CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS int) AS Value
-                FROM sys.all_objects AS first_source
-                CROSS JOIN sys.all_objects AS second_source
-            ) AS numbers;
+            FROM Numbers AS numbers
+            WHERE numbers.Value <= @ProductCount;
             """;
         command.Parameters.AddWithValue("@ProductCount", productCount);
         await command.ExecuteNonQueryAsync(cancellationToken);
