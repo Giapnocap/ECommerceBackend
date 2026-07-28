@@ -3,17 +3,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36408.4
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "API", "ECommerceBackend.csproj", "{911F66BD-BDAE-4FE2-95BE-9BF00EF89B37}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "API", "src\ECommerceBackend\ECommerceBackend.csproj", "{911F66BD-BDAE-4FE2-95BE-9BF00EF89B37}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "ECommerceBackend.Tests\ECommerceBackend.Tests.csproj", "{EF6BE3C7-6656-4D19-B127-4DF5346753F7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "tests\ECommerceBackend.Tests\ECommerceBackend.Tests.csproj", "{EF6BE3C7-6656-4D19-B127-4DF5346753F7}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Backend", "Backend", "{1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "Domain\ECommerceBackend.Domain.csproj", "{F6580000-6339-4919-9FF4-D120D689E82D}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{814FA0E8-170F-4935-80A9-D37AB6231A2B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "Application\ECommerceBackend.Application.csproj", "{31100746-B4E3-4CF3-93F1-CF501FACCB41}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "src\ECommerceBackend.Domain\ECommerceBackend.Domain.csproj", "{F6580000-6339-4919-9FF4-D120D689E82D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure", "Infrastructure\ECommerceBackend.Infrastructure.csproj", "{8FBE0E5A-510A-417D-B335-89EBDA25D7F0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "src\ECommerceBackend.Application\ECommerceBackend.Application.csproj", "{31100746-B4E3-4CF3-93F1-CF501FACCB41}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure", "src\ECommerceBackend.Infrastructure\ECommerceBackend.Infrastructure.csproj", "{8FBE0E5A-510A-417D-B335-89EBDA25D7F0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -94,6 +96,7 @@ Global
 		{F6580000-6339-4919-9FF4-D120D689E82D} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
 		{31100746-B4E3-4CF3-93F1-CF501FACCB41} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
 		{8FBE0E5A-510A-417D-B335-89EBDA25D7F0} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{EF6BE3C7-6656-4D19-B127-4DF5346753F7} = {814FA0E8-170F-4935-80A9-D37AB6231A2B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {2459D9D7-79C8-4E21-913E-983AC7DB87F1}

@@ -141,7 +141,8 @@ public sealed class ArchitectureBoundaryTests
     {
         var applicationDirectory = Path.Combine(
             FindRepositoryRoot(),
-            "Application");
+            "src",
+            "ECommerceBackend.Application");
         var forbiddenReferences = Directory
             .EnumerateFiles(applicationDirectory, "*.cs", SearchOption.AllDirectories)
             .SelectMany(file => File.ReadLines(file)

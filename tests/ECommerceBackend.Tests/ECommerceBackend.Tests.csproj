@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ECommerceBackend.csproj" />
+    <ProjectReference Include="..\..\src\ECommerceBackend\ECommerceBackend.csproj" />
   </ItemGroup>
 
 </Project>

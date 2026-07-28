@@ -9,20 +9,9 @@
     <NoWarn>$(NoWarn);1591</NoWarn>
     <DefaultItemExcludes>
       $(DefaultItemExcludes);
-      Application\**;
-      Domain\**;
-      Infrastructure\**;
-      ECommerceBackend.Tests\**;
-      TestResults\**;
-      PerformanceResults\**;
-      ReleasePackage\**;
-      MigrationArtifacts\**;
-      .tools\**;
-      docs\**;
-      scripts\**;
       DataProtectionKeys\**;
       logs\**;
-      uploads\**
+      Uploads\**
     </DefaultItemExcludes>
   </PropertyGroup>
 
@@ -46,18 +35,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Remove="Application\**\*.cs" />
-    <Compile Remove="Domain\**\*.cs" />
-    <Compile Remove="Infrastructure\**\*.cs" />
-    <Compile Remove="ECommerceBackend.Tests\**\*.cs" />
-    <Content Remove="ECommerceBackend.Tests\**\*" />
-    <None Remove="ECommerceBackend.Tests\**\*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="Application\ECommerceBackend.Application.csproj" />
-    <ProjectReference Include="Domain\ECommerceBackend.Domain.csproj" />
-    <ProjectReference Include="Infrastructure\ECommerceBackend.Infrastructure.csproj" />
+    <ProjectReference Include="..\ECommerceBackend.Application\ECommerceBackend.Application.csproj" />
+    <ProjectReference Include="..\ECommerceBackend.Domain\ECommerceBackend.Domain.csproj" />
+    <ProjectReference Include="..\ECommerceBackend.Infrastructure\ECommerceBackend.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Domain\ECommerceBackend.Domain.csproj" />
+    <ProjectReference Include="..\ECommerceBackend.Domain\ECommerceBackend.Domain.csproj" />
   </ItemGroup>
 
 </Project>

@@ -38,7 +38,7 @@ The compiler enforces `Application -> Domain` and
 Composition registration is split by responsibility across
 `ServiceCollectionExtensions.Configuration`, `.Infrastructure`, `.Security` and `.Web`.
 `AppDbContext` discovers per-entity `IEntityTypeConfiguration<T>` implementations from
-`Infrastructure/Data/Configurations`; indexes, constraints, relationships and authorization seed
+`src/ECommerceBackend.Infrastructure/Data/Configurations`; indexes, constraints, relationships and authorization seed
 data are kept at that persistence boundary.
 
 ## Domain Invariants

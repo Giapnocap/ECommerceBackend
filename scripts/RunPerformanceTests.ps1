@@ -25,7 +25,7 @@ $env:ECOMMERCE_PERFORMANCE_RESULTS_DIRECTORY = $resolvedResultsDirectory
 
 $arguments = @(
     "test",
-    "ECommerceBackend.Tests/ECommerceBackend.Tests.csproj",
+    "tests/ECommerceBackend.Tests/ECommerceBackend.Tests.csproj",
     "--configuration", $Configuration,
     "--filter", "Category=SqlServerPerformance",
     "--logger", "console;verbosity=normal"

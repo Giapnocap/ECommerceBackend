@@ -41,35 +41,38 @@ API request
 ```
 
 ```text
-API/
-  Controllers/       HTTP endpoints
-  Middlewares/       Correlation ID, security headers, exception handling
-  Extensions/        Composition modules, routing và static files
-Application/
-  DTOs/              Request/response contracts
-  Validation/        FluentValidation rules theo feature
-  Interfaces/        Service, repository và transaction contracts
-  Services/          Use cases và application facades
-Domain/              Entities, enums, state transitions, business policies
-Infrastructure/
-  Data/Repositories/ EF Core repository implementations
-  Data/Configurations/ Entity mappings, indexes, constraints và seed data
-  Migrations/        SQL Server migration history
-  Notifications/     Outbox processing và notification adapters
-  Payments/          Payment provider adapters
-ECommerceBackend.Tests/  Unit, contract và SQL Server integration tests
+src/
+  ECommerceBackend/
+    API/              Controllers, middleware, composition root và Swagger
+  ECommerceBackend.Application/
+    DTOs/             Request/response contracts
+    Validation/       FluentValidation rules theo feature
+    Interfaces/       Service, repository và transaction contracts
+    Services/         Use cases và application facades
+  ECommerceBackend.Domain/
+    Entities/         Entities và aggregate state
+    Enums/            Status và state transitions
+    Policies/         Business policies
+  ECommerceBackend.Infrastructure/
+    Data/Repositories/ EF Core repository implementations
+    Data/Configurations/ Entity mappings, indexes, constraints và seed data
+    Migrations/       SQL Server migration history
+    Notifications/    Outbox processing và notification adapters
+    Payments/         Payment provider adapters
+tests/
+  ECommerceBackend.Tests/ Unit, contract và SQL Server integration tests
 ```
 
-Solution gồm năm project: API host `ECommerceBackend.csproj`, `Domain`, `Application`,
+Solution gồm năm project: API host `src/ECommerceBackend/ECommerceBackend.csproj`, `Domain`, `Application`,
 `Infrastructure` và `ECommerceBackend.Tests`. Khi chạy bằng Visual Studio, đặt project
-`ECommerceBackend` ở root làm Startup Project; các project layer là class library và không chạy
+`API` trong solution folder `src` làm Startup Project; các project layer là class library và không chạy
 độc lập.
 
-`Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
+`src/ECommerceBackend/Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
 
 Đăng ký dependency được chia theo trách nhiệm trong
-`API/Extensions/ServiceCollectionExtensions.*.cs`. `AppDbContext` chỉ khai báo `DbSet` và nạp
-`IEntityTypeConfiguration<T>` từ `Infrastructure/Data/Configurations`; mapping không nằm trong
+`src/ECommerceBackend/API/Extensions/ServiceCollectionExtensions.*.cs`. `AppDbContext` chỉ khai báo `DbSet` và nạp
+`IEntityTypeConfiguration<T>` từ `src/ECommerceBackend.Infrastructure/Data/Configurations`; mapping không nằm trong
 application service. Repository là các contract theo feature, không sử dụng generic repository và
 không expose `DbSet` hoặc `IQueryable` qua tầng Application.
 
@@ -102,10 +105,10 @@ Yêu cầu:
 Tạo cấu hình local:
 
 ```powershell
-Copy-Item appsettings.Local.example.json appsettings.Local.json
+Copy-Item src/ECommerceBackend/appsettings.Local.example.json src/ECommerceBackend/appsettings.Local.json
 ```
 
-Đặt JWT key riêng tối thiểu 32 bytes trong `appsettings.Local.json`. Có thể thay connection string mặc định bằng:
+Đặt JWT key riêng tối thiểu 32 bytes trong `src/ECommerceBackend/appsettings.Local.json`. Có thể thay connection string mặc định bằng:
 
 ```powershell
 $env:ConnectionStrings__Default = "Server=.;Database=ECommerceDB;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
@@ -116,9 +119,9 @@ Khởi tạo và chạy:
 ```powershell
 dotnet restore
 dotnet ef database update `
-  --project Infrastructure/ECommerceBackend.Infrastructure.csproj `
-  --startup-project ECommerceBackend.csproj
-dotnet run
+  --project src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj `
+  --startup-project src/ECommerceBackend/ECommerceBackend.csproj
+dotnet run --project src/ECommerceBackend/ECommerceBackend.csproj
 ```
 
 - API: `http://localhost:5171`
@@ -127,7 +130,7 @@ dotnet run
 
 ### Tạo Admin Đầu Tiên
 
-Trong `appsettings.Local.json`, cấu hình thông tin riêng và đặt `AdminBootstrap:Enabled` thành `true`. Chạy ứng dụng một lần, sau đó tắt lại tùy chọn này. Không commit password hoặc JWT key.
+Trong `src/ECommerceBackend/appsettings.Local.json`, cấu hình thông tin riêng và đặt `AdminBootstrap:Enabled` thành `true`. Chạy ứng dụng một lần, sau đó tắt lại tùy chọn này. Không commit password hoặc JWT key.
 
 ### Dữ Liệu Demo
 
@@ -157,7 +160,7 @@ Demo seed còn tạo mã `WELCOME10`: giảm 10%, tối đa 100.000 đ, cho đơ
 - Admin quản lý promotion qua `/api/promotions` bằng quyền quản lý sản phẩm.
 - Staff/Admin xuất giao qua `/shipment/dispatch`, xác nhận giao qua `/shipment/deliver`.
 - Customer tạo `/return-request`; Staff/Admin xét duyệt, nhận hàng hoàn rồi mới ghi nhận refund.
-- [ECommerceBackend.http](ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
+- [ECommerceBackend.http](src/ECommerceBackend/ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
 - API error sử dụng `application/problem+json`, có `code` và `traceId` ổn định.
 
 ## Chạy Test
@@ -175,7 +178,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildMigrationArti
 $env:RUN_SQL_INTEGRATION_TESTS = "1"
 $env:ECOMMERCE_TEST_SQL_CONNECTION = "Server=.;Database=ECommerceBackendIntegration;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
 $env:ECOMMERCE_MIGRATION_ARTIFACTS_DIRECTORY = (Resolve-Path .\MigrationArtifacts)
-dotnet test ECommerceBackend.Tests/ECommerceBackend.Tests.csproj --filter "Category=SqlServerIntegration"
+dotnet test tests/ECommerceBackend.Tests/ECommerceBackend.Tests.csproj --filter "Category=SqlServerIntegration"
 ```
 
 Các test này tạo và xóa database tạm. `ECOMMERCE_TEST_SQL_CONNECTION` phải trỏ tới database
@@ -255,7 +258,7 @@ GitHub Actions artifact.
 
 ## Bảo Mật Cấu Hình
 
-- `appsettings.Local.json`, logs, uploads và data-protection keys không được commit.
-- `appsettings.Production.example.json` chỉ là template, không chứa secret thật.
+- `src/ECommerceBackend/appsettings.Local.json`, logs, uploads và data-protection keys không được commit.
+- `src/ECommerceBackend/appsettings.Production.example.json` chỉ là template, không chứa secret thật.
 - Production validation từ chối JWT key yếu, CORS không hợp lệ và cấu hình webhook thiếu an toàn.
 - Khi `OrderLifecycle:RequireExpirationProcessing=true`, worker hết hạn đơn phải được bật và không được chạy dry-run.

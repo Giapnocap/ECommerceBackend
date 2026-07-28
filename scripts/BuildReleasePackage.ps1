@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$projectPath = Join-Path $repositoryRoot 'ECommerceBackend.csproj'
+$projectPath = Join-Path $repositoryRoot 'src/ECommerceBackend/ECommerceBackend.csproj'
 
 function Resolve-RepositoryPath {
     param([Parameter(Mandatory)][string]$Path)

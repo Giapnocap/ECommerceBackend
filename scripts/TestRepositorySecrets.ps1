@@ -9,12 +9,12 @@ $allowedFixturePaths = @(
     '.github/workflows/ci.yml',
     '.github/workflows/performance.yml',
     'README.md',
-    'ECommerceBackend.http',
+    'src/ECommerceBackend/ECommerceBackend.http',
     'scripts/SeedDemoData.sql',
     'scripts/TestRepositorySecrets.ps1'
 )
 $allowedPrefixes = @(
-    'ECommerceBackend.Tests/'
+    'tests/ECommerceBackend.Tests/'
 )
 $patterns = [ordered]@{
     PrivateKey = '-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
