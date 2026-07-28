@@ -1,15 +1,18 @@
+using ECommerceBackend.Domain.Common;
+using ECommerceBackend.Domain.Policies;
+
 namespace ECommerceBackend.Domain.Entities
 {
     public class Product
     {
         public Guid Id { get; set; }
-        public Guid CategoryId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public decimal Price { get; set; }
-        public int StockQuantity { get; set; }
-        public string Description { get; set; } = string.Empty;
-        public bool IsDeleted { get; set; } = false;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public Guid CategoryId { get; internal set; }
+        public string Name { get; internal set; } = string.Empty;
+        public decimal Price { get; internal set; }
+        public int StockQuantity { get; internal set; }
+        public string Description { get; internal set; } = string.Empty;
+        public bool IsDeleted { get; internal set; }
+        public DateTime CreatedAt { get; internal set; } = DateTime.UtcNow;
         public byte[] RowVersion { get; set; } = [];
 
         // Navigation
@@ -18,5 +21,132 @@ namespace ECommerceBackend.Domain.Entities
         public ICollection<CartItem> CartItems { get; set; } = new List<CartItem>();
         public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
         public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
+
+        public static Product Create(
+            Guid id,
+            Guid categoryId,
+            string name,
+            decimal price,
+            int stockQuantity,
+            string description,
+            DateTime createdAt)
+        {
+            if (id == Guid.Empty)
+            {
+                throw new DomainRuleViolationException(
+                    "product_identity_invalid",
+                    "Mã sản phẩm không hợp lệ.");
+            }
+
+            var product = new Product
+            {
+                Id = id,
+                CreatedAt = createdAt
+            };
+            _ = product.Update(
+                categoryId,
+                name,
+                price,
+                stockQuantity,
+                description);
+            return product;
+        }
+
+        public InventoryMutation Update(
+            Guid categoryId,
+            string name,
+            decimal price,
+            int stockQuantity,
+            string description)
+        {
+            var details = ValidateDetails(
+                categoryId,
+                name,
+                price,
+                stockQuantity,
+                description);
+            var inventoryMutation = InventoryPolicy.AdjustTo(
+                this,
+                stockQuantity);
+
+            CategoryId = categoryId;
+            Name = details.Name;
+            Price = price;
+            Description = details.Description;
+            return inventoryMutation;
+        }
+
+        public bool MarkDeleted()
+        {
+            if (IsDeleted)
+                return false;
+
+            IsDeleted = true;
+            return true;
+        }
+
+        private static ProductDetails ValidateDetails(
+            Guid categoryId,
+            string name,
+            decimal price,
+            int stockQuantity,
+            string description)
+        {
+            if (categoryId == Guid.Empty)
+            {
+                throw new DomainRuleViolationException(
+                    "product_category_invalid",
+                    "Danh mục của sản phẩm không hợp lệ.");
+            }
+
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new DomainRuleViolationException(
+                    "product_name_invalid",
+                    "Tên sản phẩm không được để trống.");
+            }
+
+            var normalizedName = name.Trim();
+            if (normalizedName.Length > 200)
+            {
+                throw new DomainRuleViolationException(
+                    "product_name_invalid",
+                    "Tên sản phẩm không được vượt quá 200 ký tự.");
+            }
+
+            OrderPricingPolicy.EnsureMoneyValue(
+                price,
+                "product_price_invalid",
+                "Giá sản phẩm");
+            if (price <= 0)
+            {
+                throw new DomainRuleViolationException(
+                    "product_price_invalid",
+                    "Giá sản phẩm phải lớn hơn 0.");
+            }
+
+            if (stockQuantity < 0)
+            {
+                throw new DomainRuleViolationException(
+                    "inventory_balance_invalid",
+                    "Tồn kho không được là số âm.");
+            }
+
+            var normalizedDescription = description?.Trim() ?? string.Empty;
+            if (normalizedDescription.Length > 2000)
+            {
+                throw new DomainRuleViolationException(
+                    "product_description_invalid",
+                    "Mô tả sản phẩm không được vượt quá 2000 ký tự.");
+            }
+
+            return new ProductDetails(
+                normalizedName,
+                normalizedDescription);
+        }
+
+        private readonly record struct ProductDetails(
+            string Name,
+            string Description);
     }
 }

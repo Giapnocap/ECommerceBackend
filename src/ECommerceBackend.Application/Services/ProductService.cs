@@ -9,7 +9,6 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
-using ECommerceBackend.Domain.Policies;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -151,22 +150,19 @@ namespace ECommerceBackend.Application.Services
                     ?? throw new NotFoundException("Không tìm thấy danh mục.");
 
                 var occurredAt = UtcNow;
-                var product = new Product
-                {
-                    Id = Guid.NewGuid(),
-                    Name = request.Name.Trim(),
-                    Price = request.Price,
-                    StockQuantity = 0,
-                    Description = request.Description.Trim(),
-                    CategoryId = request.CategoryId,
-                    CreatedAt = occurredAt
-                };
-                var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
-                    InventoryPolicy.AdjustTo(product, request.StockQuantity));
+                var product = DomainRuleGuard.AsBusiness(() =>
+                    Product.Create(
+                        Guid.NewGuid(),
+                        request.CategoryId,
+                        request.Name,
+                        request.Price,
+                        request.StockQuantity,
+                        request.Description,
+                        occurredAt));
                 productId = product.Id;
 
                 await _productRepository.AddAsync(product, cancellationToken);
-                if (inventoryMutation.QuantityChange != 0)
+                if (product.StockQuantity != 0)
                 {
                     _inventoryRepository.AddTransaction(new InventoryTransaction
                     {
@@ -174,8 +170,8 @@ namespace ECommerceBackend.Application.Services
                         ProductId = product.Id,
                         CreatedByUserId = actorUserId,
                         Type = Domain.Enums.InventoryTransactionType.InitialStock,
-                        QuantityChange = inventoryMutation.QuantityChange,
-                        BalanceAfter = inventoryMutation.BalanceAfter,
+                        QuantityChange = product.StockQuantity,
+                        BalanceAfter = product.StockQuantity,
                         Reason = "Tồn kho ban đầu",
                         CreatedAt = occurredAt
                     });
@@ -229,12 +225,12 @@ namespace ECommerceBackend.Application.Services
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
                 var occurredAt = UtcNow;
                 var inventoryMutation = DomainRuleGuard.AsBusiness(() =>
-                    InventoryPolicy.AdjustTo(product, request.StockQuantity));
-
-                product.Name = request.Name.Trim();
-                product.Price = request.Price;
-                product.Description = request.Description.Trim();
-                product.CategoryId = request.CategoryId;
+                    product.Update(
+                        request.CategoryId,
+                        request.Name,
+                        request.Price,
+                        request.StockQuantity,
+                        request.Description));
 
                 if (inventoryMutation.QuantityChange != 0)
                 {
@@ -302,7 +298,7 @@ namespace ECommerceBackend.Application.Services
                 var product = await LoadProductForUpdateAsync(id, cancellationToken)
                     ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
 
-                product.IsDeleted = true;
+                DomainRuleGuard.AsBusiness(product.MarkDeleted);
                 _audit.Write("product.delete", "Product", product.Id.ToString(), actorUserId);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);

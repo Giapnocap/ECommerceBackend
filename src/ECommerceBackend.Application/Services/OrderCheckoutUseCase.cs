@@ -363,7 +363,7 @@ namespace ECommerceBackend.Application.Services
                 CreatedAt = occurredAt
             });
 
-            foreach (var item in cart.CartItems)
+            foreach (var item in cart.CartItems.ToList())
             {
                 var product = item.Product!;
                 var mutation = DomainRuleGuard.AsBusiness(() =>
@@ -390,6 +390,8 @@ namespace ECommerceBackend.Application.Services
                         Reason = $"Đặt đơn {order.OrderNumber}",
                         CreatedAt = occurredAt
                     });
+                DomainRuleGuard.AsBusiness(() =>
+                    cart.RemoveItem(item));
                 _cartRepository.RemoveItem(item);
             }
         }

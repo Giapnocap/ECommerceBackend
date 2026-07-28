@@ -12,7 +12,7 @@ namespace ECommerceBackend.Domain.Entities
         public string PasswordHash { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string? Phone { get; set; }
-        public bool IsDeleted { get; set; }
+        public bool IsDeleted { get; internal set; }
         public int TokenVersion { get; private set; }
         public int FailedLoginCount { get; private set; }
         public DateTime? LockoutEndAt { get; private set; }
@@ -28,6 +28,78 @@ namespace ECommerceBackend.Domain.Entities
             new List<PasswordResetToken>();
         public ICollection<OrderStatusHistory> OrderStatusChanges { get; set; } = new List<OrderStatusHistory>();
         public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
+
+        public void UpdateProfile(string fullName, string? phone)
+        {
+            if (string.IsNullOrWhiteSpace(fullName))
+            {
+                throw new DomainRuleViolationException(
+                    "user_full_name_invalid",
+                    "Họ tên không được để trống.");
+            }
+
+            var normalizedFullName = fullName.Trim();
+            if (normalizedFullName.Length > 100)
+            {
+                throw new DomainRuleViolationException(
+                    "user_full_name_invalid",
+                    "Họ tên không được vượt quá 100 ký tự.");
+            }
+
+            var normalizedPhone = string.IsNullOrWhiteSpace(phone)
+                ? null
+                : phone.Trim();
+            if (normalizedPhone != null && !IsValidPhone(normalizedPhone))
+            {
+                throw new DomainRuleViolationException(
+                    "user_phone_invalid",
+                    "Số điện thoại không hợp lệ.");
+            }
+
+            FullName = normalizedFullName;
+            Phone = normalizedPhone;
+        }
+
+        public UserRoleChange ChangeRole(Role role)
+        {
+            ArgumentNullException.ThrowIfNull(role);
+            if (IsDeleted)
+            {
+                throw new DomainRuleViolationException(
+                    "user_deleted",
+                    "Không thể thay đổi vai trò của tài khoản đã bị xóa.");
+            }
+
+            var previousAssignments = UserRoles.ToArray();
+            if (previousAssignments.Length == 1
+                && previousAssignments[0].RoleId == role.Id)
+            {
+                return new UserRoleChange(
+                    previousAssignments,
+                    previousAssignments[0],
+                    false);
+            }
+
+            var assignment = UserRole.Create(Id, role);
+            UserRoles.Clear();
+            UserRoles.Add(assignment);
+            InvalidateSessions();
+            return new UserRoleChange(
+                previousAssignments,
+                assignment,
+                true);
+        }
+
+        public bool MarkDeleted()
+        {
+            if (IsDeleted)
+                return false;
+
+            IsDeleted = true;
+            ClearLoginFailures();
+            InvalidateSessions();
+            return true;
+        }
 
         public void ChangePasswordHash(string passwordHash, DateTime occurredAt)
         {
@@ -105,5 +177,25 @@ namespace ECommerceBackend.Domain.Entities
 
             return passwordHash;
         }
+
+        private static bool IsValidPhone(string phone)
+        {
+            var digitStart = phone.StartsWith("+84", StringComparison.Ordinal)
+                ? 3
+                : phone.StartsWith('0')
+                    ? 1
+                    : -1;
+            if (digitStart < 0 || phone.Length - digitStart != 9)
+                return false;
+
+            return phone.AsSpan(digitStart).IndexOfAnyExceptInRange(
+                '0',
+                '9') < 0;
+        }
     }
+
+    public readonly record struct UserRoleChange(
+        IReadOnlyList<UserRole> PreviousAssignments,
+        UserRole Assignment,
+        bool Changed);
 }

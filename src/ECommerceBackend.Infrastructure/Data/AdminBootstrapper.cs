@@ -97,7 +97,7 @@ namespace ECommerceBackend.Infrastructure.Data
                     };
 
                     _context.Users.Add(user);
-                    _context.Carts.Add(new Cart { Id = Guid.NewGuid(), UserId = user.Id });
+                    _context.Carts.Add(Cart.Create(Guid.NewGuid(), user.Id));
                 }
                 else
                 {
@@ -115,16 +115,13 @@ namespace ECommerceBackend.Infrastructure.Data
                         occurredAt);
 
                     if (!await _context.Carts.AnyAsync(cart => cart.UserId == user.Id, cancellationToken))
-                        _context.Carts.Add(new Cart { Id = Guid.NewGuid(), UserId = user.Id });
+                        _context.Carts.Add(Cart.Create(Guid.NewGuid(), user.Id));
                 }
 
                 if (user.UserRoles.All(userRole => userRole.RoleId != adminRole.Id))
                 {
-                    _context.UserRoles.Add(new UserRole
-                    {
-                        UserId = user.Id,
-                        RoleId = adminRole.Id
-                    });
+                    _context.UserRoles.Add(
+                        UserRole.Create(user.Id, adminRole));
                 }
 
                 await _context.SaveChangesAsync(cancellationToken);

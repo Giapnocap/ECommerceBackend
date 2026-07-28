@@ -92,10 +92,10 @@ namespace ECommerceBackend.Application.Services
             };
             await _userRepository.AddAsync(user, cancellationToken);
             await _userRepository.AddRoleAsync(
-                new UserRole { UserId = user.Id, RoleId = customerRole.Id },
+                UserRole.Create(user.Id, customerRole),
                 cancellationToken);
             await _cartRepository.AddAsync(
-                new Cart { Id = Guid.NewGuid(), UserId = user.Id },
+                Cart.Create(Guid.NewGuid(), user.Id),
                 cancellationToken);
             var refreshToken = _tokenIssuer.CreateRefreshToken(
                 user.Id,

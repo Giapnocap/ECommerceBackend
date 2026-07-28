@@ -1,4 +1,5 @@
 using System.Data;
+using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
@@ -60,13 +61,14 @@ namespace ECommerceBackend.Application.Services
                 IsolationLevel.Serializable,
                 cancellationToken);
             var name = request.Name.Trim();
-            var normalizedName = Normalize(name);
+            var normalizedName = DomainRuleGuard.AsBusiness(() =>
+                Category.NormalizeName(name));
 
             try
             {
-                await ValidateParentAsync(
+                var parent = await LoadParentForUpdateAsync(
                     request.ParentId,
-                    cancellationToken: cancellationToken);
+                    cancellationToken);
 
                 if (await _categoryRepository.ExistsAtLevelAsync(
                     normalizedName,
@@ -77,13 +79,11 @@ namespace ECommerceBackend.Application.Services
                     throw new ConflictException($"Danh mục '{name}' đã tồn tại trong cùng cấp.");
                 }
 
-                var category = new Category
-                {
-                    Id = Guid.NewGuid(),
-                    Name = name,
-                    NormalizedName = normalizedName,
-                    ParentId = request.ParentId
-                };
+                var category = DomainRuleGuard.AsBusiness(() =>
+                    Category.Create(
+                        Guid.NewGuid(),
+                        name,
+                        parent));
                 categoryId = category.Id;
 
                 await _categoryRepository.AddAsync(category, cancellationToken);
@@ -128,7 +128,8 @@ namespace ECommerceBackend.Application.Services
                 IsolationLevel.Serializable,
                 cancellationToken);
             var name = request.Name.Trim();
-            var normalizedName = Normalize(name);
+            var normalizedName = DomainRuleGuard.AsBusiness(() =>
+                Category.NormalizeName(name));
 
             try
             {
@@ -142,15 +143,15 @@ namespace ECommerceBackend.Application.Services
                 {
                     throw new NotFoundException("Danh mục cha không tồn tại.");
                 }
+                var parent = request.ParentId.HasValue
+                    ? lockedCategories[request.ParentId.Value]
+                    : null;
 
                 await _categoryRepository.LoadChildrenAsync(
                     category,
                     cancellationToken);
-
-                await ValidateParentAsync(request.ParentId, id, cancellationToken);
-
-                if (category.Children.Any(child => !child.IsDeleted) && request.ParentId.HasValue)
-                    throw new BusinessException("Không thể chuyển danh mục có con thành danh mục con.");
+                DomainRuleGuard.AsBusiness(() =>
+                    category.EnsureCanUpdateDetails(name, parent));
 
                 if (await _categoryRepository.ExistsAtLevelAsync(
                     normalizedName,
@@ -161,9 +162,8 @@ namespace ECommerceBackend.Application.Services
                     throw new ConflictException($"Danh mục '{name}' đã tồn tại trong cùng cấp.");
                 }
 
-                category.Name = name;
-                category.NormalizedName = normalizedName;
-                category.ParentId = request.ParentId;
+                DomainRuleGuard.AsBusiness(() =>
+                    category.UpdateDetails(name, parent));
                 _audit.Write(
                     "category.update",
                     "Category",
@@ -218,13 +218,7 @@ namespace ECommerceBackend.Application.Services
                     category,
                     cancellationToken);
 
-                if (category.Children.Any(child => !child.IsDeleted))
-                    throw new BusinessException("Không thể xóa danh mục đang có danh mục con.");
-
-                if (category.Products.Any(product => !product.IsDeleted))
-                    throw new BusinessException("Không thể xóa danh mục đang có sản phẩm.");
-
-                category.IsDeleted = true;
+                DomainRuleGuard.AsBusiness(category.MarkDeleted);
                 _audit.Write("category.delete", "Category", category.Id.ToString(), actorUserId);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -249,27 +243,19 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        private async Task ValidateParentAsync(
+        private async Task<Category?> LoadParentForUpdateAsync(
             Guid? parentId,
-            Guid? categoryId = null,
             CancellationToken cancellationToken = default)
         {
             if (!parentId.HasValue)
-                return;
-
-            if (parentId == categoryId)
-                throw new BusinessException("Danh mục không thể là cha của chính nó.");
+                return null;
 
             var parent = await LoadCategoryForUpdateAsync(
                 parentId.Value,
                 cancellationToken)
                 ?? throw new NotFoundException("Danh mục cha không tồn tại.");
 
-            if (categoryId.HasValue && parent.ParentId == categoryId)
-                throw new BusinessException("Không thể chọn danh mục con làm danh mục cha.");
-
-            if (parent.ParentId.HasValue)
-                throw new BusinessException("Chỉ hỗ trợ tối đa 2 cấp danh mục.");
+            return parent;
         }
 
         private static ConflictException CategoryConcurrencyConflict(Exception exception)
@@ -302,8 +288,6 @@ namespace ECommerceBackend.Application.Services
                 categoryId,
                 activeOnly: true,
                 cancellationToken);
-
-        private static string Normalize(string value) => value.Trim().ToUpperInvariant();
 
     }
 }

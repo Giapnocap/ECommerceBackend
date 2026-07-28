@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ECommerceBackend.UnitTests" />
+    <InternalsVisibleTo Include="ECommerceBackend.IntegrationTests" />
+  </ItemGroup>
+
 </Project>

@@ -75,8 +75,10 @@ namespace ECommerceBackend.Application.Services
                 cancellationToken)
                 ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
-            user.FullName = request.FullName.Trim();
-            user.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+            DomainRuleGuard.AsBusiness(() =>
+                user.UpdateProfile(
+                    request.FullName,
+                    request.Phone));
 
             try
             {
@@ -219,14 +221,15 @@ namespace ECommerceBackend.Application.Services
                     }
                 }
 
-                foreach (var userRole in currentRoles)
+                var roleChange = DomainRuleGuard.AsConflict(() =>
+                    user.ChangeRole(role));
+                foreach (var userRole in roleChange.PreviousAssignments)
                     _userRepository.RemoveRole(userRole);
 
                 await _userRepository.AddRoleAsync(
-                    new UserRole { UserId = userId, RoleId = role.Id },
+                    roleChange.Assignment,
                     cancellationToken);
                 var occurredAt = UtcNow;
-                DomainRuleGuard.AsConflict(user.InvalidateSessions);
                 await RevokeAllRefreshTokensAsync(
                     user.Id,
                     "Role changed",

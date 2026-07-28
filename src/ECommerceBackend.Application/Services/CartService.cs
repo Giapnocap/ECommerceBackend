@@ -1,4 +1,5 @@
 using System.Data;
+using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
@@ -41,7 +42,8 @@ namespace ECommerceBackend.Application.Services
             AddToCartRequest request,
             CancellationToken cancellationToken = default)
         {
-            EnsurePositiveQuantity(request.Quantity);
+            DomainRuleGuard.AsBusiness(() =>
+                CartItem.EnsurePositiveQuantity(request.Quantity));
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken);
@@ -57,23 +59,21 @@ namespace ECommerceBackend.Application.Services
                 var existingItem = cart.CartItems.FirstOrDefault(item => item.ProductId == request.ProductId);
                 if (existingItem != null)
                 {
-                    var newQuantity = (long)existingItem.Quantity + request.Quantity;
-                    EnsureStockAvailable(product, newQuantity);
-
-                    existingItem.Quantity = (int)newQuantity;
-                    existingItem.UnitPrice = product.Price;
+                    DomainRuleGuard.AsBusiness(() =>
+                        existingItem.IncreaseQuantity(
+                            request.Quantity,
+                            product));
                 }
                 else
                 {
-                    EnsureStockAvailable(product, request.Quantity);
-                    await _cartRepository.AddItemAsync(new CartItem
-                    {
-                        Id = Guid.NewGuid(),
-                        CartId = cart.Id,
-                        ProductId = request.ProductId,
-                        Quantity = request.Quantity,
-                        UnitPrice = product.Price
-                    }, cancellationToken);
+                    var item = DomainRuleGuard.AsBusiness(() =>
+                        cart.AddItem(
+                            Guid.NewGuid(),
+                            product,
+                            request.Quantity));
+                    await _cartRepository.AddItemAsync(
+                        item,
+                        cancellationToken);
                 }
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -109,7 +109,8 @@ namespace ECommerceBackend.Application.Services
             UpdateCartItemRequest request,
             CancellationToken cancellationToken = default)
         {
-            EnsureNonNegativeQuantity(request.Quantity);
+            DomainRuleGuard.AsBusiness(() =>
+                CartItem.EnsureNonNegativeQuantity(request.Quantity));
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.Serializable,
                 cancellationToken);
@@ -122,17 +123,20 @@ namespace ECommerceBackend.Application.Services
 
                 if (request.Quantity == 0)
                 {
+                    DomainRuleGuard.AsBusiness(() =>
+                        cart.RemoveItem(item));
                     _cartRepository.RemoveItem(item);
                 }
                 else
                 {
                     var product = item.Product;
-                    if (product == null || product.IsDeleted)
+                    if (product == null)
                         throw new BusinessException("Sản phẩm đã ngừng bán. Vui lòng xóa sản phẩm khỏi giỏ hàng.");
 
-                    EnsureStockAvailable(product, request.Quantity);
-                    item.Quantity = request.Quantity;
-                    item.UnitPrice = product.Price;
+                    DomainRuleGuard.AsBusiness(() =>
+                        item.SetQuantity(
+                            request.Quantity,
+                            product));
                 }
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -172,6 +176,8 @@ namespace ECommerceBackend.Application.Services
                 var item = cart.CartItems.FirstOrDefault(cartItem => cartItem.Id == cartItemId)
                     ?? throw new NotFoundException("Không tìm thấy sản phẩm trong giỏ hàng.");
 
+                DomainRuleGuard.AsBusiness(() =>
+                    cart.RemoveItem(item));
                 _cartRepository.RemoveItem(item);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -206,7 +212,7 @@ namespace ECommerceBackend.Application.Services
             try
             {
                 var cart = await GetOrCreateCartAsync(userId, cancellationToken, lockForUpdate: true);
-                foreach (var item in cart.CartItems.ToList())
+                foreach (var item in cart.ClearItems())
                     _cartRepository.RemoveItem(item);
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -256,7 +262,8 @@ namespace ECommerceBackend.Application.Services
             if (cart != null)
                 return cart;
 
-            cart = new Cart { Id = Guid.NewGuid(), UserId = userId };
+            cart = DomainRuleGuard.AsBusiness(() =>
+                Cart.Create(Guid.NewGuid(), userId));
             await _cartRepository.AddAsync(cart, cancellationToken);
             try
             {
@@ -277,27 +284,6 @@ namespace ECommerceBackend.Application.Services
             }
 
             return cart;
-        }
-
-        private static void EnsureStockAvailable(Product product, long requestedQuantity)
-        {
-            if (requestedQuantity > product.StockQuantity)
-            {
-                throw new BusinessException(
-                    $"Sản phẩm '{product.Name}' chỉ còn {product.StockQuantity} trong kho.");
-            }
-        }
-
-        private static void EnsurePositiveQuantity(int quantity)
-        {
-            if (quantity <= 0)
-                throw new BusinessException("cart_quantity_invalid", "Số lượng sản phẩm trong giỏ hàng phải lớn hơn 0.");
-        }
-
-        private static void EnsureNonNegativeQuantity(int quantity)
-        {
-            if (quantity < 0)
-                throw new BusinessException("cart_quantity_invalid", "Số lượng sản phẩm trong giỏ hàng không được là số âm.");
         }
 
     }
