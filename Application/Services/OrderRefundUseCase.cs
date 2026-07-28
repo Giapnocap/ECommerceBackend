@@ -13,6 +13,8 @@ namespace ECommerceBackend.Application.Services
     public sealed class OrderRefundUseCase
     {
         private readonly IPaymentRepository _paymentRepository;
+        private readonly IFulfillmentRepository _fulfillmentRepository;
+        private readonly IOrderRepository _orderRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IDataConsistencyService _consistency;
         private readonly IOutboxWriter _outbox;
@@ -22,12 +24,16 @@ namespace ECommerceBackend.Application.Services
 
         public OrderRefundUseCase(
             IPaymentRepository paymentRepository,
+            IFulfillmentRepository fulfillmentRepository,
+            IOrderRepository orderRepository,
             IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IOutboxWriter outbox,
             OrderQueryUseCase queries)
             : this(
                 paymentRepository,
+                fulfillmentRepository,
+                orderRepository,
                 unitOfWork,
                 consistency,
                 outbox,
@@ -38,6 +44,8 @@ namespace ECommerceBackend.Application.Services
 
         public OrderRefundUseCase(
             IPaymentRepository paymentRepository,
+            IFulfillmentRepository fulfillmentRepository,
+            IOrderRepository orderRepository,
             IUnitOfWork unitOfWork,
             IDataConsistencyService consistency,
             IOutboxWriter outbox,
@@ -46,6 +54,8 @@ namespace ECommerceBackend.Application.Services
             IAuditWriter? auditWriter = null)
         {
             _paymentRepository = paymentRepository;
+            _fulfillmentRepository = fulfillmentRepository;
+            _orderRepository = orderRepository;
             _unitOfWork = unitOfWork;
             _consistency = consistency;
             _outbox = outbox;
@@ -75,13 +85,13 @@ namespace ECommerceBackend.Application.Services
                     ?? throw new ConflictException(
                         "order_payment_missing",
                         "Đơn hàng không có giao dịch thanh toán để hoàn tiền.");
-
-                if (order.Status != OrderStatus.Returned)
-                {
-                    throw new ConflictException(
-                        "order_refund_requires_returned",
-                        "Chỉ có thể ghi nhận hoàn tiền sau khi đơn hàng đã được hoàn.");
-                }
+                var returnRequest =
+                    await _fulfillmentRepository.LockReturnRequestByOrderIdAsync(
+                        order.Id,
+                        cancellationToken)
+                    ?? throw new ConflictException(
+                        "return_request_missing",
+                        "Đơn hàng không có yêu cầu trả hàng hợp lệ.");
 
                 if (payment.Method != PaymentMethod.CashOnDelivery)
                 {
@@ -91,7 +101,9 @@ namespace ECommerceBackend.Application.Services
                 }
 
                 var reference = NormalizeReference(request.Reference);
-                if (payment.Status == PaymentStatus.Refunded)
+                if (payment.Status == PaymentStatus.Refunded
+                    || order.Status == OrderStatus.Refunded
+                    || returnRequest.Status == ReturnRequestStatus.Refunded)
                 {
                     var existingRefund =
                         await _paymentRepository.GetRefundHistoryAsync(
@@ -108,10 +120,26 @@ namespace ECommerceBackend.Application.Services
                             "refund_reference_mismatch",
                             "Giao dịch đã được hoàn tiền với một mã tham chiếu khác.");
                     }
-                }
 
-                if (payment.Status != PaymentStatus.Refunded)
+                    if (payment.Status != PaymentStatus.Refunded
+                        || order.Status != OrderStatus.Refunded
+                        || returnRequest.Status != ReturnRequestStatus.Refunded)
+                    {
+                        throw new ConflictException(
+                            "refund_state_inconsistent",
+                            "Trạng thái đơn hàng, yêu cầu trả hàng và thanh toán không đồng nhất.");
+                    }
+                }
+                else
                 {
+                    if (order.Status != OrderStatus.Returned
+                        || returnRequest.Status != ReturnRequestStatus.Received)
+                    {
+                        throw new ConflictException(
+                            "order_refund_requires_received_return",
+                            "Chỉ có thể hoàn tiền sau khi hàng hoàn đã được nhận và kiểm tra.");
+                    }
+
                     if (payment.Status != PaymentStatus.Paid)
                     {
                         throw new ConflictException(
@@ -122,6 +150,12 @@ namespace ECommerceBackend.Application.Services
                     var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
                     var statusChange = DomainRuleGuard.AsConflict(() =>
                         payment.ChangeStatus(PaymentStatus.Refunded, occurredAt));
+                    DomainRuleGuard.AsConflict(() =>
+                        returnRequest.MarkRefunded(occurredAt));
+                    var orderStatusChange = DomainRuleGuard.AsConflict(() =>
+                        order.ChangeStatus(
+                            OrderStatus.Refunded,
+                            payment.Status));
 
                     _paymentRepository.AddStatusHistory(new PaymentStatusHistory
                     {
@@ -133,6 +167,17 @@ namespace ECommerceBackend.Application.Services
                         Source = PaymentStatusChangeSource.ManualRefund,
                         Reference = reference,
                         OccurredAt = occurredAt,
+                        CreatedAt = occurredAt
+                    });
+                    _orderRepository.AddStatusHistory(new OrderStatusHistory
+                    {
+                        Id = Guid.NewGuid(),
+                        OrderId = order.Id,
+                        ChangedByUserId = actorUserId,
+                        FromStatus = orderStatusChange.Previous,
+                        ToStatus = orderStatusChange.Current,
+                        Note = NormalizeOptional(request.Note)
+                            ?? $"Hoàn tiền {reference}",
                         CreatedAt = occurredAt
                     });
 
@@ -151,6 +196,7 @@ namespace ECommerceBackend.Application.Services
                         new Dictionary<string, object?>
                         {
                             ["orderId"] = order.Id,
+                            ["returnRequestId"] = returnRequest.Id,
                             ["reference"] = reference,
                             ["note"] = NormalizeOptional(request.Note)
                         });

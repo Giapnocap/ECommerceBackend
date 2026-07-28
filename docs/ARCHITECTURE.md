@@ -43,7 +43,7 @@ data are kept at that persistence boundary.
 
 ## Domain Invariants
 
-`Order` and `Payment` expose state changes through domain methods; their lifecycle and monetary
+`Order`, `Payment`, `Shipment` and `ReturnRequest` expose state changes through domain methods; their lifecycle and monetary
 setters are private. `OrderPricingPolicy` validates decimal scale, supported amount limits and
 consistent totals before an order is mutated. `InventoryPolicy` is the single rule boundary for
 order reservation and release, and returns the exact quantity movement and resulting balance for
@@ -66,7 +66,7 @@ Database checks, unique indexes and row versions remain defense-in-depth beneath
 - Users: profile, password changes, paged administration, role assignment and last-admin protection.
 - Catalog: category hierarchy, products, images, search, filtering and paging.
 - Cart: one cart per user, unique product lines and current-price availability checks.
-- Orders: idempotent checkout, order snapshots, state transitions and cancellation.
+- Orders: idempotent checkout, order snapshots, state transitions, shipment, cancellation and return workflow.
 - Pricing: server-side quote, shipping/tax policy, promotion limits and immutable redemption records.
 - Payments: centralized state machine, immutable status history, COD adapter and signed/idempotent webhook processing.
 - Inventory: current balance plus immutable stock movement ledger.
@@ -114,11 +114,15 @@ discount; shipping itself is not included in the taxable amount.
 ## Order And Payment State
 
 ```text
-Order: Pending -> Confirmed -> Shipping -> Delivered -> Returned
+Order: Pending -> Confirmed -> Shipping -> Delivered -> ReturnRequested
          |           |           |
          +-----------+           +-> DeliveryFailed -> Shipping
                                       |
                                       +-> Cancelled
+
+ReturnRequested -> ReturnApproved -> Returned -> Refunded
+        |
+        +-> Delivered (rejected)
 
 Payment: Pending -> Paid -> Refunded
             |------> Failed
@@ -127,12 +131,13 @@ Payment: Pending -> Paid -> Refunded
 COD reaches Paid when the order is Delivered and Cancelled when the order is Cancelled.
 ```
 
-Stock is reserved while an order is Pending. Repeated updates to the current order status are
-idempotent. Cancellation and return acceptance restore stock with distinct, unique inventory
-movements. A delivery failure keeps stock reserved; staff can retry shipping or cancel fulfillment.
+Stock is reserved while an order is Pending. Shipment dispatch requires a carrier and tracking
+number. A delivery failure keeps stock reserved; staff can retry the same shipment or cancel.
+Customer return requests are bounded by `Returns:ReturnWindowDays`; Staff approves or rejects them.
+Stock is restored only when approved goods are physically received and inspected.
 
 `POST /api/orders/{id}/refund` records a completed offline COD refund only after the order is
-`Returned` and the payment is `Paid`. The request requires the external receipt/reference. Replaying
+`Returned`, the return request is `Received` and the payment is `Paid`. The request requires the external receipt/reference. Replaying
 the same reference is idempotent; a different reference returns `409` instead of rewriting financial
 history. Return acceptance and refund recording are intentionally separate because receiving the
 item does not prove that money has already been returned.
@@ -212,7 +217,7 @@ missing referenced files are reported and never removed from the database automa
 ## Consistency Rules
 
 - Cart mutations serialize per cart.
-- Order lifecycle and webhook mutations lock the order before its payment.
+- Order lifecycle, shipment, return and webhook mutations lock the order before dependent rows.
 - Checkout and cancellation lock product rows in stable GUID order.
 - Checkout preflights every cart line after acquiring product locks and before mutating any stock,
   order, payment or cart state; an unavailable line therefore leaves the entire cart unchanged.
@@ -316,11 +321,9 @@ are rethrown because replacing a partially written response would corrupt the HT
   locks; retries must wrap each complete business operation before they are introduced.
 - COD is the only checkout method currently enabled. The generic HMAC webhook is provider
   neutral; a real gateway still needs its own Infrastructure adapter and credential mapping.
-- Discount, shipping fee and tax remain zero at checkout because this project has no approved
-  promotion, carrier or tax rules. Their persisted order snapshot columns are retained for a future
-  calculator without changing historical order totals.
+- Shipping fee, discount and tax are calculated from configured server-side rules; live carrier
+  pricing and jurisdiction-specific tax remain outside the current scope.
 - Payment adapters are validated before persistence: provider codes must be route-safe, checkout
   methods must be defined, initial states must follow the payment state machine, and webhook-capable
   checkout providers must return a bounded transaction ID.
-- Product variants, promotions, tax and shipping calculators remain future domain modules;
-  they should only be added when their business rules are defined.
+- Product variants and live carrier/tax integrations remain future domain modules.

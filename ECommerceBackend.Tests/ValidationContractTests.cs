@@ -72,6 +72,22 @@ public sealed class ValidationContractTests
             }));
         yield return Case("order cancellation", () => new CancelOrderRequestValidator().Validate(
             new CancelOrderRequest { Reason = new string('a', 201) }));
+        yield return Case("shipment dispatch", () => new DispatchShipmentRequestValidator().Validate(
+            new DispatchShipmentRequest
+            {
+                Carrier = string.Empty,
+                TrackingNumber = string.Empty
+            }));
+        yield return Case("return request", () => new CreateReturnRequestValidator().Validate(
+            new CreateReturnRequest { Reason = string.Empty }));
+        yield return Case("return review", () => new ReviewReturnRequestValidator().Validate(
+            new ReviewReturnRequest
+            {
+                Decision = ReturnReviewDecision.Reject,
+                Note = string.Empty
+            }));
+        yield return Case("return receive", () => new ReceiveReturnRequestValidator().Validate(
+            new ReceiveReturnRequest { InspectionNote = string.Empty }));
         yield return Case("order query", () => new OrderQueryParamsValidator().Validate(
             new OrderQueryParams { Page = 0, PageSize = 101 }));
         yield return Case("inventory query", () => new InventoryQueryParamsValidator().Validate(

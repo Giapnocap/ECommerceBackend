@@ -171,10 +171,15 @@ public sealed class SqlServerCommerceFlowTests
                 deliveryOrder.Id,
                 user.Id,
                 new UpdateOrderStatusRequest { Status = OrderStatus.Confirmed });
-            _ = await service.UpdateStatusAsync(
+            var dispatchRequest = new DispatchShipmentRequest
+            {
+                Carrier = "SQL Carrier",
+                TrackingNumber = "SQL-TRACKING-001"
+            };
+            _ = await service.DispatchShipmentAsync(
                 deliveryOrder.Id,
                 user.Id,
-                new UpdateOrderStatusRequest { Status = OrderStatus.Shipping });
+                dispatchRequest);
             _ = await service.UpdateStatusAsync(
                 deliveryOrder.Id,
                 user.Id,
@@ -183,14 +188,14 @@ public sealed class SqlServerCommerceFlowTests
                     Status = OrderStatus.DeliveryFailed,
                     Note = "Không liên hệ được người nhận"
                 });
-            _ = await service.UpdateStatusAsync(
+            _ = await service.DispatchShipmentAsync(
                 deliveryOrder.Id,
                 user.Id,
-                new UpdateOrderStatusRequest { Status = OrderStatus.Shipping });
-            var delivered = await service.UpdateStatusAsync(
+                dispatchRequest);
+            var delivered = await service.MarkShipmentDeliveredAsync(
                 deliveryOrder.Id,
                 user.Id,
-                new UpdateOrderStatusRequest { Status = OrderStatus.Delivered });
+                new MarkShipmentDeliveredRequest());
 
             Assert.Equal(nameof(OrderStatus.Delivered), delivered.Status);
             Assert.Equal(nameof(PaymentStatus.Paid), delivered.Payment?.Status);
@@ -265,13 +270,27 @@ public sealed class SqlServerCommerceFlowTests
             Assert.Equal(1, topProduct.QuantitySold);
             Assert.Equal(125.50m, topProduct.Revenue);
 
-            var returned = await service.UpdateStatusAsync(
+            var requestedReturn = await service.RequestReturnAsync(
                 deliveryOrder.Id,
                 user.Id,
-                new UpdateOrderStatusRequest
+                new CreateReturnRequest
                 {
-                    Status = OrderStatus.Returned,
-                    Note = "Sản phẩm còn nguyên trạng"
+                    Reason = "Sản phẩm còn nguyên trạng"
+                });
+            var approvedReturn = await service.ReviewReturnAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new ReviewReturnRequest
+                {
+                    Decision = ReturnReviewDecision.Approve,
+                    Note = "Đủ điều kiện hoàn hàng"
+                });
+            var returned = await service.ReceiveReturnAsync(
+                deliveryOrder.Id,
+                user.Id,
+                new ReceiveReturnRequest
+                {
+                    InspectionNote = "Đã nhận đủ sản phẩm và phụ kiện"
                 });
             var refunded = await service.RecordRefundAsync(
                 deliveryOrder.Id,
@@ -286,7 +305,14 @@ public sealed class SqlServerCommerceFlowTests
                 user.Id,
                 new RecordOrderRefundRequest { Reference = "SQL-REFUND-001" });
 
+            Assert.Equal(
+                nameof(OrderStatus.ReturnRequested),
+                requestedReturn.Status);
+            Assert.Equal(
+                nameof(OrderStatus.ReturnApproved),
+                approvedReturn.Status);
             Assert.Equal(nameof(OrderStatus.Returned), returned.Status);
+            Assert.Equal(nameof(OrderStatus.Refunded), refunded.Status);
             Assert.Equal(nameof(PaymentStatus.Refunded), refunded.Payment?.Status);
             Assert.Equal(5, await context.Products
                 .Where(item => item.Id == product.Id)
@@ -302,10 +328,10 @@ public sealed class SqlServerCommerceFlowTests
                 .ToListAsync());
             Assert.Equal(PaymentStatusChangeSource.ManualRefund, refundHistory.Source);
             Assert.Equal("SQL-REFUND-001", refundHistory.Reference);
-            Assert.Equal(7, await context.OrderStatusHistories
+            Assert.Equal(10, await context.OrderStatusHistories
                 .CountAsync(history => history.OrderId == deliveryOrder.Id));
 
-            Assert.Equal(10, await context.OutboxMessages.CountAsync());
+            Assert.Equal(12, await context.OutboxMessages.CountAsync());
 
             var notificationSender = new RecordingNotificationSender();
             var outboxProcessor = new OutboxProcessor(
@@ -316,15 +342,15 @@ public sealed class SqlServerCommerceFlowTests
                     NullLogger<NotificationOutboxMessageHandler>.Instance),
                 Options.Create(new OutboxOptions
                 {
-                    BatchSize = 10,
+                    BatchSize = 20,
                     MaxAttempts = 3,
                     LockTimeoutMinutes = 5,
                     PollIntervalSeconds = 1
                 }),
                 NullLogger<OutboxProcessor>.Instance);
 
-            Assert.Equal(10, await outboxProcessor.ProcessBatchAsync());
-            Assert.Equal(10, notificationSender.Messages.Count);
+            Assert.Equal(12, await outboxProcessor.ProcessBatchAsync());
+            Assert.Equal(12, notificationSender.Messages.Count);
             Assert.All(
                 await context.OutboxMessages.AsNoTracking().ToListAsync(),
                 message => Assert.NotNull(message.ProcessedAt));
@@ -332,6 +358,178 @@ public sealed class SqlServerCommerceFlowTests
         finally
         {
             await using var cleanupContext = new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task ConcurrentReturnReceipts_RestoreInventoryExactlyOnce()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName =
+            $"ECommerceBackendIntegration_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+
+        try
+        {
+            Guid orderId;
+            Guid productId;
+            Guid actorUserId;
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.MigrateAsync();
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    UserName = "return_concurrency_customer",
+                    NormalizedUserName = "RETURN_CONCURRENCY_CUSTOMER",
+                    Email = "return_concurrency@example.com",
+                    NormalizedEmail = "RETURN_CONCURRENCY@EXAMPLE.COM",
+                    FullName = "Return Concurrency Customer",
+                    PasswordHash = "hash",
+                    CreatedAt = DateTime.UtcNow
+                };
+                actorUserId = user.Id;
+                var category = new Category
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Return concurrency",
+                    NormalizedName = "RETURN CONCURRENCY"
+                };
+                var product = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = category.Id,
+                    Name = "Return concurrency product",
+                    Price = 500_000m,
+                    StockQuantity = 1,
+                    CreatedAt = DateTime.UtcNow
+                };
+                productId = product.Id;
+                var cart = new Cart
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id
+                };
+                setupContext.AddRange(
+                    user,
+                    category,
+                    product,
+                    cart,
+                    new CartItem
+                    {
+                        Id = Guid.NewGuid(),
+                        CartId = cart.Id,
+                        ProductId = product.Id,
+                        Quantity = 1,
+                        UnitPrice = product.Price
+                    });
+                await setupContext.SaveChangesAsync();
+
+                var service = CreateOrderService(setupContext);
+                var order = await service.PlaceOrderAsync(
+                    user.Id,
+                    new PlaceOrderRequest
+                    {
+                        ShippingAddress = "1 Return Concurrency Street",
+                        PaymentMethod = PaymentMethod.CashOnDelivery
+                    },
+                    "return-concurrency-checkout");
+                orderId = order.Id;
+                _ = await service.UpdateStatusAsync(
+                    orderId,
+                    actorUserId,
+                    new UpdateOrderStatusRequest
+                    {
+                        Status = OrderStatus.Confirmed
+                    });
+                _ = await service.DispatchShipmentAsync(
+                    orderId,
+                    actorUserId,
+                    new DispatchShipmentRequest
+                    {
+                        Carrier = "Concurrency Carrier",
+                        TrackingNumber =
+                            $"RETURN-{Guid.NewGuid():N}"
+                    });
+                _ = await service.MarkShipmentDeliveredAsync(
+                    orderId,
+                    actorUserId,
+                    new MarkShipmentDeliveredRequest());
+                _ = await service.RequestReturnAsync(
+                    orderId,
+                    user.Id,
+                    new CreateReturnRequest
+                    {
+                        Reason = "Sản phẩm còn nguyên trạng"
+                    });
+                _ = await service.ReviewReturnAsync(
+                    orderId,
+                    actorUserId,
+                    new ReviewReturnRequest
+                    {
+                        Decision = ReturnReviewDecision.Approve
+                    });
+            }
+
+            async Task<Exception?> ReceiveAsync()
+            {
+                await using var context = new AppDbContext(options);
+                var service = CreateOrderService(context);
+                return await Record.ExceptionAsync(() =>
+                    service.ReceiveReturnAsync(
+                        orderId,
+                        actorUserId,
+                        new ReceiveReturnRequest
+                        {
+                            InspectionNote =
+                                "Đã nhận đủ sản phẩm và phụ kiện"
+                        }));
+            }
+
+            var outcomes = await Task.WhenAll(
+                ReceiveAsync(),
+                ReceiveAsync());
+
+            Assert.All(outcomes, Assert.Null);
+            await using var verificationContext =
+                new AppDbContext(options);
+            Assert.Equal(
+                1,
+                await verificationContext.Products
+                    .Where(product => product.Id == productId)
+                    .Select(product => product.StockQuantity)
+                    .SingleAsync());
+            Assert.Equal(
+                1,
+                await verificationContext.InventoryTransactions
+                    .CountAsync(transaction =>
+                        transaction.OrderId == orderId
+                        && transaction.Type
+                            == InventoryTransactionType.OrderReturned));
+            Assert.Equal(
+                OrderStatus.Returned,
+                await verificationContext.Orders
+                    .Where(order => order.Id == orderId)
+                    .Select(order => order.Status)
+                    .SingleAsync());
+            Assert.Equal(
+                ReturnRequestStatus.Received,
+                await verificationContext.ReturnRequests
+                    .Where(returnRequest =>
+                        returnRequest.OrderId == orderId)
+                    .Select(returnRequest => returnRequest.Status)
+                    .SingleAsync());
+        }
+        finally
+        {
+            await using var cleanupContext =
+                new AppDbContext(options);
             await cleanupContext.Database.EnsureDeletedAsync();
         }
     }
@@ -607,6 +805,126 @@ public sealed class SqlServerCommerceFlowTests
             Assert.DoesNotContain(
                 persistedTokens,
                 token => token.IsActiveAt(now.UtcDateTime));
+        }
+        finally
+        {
+            await using var cleanupContext = new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task FulfillmentMigration_BackfillsLegacyReturnedAndRefundedOrder()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName =
+            $"ECommerceBackendFulfillmentMigration_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+
+        try
+        {
+            await using var context = new AppDbContext(options);
+            var migrator = context.GetService<IMigrator>();
+            await migrator.MigrateAsync(
+                "20260727180607_AddPricingAndPromotions");
+
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var paymentId = Guid.NewGuid();
+            var orderDate = DateTime.UtcNow.AddDays(-5);
+            var deliveredAt = orderDate.AddDays(2);
+            var returnedAt = deliveredAt.AddDays(1);
+            var refundedAt = returnedAt.AddHours(1);
+            var orderNumber = $"ORD-{Guid.NewGuid():N}"[..32];
+            var passwordHash =
+                BCrypt.Net.BCrypt.HashPassword("Customer@123");
+
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [Users]
+                    ([Id], [UserName], [NormalizedUserName], [Email],
+                     [NormalizedEmail], [PasswordHash], [FullName],
+                     [Phone], [IsDeleted], [CreatedAt],
+                     [PasswordChangedAt], [TokenVersion])
+                VALUES
+                    ({userId}, {"legacy_return_customer"},
+                     {"LEGACY_RETURN_CUSTOMER"},
+                     {"legacy_return_customer@example.com"},
+                     {"LEGACY_RETURN_CUSTOMER@EXAMPLE.COM"},
+                     {passwordHash}, {"Legacy Return Customer"},
+                     NULL, {false}, {orderDate}, NULL, {0})
+                """);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [Orders]
+                    ([Id], [UserId], [OrderNumber], [IdempotencyKey],
+                     [IdempotencyRequestHash], [OrderDate],
+                     [SubtotalAmount], [DiscountAmount], [ShippingFee],
+                     [TaxAmount], [TotalAmount], [Status],
+                     [ShippingAddress], [Note])
+                VALUES
+                    ({orderId}, {userId}, {orderNumber},
+                     {Guid.NewGuid().ToString("N")}, {new string('L', 64)},
+                     {orderDate}, {100m}, {0m}, {0m}, {0m}, {100m},
+                     {(int)OrderStatus.Returned}, {"Legacy address"}, NULL)
+                """);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [Payments]
+                    ([Id], [OrderId], [Method], [Status], [Amount],
+                     [Provider], [ProviderTransactionId], [CreatedAt],
+                     [PaidAt])
+                VALUES
+                    ({paymentId}, {orderId},
+                     {(int)PaymentMethod.CashOnDelivery},
+                     {(int)PaymentStatus.Refunded}, {100m}, {"cod"},
+                     {orderNumber}, {orderDate}, {deliveredAt})
+                """);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [OrderStatusHistories]
+                    ([Id], [OrderId], [ChangedByUserId], [FromStatus],
+                     [ToStatus], [Note], [CreatedAt])
+                VALUES
+                    ({Guid.NewGuid()}, {orderId}, NULL,
+                     {(int)OrderStatus.Shipping},
+                     {(int)OrderStatus.Delivered}, NULL, {deliveredAt}),
+                    ({Guid.NewGuid()}, {orderId}, NULL,
+                     {(int)OrderStatus.Delivered},
+                     {(int)OrderStatus.Returned}, NULL, {returnedAt})
+                """);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO [PaymentStatusHistories]
+                    ([Id], [PaymentId], [ChangedByUserId], [FromStatus],
+                     [ToStatus], [Source], [Reference], [OccurredAt],
+                     [CreatedAt])
+                VALUES
+                    ({Guid.NewGuid()}, {paymentId}, NULL,
+                     {(int)PaymentStatus.Paid},
+                     {(int)PaymentStatus.Refunded},
+                     {(int)PaymentStatusChangeSource.ManualRefund},
+                     {"LEGACY-REFUND"}, {refundedAt}, {refundedAt})
+                """);
+
+            await migrator.MigrateAsync();
+            context.ChangeTracker.Clear();
+
+            var order = await context.Orders.AsNoTracking()
+                .SingleAsync(candidate => candidate.Id == orderId);
+            var shipment = await context.Shipments.AsNoTracking()
+                .SingleAsync(candidate => candidate.OrderId == orderId);
+            var returnRequest = await context.ReturnRequests.AsNoTracking()
+                .SingleAsync(candidate => candidate.OrderId == orderId);
+
+            Assert.Equal(OrderStatus.Refunded, order.Status);
+            Assert.Equal("Legacy", shipment.Carrier);
+            Assert.Equal(deliveredAt, shipment.DeliveredAt);
+            Assert.Equal(ReturnRequestStatus.Refunded, returnRequest.Status);
+            Assert.Equal(refundedAt, returnRequest.RefundedAt);
+            Assert.Equal(1, await context.OrderStatusHistories.CountAsync(
+                history => history.OrderId == orderId
+                    && history.ToStatus == OrderStatus.Refunded));
         }
         finally
         {

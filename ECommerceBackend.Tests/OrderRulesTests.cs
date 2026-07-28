@@ -23,7 +23,12 @@ public class OrderRulesTests
     [InlineData(OrderStatus.Shipping, OrderStatus.DeliveryFailed, true)]
     [InlineData(OrderStatus.DeliveryFailed, OrderStatus.Shipping, true)]
     [InlineData(OrderStatus.DeliveryFailed, OrderStatus.Cancelled, true)]
-    [InlineData(OrderStatus.Delivered, OrderStatus.Returned, true)]
+    [InlineData(OrderStatus.Delivered, OrderStatus.ReturnRequested, true)]
+    [InlineData(OrderStatus.ReturnRequested, OrderStatus.ReturnApproved, true)]
+    [InlineData(OrderStatus.ReturnRequested, OrderStatus.Delivered, true)]
+    [InlineData(OrderStatus.ReturnApproved, OrderStatus.Returned, true)]
+    [InlineData(OrderStatus.Returned, OrderStatus.Refunded, true)]
+    [InlineData(OrderStatus.Delivered, OrderStatus.Returned, false)]
     [InlineData(OrderStatus.Delivered, OrderStatus.Cancelled, false)]
     [InlineData(OrderStatus.Returned, OrderStatus.Shipping, false)]
     [InlineData(OrderStatus.Cancelled, OrderStatus.Confirmed, false)]
@@ -52,9 +57,11 @@ public class OrderRulesTests
         order.ChangeStatus(OrderStatus.Delivered, PaymentStatus.Pending);
 
         var exception = Assert.Throws<DomainRuleViolationException>(() =>
-            order.ChangeStatus(OrderStatus.Returned, PaymentStatus.Pending));
+            order.ChangeStatus(
+                OrderStatus.ReturnRequested,
+                PaymentStatus.Pending));
 
-        Assert.Equal("order_return_requires_collected_payment", exception.Code);
+        Assert.Equal("order_return_requires_paid_payment", exception.Code);
         Assert.Equal(OrderStatus.Delivered, order.Status);
     }
 
@@ -66,6 +73,9 @@ public class OrderRulesTests
     [InlineData(OrderStatus.Cancelled)]
     [InlineData(OrderStatus.DeliveryFailed)]
     [InlineData(OrderStatus.Returned)]
+    [InlineData(OrderStatus.ReturnRequested)]
+    [InlineData(OrderStatus.ReturnApproved)]
+    [InlineData(OrderStatus.Refunded)]
     public void OrderStatusTransition_SameStatus_IsIdempotent(OrderStatus status)
     {
         Assert.True(status.CanTransitionTo(status));
@@ -207,27 +217,44 @@ public class OrderRulesTests
     }
 
     [Fact]
-    public void UpdateOrderStatusValidator_RequiresReasonForDeliveryFailureAndReturn()
+    public void UpdateOrderStatusValidator_RequiresReasonForDeliveryFailure()
     {
         var validator = new UpdateOrderStatusRequestValidator();
 
-        var deliveryFailure = validator.Validate(new UpdateOrderStatusRequest
+        var result = validator.Validate(new UpdateOrderStatusRequest
         {
             Status = OrderStatus.DeliveryFailed
         });
-        var returned = validator.Validate(new UpdateOrderStatusRequest
-        {
-            Status = OrderStatus.Returned,
-            Note = " "
-        });
 
-        Assert.False(deliveryFailure.IsValid);
-        Assert.False(returned.IsValid);
-        Assert.All(
-            new[] { deliveryFailure, returned },
-            result => Assert.Contains(
-                result.Errors,
-                error => error.PropertyName == nameof(UpdateOrderStatusRequest.Note)));
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.Errors,
+            error => error.PropertyName == nameof(UpdateOrderStatusRequest.Note));
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.Shipping)]
+    [InlineData(OrderStatus.Delivered)]
+    [InlineData(OrderStatus.ReturnRequested)]
+    [InlineData(OrderStatus.ReturnApproved)]
+    [InlineData(OrderStatus.Returned)]
+    [InlineData(OrderStatus.Refunded)]
+    public async Task UpdateStatusAsync_RejectsManagedWorkflowTransitions(
+        OrderStatus status)
+    {
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateOrderService(context);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.UpdateStatusAsync(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                new UpdateOrderStatusRequest
+                {
+                    Status = status
+                }));
+
+        Assert.Equal("order_managed_transition_required", exception.Code);
     }
 
     [Fact]
@@ -292,6 +319,14 @@ public class OrderRulesTests
         order.ChangeStatus(OrderStatus.Confirmed, null);
         order.ChangeStatus(OrderStatus.Shipping, null);
         order.ChangeStatus(OrderStatus.Delivered, null);
+        var shipment = Shipment.Create(
+            Guid.NewGuid(),
+            order.Id,
+            "Giao Hàng Nhanh",
+            "GHN-RETURN-001",
+            actorUserId,
+            occurredAt);
+        shipment.MarkDelivered(occurredAt.AddMinutes(1));
         var payment = new Payment
         {
             Id = Guid.NewGuid(),
@@ -304,17 +339,44 @@ public class OrderRulesTests
         };
         payment.ChangeStatus(PaymentStatus.Paid, occurredAt.AddMinutes(1));
 
-        context.AddRange(customer, actor, product, order, payment);
+        context.AddRange(
+            customer,
+            actor,
+            product,
+            order,
+            payment,
+            shipment);
         await context.SaveChangesAsync();
         var service = TestServiceFactory.CreateOrderService(context);
 
-        var returnedOrder = await service.UpdateStatusAsync(
+        var requestedOrder = await service.RequestReturnAsync(
+            order.Id,
+            customer.Id,
+            new CreateReturnRequest
+            {
+                Reason = "Sản phẩm không còn phù hợp nhu cầu"
+            });
+        var approvedOrder = await service.ReviewReturnAsync(
             order.Id,
             actorUserId,
-            new UpdateOrderStatusRequest
+            new ReviewReturnRequest
             {
-                Status = OrderStatus.Returned,
-                Note = "Khách trả hàng đúng chính sách"
+                Decision = ReturnReviewDecision.Approve,
+                Note = "Đủ điều kiện trả hàng"
+            });
+        var returnedOrder = await service.ReceiveReturnAsync(
+            order.Id,
+            actorUserId,
+            new ReceiveReturnRequest
+            {
+                InspectionNote = "Hàng nguyên vẹn, đủ phụ kiện"
+            });
+        var replayedReceive = await service.ReceiveReturnAsync(
+            order.Id,
+            actorUserId,
+            new ReceiveReturnRequest
+            {
+                InspectionNote = "Hàng nguyên vẹn, đủ phụ kiện"
             });
         var firstRefund = await service.RecordRefundAsync(
             order.Id,
@@ -340,7 +402,11 @@ public class OrderRulesTests
                     Reference = "BANK-REFUND-002"
                 }));
 
+        Assert.Equal(nameof(OrderStatus.ReturnRequested), requestedOrder.Status);
+        Assert.Equal(nameof(OrderStatus.ReturnApproved), approvedOrder.Status);
         Assert.Equal(nameof(OrderStatus.Returned), returnedOrder.Status);
+        Assert.Equal(nameof(OrderStatus.Returned), replayedReceive.Status);
+        Assert.Equal(nameof(OrderStatus.Refunded), firstRefund.Status);
         Assert.Equal(nameof(PaymentStatus.Refunded), firstRefund.Payment?.Status);
         Assert.Equal(nameof(PaymentStatus.Refunded), replayedRefund.Payment?.Status);
         Assert.Equal(1, product.StockQuantity);
@@ -351,6 +417,9 @@ public class OrderRulesTests
             history => history.ToStatus == PaymentStatus.Refunded));
         Assert.Equal(PaymentStatusChangeSource.ManualRefund, refundHistory.Source);
         Assert.Equal("BANK-REFUND-001", refundHistory.Reference);
+        Assert.Equal(
+            ReturnRequestStatus.Refunded,
+            Assert.Single(context.ReturnRequests).Status);
         Assert.Equal("refund_reference_mismatch", mismatchedReplay.Code);
     }
 }

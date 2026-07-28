@@ -15,8 +15,12 @@ namespace ECommerceBackend.Domain.Enums
                 OrderStatus.Confirmed => next is OrderStatus.Shipping or OrderStatus.Cancelled,
                 OrderStatus.Shipping => next is OrderStatus.Delivered or OrderStatus.DeliveryFailed,
                 OrderStatus.DeliveryFailed => next is OrderStatus.Shipping or OrderStatus.Cancelled,
-                OrderStatus.Delivered => next == OrderStatus.Returned,
-                OrderStatus.Cancelled or OrderStatus.Returned => false,
+                OrderStatus.Delivered => next == OrderStatus.ReturnRequested,
+                OrderStatus.ReturnRequested => next is OrderStatus.ReturnApproved
+                    or OrderStatus.Delivered,
+                OrderStatus.ReturnApproved => next == OrderStatus.Returned,
+                OrderStatus.Returned => next == OrderStatus.Refunded,
+                OrderStatus.Cancelled or OrderStatus.Refunded => false,
                 _ => false
             };
         }

@@ -23,6 +23,8 @@ namespace ECommerceBackend.Infrastructure.Data
         public DbSet<OrderStatusHistory> OrderStatusHistories { get; set; }
         public DbSet<Promotion> Promotions { get; set; }
         public DbSet<PromotionRedemption> PromotionRedemptions { get; set; }
+        public DbSet<Shipment> Shipments { get; set; }
+        public DbSet<ReturnRequest> ReturnRequests { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<PaymentWebhookEvent> PaymentWebhookEvents { get; set; }
         public DbSet<PaymentStatusHistory> PaymentStatusHistories { get; set; }

@@ -89,6 +89,7 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<ICategoryRepository, CategoryRepository>();
             services.AddScoped<IDataRetentionRepository, DataRetentionRepository>();
             services.AddScoped<IInventoryRepository, InventoryRepository>();
+            services.AddScoped<IFulfillmentRepository, FulfillmentRepository>();
             services.AddScoped<IOrderRepository, OrderRepository>();
             services.AddScoped<IOutboxRepository, OutboxRepository>();
             services.AddScoped<IPaymentRepository, PaymentRepository>();
@@ -109,6 +110,8 @@ namespace ECommerceBackend.API.Extensions
             services.AddScoped<OrderCheckoutUseCase>();
             services.AddScoped<OrderPricingUseCase>();
             services.AddScoped<OrderCommandService>();
+            services.AddScoped<OrderFulfillmentUseCase>();
+            services.AddScoped<OrderReturnUseCase>();
             services.AddScoped<OrderRefundUseCase>();
             services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();

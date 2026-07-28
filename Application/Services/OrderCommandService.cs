@@ -5,8 +5,8 @@ using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
-using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Common;
+using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Domain.Policies;
 
@@ -54,6 +54,7 @@ namespace ECommerceBackend.Application.Services
             UpdateOrderStatusRequest request,
             CancellationToken cancellationToken = default)
         {
+            EnsureGenericTransitionIsAllowed(request.Status);
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
@@ -78,16 +79,13 @@ namespace ECommerceBackend.Application.Services
                         : DomainRuleGuard.AsBusiness(() =>
                             order.ChangeStatus(request.Status, payment?.Status));
 
-                    if (request.Status is OrderStatus.Cancelled or OrderStatus.Returned)
+                    if (request.Status == OrderStatus.Cancelled)
                     {
-                        var transactionType = request.Status == OrderStatus.Returned
-                            ? InventoryTransactionType.OrderReturned
-                            : InventoryTransactionType.OrderCancelled;
                         await RestoreOrderStockAsync(
                             order,
                             actorUserId,
                             occurredAt,
-                            transactionType,
+                            InventoryTransactionType.OrderCancelled,
                             cancellationToken);
                     }
 
@@ -200,7 +198,9 @@ namespace ECommerceBackend.Application.Services
                         "Khách hàng chỉ có thể hủy đơn hàng đang chờ xử lý.");
                 }
 
-                var payment = await _consistency.LockPaymentByOrderIdAsync(order.Id, cancellationToken);
+                var payment = await _consistency.LockPaymentByOrderIdAsync(
+                    order.Id,
+                    cancellationToken);
                 var occurredAt = UtcNow;
                 var statusChange = DomainRuleGuard.AsConflict(() => order.Cancel(
                     occurredAt,
@@ -213,9 +213,21 @@ namespace ECommerceBackend.Application.Services
                     occurredAt,
                     InventoryTransactionType.OrderCancelled,
                     cancellationToken);
-                UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, customerUserId, occurredAt);
-                AddCancellationHistory(order, statusChange, customerUserId, request.Reason, occurredAt);
-                EnqueueCancellationNotification(order, payment, "Đơn hàng đã được hủy theo yêu cầu của bạn.");
+                UpdatePaymentForOrderStatus(
+                    payment,
+                    OrderStatus.Cancelled,
+                    customerUserId,
+                    occurredAt);
+                AddCancellationHistory(
+                    order,
+                    statusChange,
+                    customerUserId,
+                    request.Reason,
+                    occurredAt);
+                EnqueueCancellationNotification(
+                    order,
+                    payment,
+                    "Đơn hàng đã được hủy theo yêu cầu của bạn.");
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -291,7 +303,9 @@ namespace ECommerceBackend.Application.Services
                     return false;
                 }
 
-                var payment = await _consistency.LockPaymentByOrderIdAsync(order.Id, cancellationToken);
+                var payment = await _consistency.LockPaymentByOrderIdAsync(
+                    order.Id,
+                    cancellationToken);
                 var statusChange = DomainRuleGuard.AsConflict(() => order.Cancel(
                     asOf,
                     payment?.Status,
@@ -304,9 +318,21 @@ namespace ECommerceBackend.Application.Services
                     asOf,
                     InventoryTransactionType.OrderCancelled,
                     cancellationToken);
-                UpdatePaymentForOrderStatus(payment, OrderStatus.Cancelled, null, asOf);
-                AddCancellationHistory(order, statusChange, null, "SystemExpired", asOf);
-                EnqueueCancellationNotification(order, payment, "Đơn hàng đã hết thời gian giữ tồn kho và được hủy tự động.");
+                UpdatePaymentForOrderStatus(
+                    payment,
+                    OrderStatus.Cancelled,
+                    null,
+                    asOf);
+                AddCancellationHistory(
+                    order,
+                    statusChange,
+                    null,
+                    "SystemExpired",
+                    asOf);
+                EnqueueCancellationNotification(
+                    order,
+                    payment,
+                    "Đơn hàng đã hết thời gian giữ tồn kho và được hủy tự động.");
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -333,7 +359,8 @@ namespace ECommerceBackend.Application.Services
                         productId,
                         activeOnly: false,
                         cancellationToken)
-                    ?? throw new BusinessException("Dữ liệu sản phẩm của giỏ hàng hoặc đơn hàng không còn tồn tại.");
+                    ?? throw new BusinessException(
+                        "Dữ liệu sản phẩm của đơn hàng không còn tồn tại.");
 
                 products.Add(productId, product);
             }
@@ -370,9 +397,7 @@ namespace ECommerceBackend.Application.Services
                     Type = transactionType,
                     QuantityChange = inventoryMutation.QuantityChange,
                     BalanceAfter = inventoryMutation.BalanceAfter,
-                    Reason = transactionType == InventoryTransactionType.OrderReturned
-                        ? $"Hoàn kho do nhận hàng hoàn của đơn {order.OrderNumber}"
-                        : $"Hoàn kho do hủy đơn {order.OrderNumber}",
+                    Reason = $"Hoàn kho do hủy đơn {order.OrderNumber}",
                     CreatedAt = occurredAt
                 });
             }
@@ -387,19 +412,14 @@ namespace ECommerceBackend.Application.Services
             if (payment == null)
                 return;
 
-            PaymentStatus? nextStatus = null;
-            if (orderStatus == OrderStatus.Cancelled && payment.Status == PaymentStatus.Pending)
-                nextStatus = PaymentStatus.Cancelled;
-            else if (orderStatus == OrderStatus.Delivered
-                && payment.Method == PaymentMethod.CashOnDelivery
-                && payment.Status == PaymentStatus.Pending)
-                nextStatus = PaymentStatus.Paid;
-
-            if (!nextStatus.HasValue)
+            if (orderStatus != OrderStatus.Cancelled
+                || payment.Status != PaymentStatus.Pending)
+            {
                 return;
+            }
 
             var statusChange = DomainRuleGuard.AsConflict(() =>
-                payment.ChangeStatus(nextStatus.Value, occurredAt));
+                payment.ChangeStatus(PaymentStatus.Cancelled, occurredAt));
 
             _paymentRepository.AddStatusHistory(new PaymentStatusHistory
             {
@@ -407,7 +427,7 @@ namespace ECommerceBackend.Application.Services
                 PaymentId = payment.Id,
                 ChangedByUserId = actorUserId,
                 FromStatus = statusChange.Previous,
-                ToStatus = nextStatus.Value,
+                ToStatus = PaymentStatus.Cancelled,
                 Source = PaymentStatusChangeSource.OrderLifecycle,
                 Reference = GetOrderStatusLabel(orderStatus),
                 OccurredAt = occurredAt,
@@ -447,6 +467,22 @@ namespace ECommerceBackend.Application.Services
                 payment?.Id);
         }
 
+        private static void EnsureGenericTransitionIsAllowed(
+            OrderStatus requestedStatus)
+        {
+            if (requestedStatus is OrderStatus.Shipping
+                or OrderStatus.Delivered
+                or OrderStatus.ReturnRequested
+                or OrderStatus.ReturnApproved
+                or OrderStatus.Returned
+                or OrderStatus.Refunded)
+            {
+                throw new ConflictException(
+                    "order_managed_transition_required",
+                    "Trạng thái giao hàng, trả hàng và hoàn tiền phải được cập nhật qua API nghiệp vụ tương ứng.");
+            }
+        }
+
         private static string GetOrderStatusLabel(OrderStatus status)
             => status switch
             {
@@ -456,12 +492,14 @@ namespace ECommerceBackend.Application.Services
                 OrderStatus.Delivered => "Đã giao",
                 OrderStatus.Cancelled => "Đã hủy",
                 OrderStatus.DeliveryFailed => "Giao thất bại",
-                OrderStatus.Returned => "Đã hoàn hàng",
+                OrderStatus.Returned => "Đã nhận hàng hoàn",
+                OrderStatus.ReturnRequested => "Đã yêu cầu trả hàng",
+                OrderStatus.ReturnApproved => "Đã duyệt trả hàng",
+                OrderStatus.Refunded => "Đã hoàn tiền",
                 _ => status.ToString()
             };
 
         private static string? NormalizeOptional(string? value)
             => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
     }
 }

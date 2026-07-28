@@ -40,7 +40,7 @@ BEGIN TRY
     (
         SELECT 1
         FROM dbo.__EFMigrationsHistory
-        WHERE MigrationId = N'20260727180607_AddPricingAndPromotions'
+        WHERE MigrationId = N'20260728040145_AddFulfillmentAndReturnWorkflow'
     )
         THROW 51001, 'Apply all EF Core migrations before seeding demo data.', 1;
 

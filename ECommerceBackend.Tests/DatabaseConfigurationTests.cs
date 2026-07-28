@@ -79,6 +79,32 @@ public sealed class DatabaseConfigurationTests
         Assert.False(consistency.IsUniqueConstraintViolation(new DbUpdateException()));
     }
 
+    [Fact]
+    public void Fulfillment_HasOneShipmentAndReturnRequestPerOrder()
+    {
+        using var context = TestAppDbContext.Create();
+
+        var shipmentOrder = context.Model
+            .FindEntityType(typeof(Shipment))!
+            .GetIndexes()
+            .Single(index =>
+                index.GetDatabaseName() == "UX_Shipments_OrderId");
+        var returnOrder = context.Model
+            .FindEntityType(typeof(ReturnRequest))!
+            .GetIndexes()
+            .Single(index =>
+                index.GetDatabaseName() == "UX_ReturnRequests_OrderId");
+
+        Assert.True(shipmentOrder.IsUnique);
+        Assert.True(returnOrder.IsUnique);
+        Assert.Equal(
+            nameof(Shipment.OrderId),
+            Assert.Single(shipmentOrder.Properties).Name);
+        Assert.Equal(
+            nameof(ReturnRequest.OrderId),
+            Assert.Single(returnOrder.Properties).Name);
+    }
+
     private static void AssertIndex(
         AppDbContext context,
         Type entityType,

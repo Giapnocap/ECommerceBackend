@@ -44,6 +44,36 @@ namespace ECommerceBackend.Application.Interfaces
             CancelOrderRequest request,
             CancellationToken cancellationToken = default);
 
+        Task<OrderResponse> DispatchShipmentAsync(
+            Guid orderId,
+            Guid actorUserId,
+            DispatchShipmentRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task<OrderResponse> MarkShipmentDeliveredAsync(
+            Guid orderId,
+            Guid actorUserId,
+            MarkShipmentDeliveredRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task<OrderResponse> RequestReturnAsync(
+            Guid orderId,
+            Guid customerUserId,
+            CreateReturnRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task<OrderResponse> ReviewReturnAsync(
+            Guid orderId,
+            Guid actorUserId,
+            ReviewReturnRequest request,
+            CancellationToken cancellationToken = default);
+
+        Task<OrderResponse> ReceiveReturnAsync(
+            Guid orderId,
+            Guid actorUserId,
+            ReceiveReturnRequest request,
+            CancellationToken cancellationToken = default);
+
         Task<OrderResponse> RecordRefundAsync(
             Guid orderId,
             Guid actorUserId,

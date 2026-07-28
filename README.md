@@ -20,7 +20,8 @@ REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NE
 - Tìm kiếm, lọc, sắp xếp và phân trang sản phẩm.
 - Giỏ hàng và checkout có `Idempotency-Key`.
 - Báo giá checkout phía server, phí giao hàng cấu hình được và promotion có giới hạn tổng/theo khách.
-- Vòng đời đơn hàng gồm giao lại, giao thất bại, hoàn hàng và tự động hết hạn đơn `Pending`.
+- Vận đơn một-một lưu đơn vị vận chuyển, mã theo dõi, thời điểm xuất giao và giao thành công.
+- Quy trình trả hàng gồm Customer yêu cầu, Staff duyệt/từ chối, nhận kiểm hàng, hoàn kho và hoàn tiền.
 - Giữ/hoàn tồn kho có inventory ledger riêng cho hủy đơn và nhận hàng hoàn.
 - Payment state machine, COD, ghi nhận hoàn tiền thủ công và HMAC webhook chống replay.
 - Transactional outbox, retry, dead-letter và redrive.
@@ -84,8 +85,8 @@ Tài liệu thiết kế:
 
 | Vai trò | Phạm vi chính |
 |---|---|
-| `Customer` | Giỏ hàng, checkout, xem và hủy đơn thuộc sở hữu |
-| `Staff` | Xử lý đơn hàng, xem tồn kho và inventory ledger |
+| `Customer` | Giỏ hàng, checkout, xem/hủy đơn thuộc sở hữu và yêu cầu trả hàng |
+| `Staff` | Xác nhận đơn, vận đơn, giao hàng, xét duyệt/nhận hàng hoàn và xem tồn kho |
 | `Admin` | Toàn bộ quyền Staff, quản lý catalog/user, báo cáo và operations |
 
 Các endpoint quản trị sử dụng permission policies. Riêng operations recovery và audit yêu cầu role `Admin`.
@@ -154,6 +155,8 @@ Demo seed còn tạo mã `WELCOME10`: giảm 10%, tối đa 100.000 đ, cho đơ
 - Swagger hỗ trợ Bearer authentication và mô tả success/error contracts.
 - `POST /api/orders/quote` tính giá hiện tại; `POST /api/orders` luôn tính lại trong transaction.
 - Admin quản lý promotion qua `/api/promotions` bằng quyền quản lý sản phẩm.
+- Staff/Admin xuất giao qua `/shipment/dispatch`, xác nhận giao qua `/shipment/deliver`.
+- Customer tạo `/return-request`; Staff/Admin xét duyệt, nhận hàng hoàn rồi mới ghi nhận refund.
 - [ECommerceBackend.http](ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
 - API error sử dụng `application/problem+json`, có `code` và `traceId` ổn định.
 
@@ -204,10 +207,9 @@ SQL Server cô lập, áp dụng `migrate-up.sql` trong maintenance window và c
 `rollback-last.sql` khi thay đổi tương thích với dữ liệu cũ; nếu migration đã làm mất dữ liệu,
 phục hồi từ bản backup đã được kiểm chứng.
 
-Migration vòng đời hoàn hàng chỉ rollback được khi chưa có order status `DeliveryFailed`/`Returned`,
-inventory movement `OrderReturned`, manual refund history hoặc nhiều lần đi qua cùng trạng thái.
-Nếu đã phát sinh các dữ liệu này, giữ migration hiện tại hoặc phục hồi backup thay vì ép chạy script
-rollback.
+Migration fulfillment mới chặn rollback sau khi đã có shipment, return request hoặc trạng thái
+`ReturnRequested`/`ReturnApproved`/`Refunded`. Khi đã phát sinh dữ liệu, phục hồi bản backup trước
+migration thay vì xóa lịch sử vận đơn và trả hàng.
 
 CI thực hiện restore có vulnerability audit, format check, Release build, kiểm tra model/migration,
 coverage gate và SQL Server integration tests. Baseline và quyết định scale được ghi tại

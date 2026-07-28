@@ -67,31 +67,44 @@ different request returns `409`; unavailable stock rolls back the complete trans
 ```mermaid
 sequenceDiagram
     actor Staff
+    actor Customer
     participant API as OrderController
     participant Commands as OrderCommandService
+    participant Fulfillment as OrderFulfillmentUseCase
+    participant Returns as OrderReturnUseCase
     participant Refund as OrderRefundUseCase
     participant Rules as Order/Payment/Inventory Policies
     participant DB as SQL Server
 
-    Staff->>API: PUT /api/orders/{id}/status
-    API->>Commands: UpdateStatusAsync
-    Commands->>DB: Begin transaction and lock order/payment
-    Commands->>Rules: Validate next order/payment state
-    Commands->>DB: Append status/payment history and commit
+    Staff->>API: POST shipment/dispatch (carrier + tracking)
+    API->>Fulfillment: DispatchAsync
+    Fulfillment->>DB: Lock order and shipment
+    Fulfillment->>DB: Insert shipment + Shipping history + commit
 
-    Staff->>API: Mark Returned after delivered order is received
-    API->>Commands: UpdateStatusAsync(Returned)
-    Commands->>DB: Lock products in stable order
-    Commands->>Rules: Release returned quantity
-    Commands->>DB: Append unique return inventory movements and commit
+    Staff->>API: POST shipment/deliver
+    API->>Fulfillment: MarkDeliveredAsync
+    Fulfillment->>DB: Lock order, shipment and payment
+    Fulfillment->>Rules: Delivered + collect COD
+    Fulfillment->>DB: Commit histories atomically
+
+    Customer->>API: POST return-request
+    API->>Returns: RequestAsync
+    Returns->>DB: Verify owner, delivery time and return window
+    Returns->>DB: Insert request + ReturnRequested history
+    Staff->>API: POST return-request/review
+    Returns->>DB: Approve or reject under order lock
+    Staff->>API: POST return-request/receive
+    Returns->>DB: Lock products in stable order
+    Returns->>Rules: Receive inspection and release stock once
+    Returns->>DB: Append Returned history + ledger + commit
 
     Staff->>API: POST /api/orders/{id}/refund + receipt reference
     API->>Refund: RecordRefundAsync
-    Refund->>DB: Lock order/payment
-    Refund->>Rules: Require Returned order and Paid payment
-    Refund->>DB: Append Refunded history and commit
+    Refund->>DB: Lock order/payment/return request
+    Refund->>Rules: Require received return and Paid payment
+    Refund->>DB: Set Order/Return/Payment Refunded + histories + commit
     API-->>Staff: Updated OrderResponse
 ```
 
-Return acceptance and offline COD refund are separate auditable actions. Replaying the same refund
+Receiving returned goods and offline COD refund are separate auditable actions. Replaying the same refund
 reference is idempotent; a different reference cannot overwrite the recorded financial history.

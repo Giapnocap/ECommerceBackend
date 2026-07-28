@@ -72,6 +72,23 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             .GetProperty("/api/promotions")
             .GetProperty("get");
         Assert.True(promotions.TryGetProperty("security", out _));
+        foreach (var fulfillmentPath in new[]
+        {
+            "/api/orders/{id}/shipment/dispatch",
+            "/api/orders/{id}/shipment/deliver",
+            "/api/orders/{id}/return-request",
+            "/api/orders/{id}/return-request/review",
+            "/api/orders/{id}/return-request/receive"
+        })
+        {
+            var operation = paths
+                .GetProperty(fulfillmentPath)
+                .GetProperty("post");
+            Assert.True(
+                operation.TryGetProperty("security", out _),
+                $"Missing security contract for {fulfillmentPath}.");
+            AssertRequiredParameter(operation, "id", "path");
+        }
 
         var publicProducts = paths.GetProperty("/api/products").GetProperty("get");
         Assert.False(publicProducts.TryGetProperty("security", out _));

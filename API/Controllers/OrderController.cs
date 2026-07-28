@@ -102,6 +102,106 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>[Staff/Admin] Tạo vận đơn và xuất giao đơn hàng</summary>
+        /// <param name="id">Mã đơn hàng</param>
+        /// <param name="request">Thông tin đơn vị vận chuyển và mã vận đơn</param>
+        /// <param name="cancellationToken">Token hủy yêu cầu</param>
+        [HttpPost("{id:guid}/shipment/dispatch")]
+        [Authorize(Policy = PermissionNames.ProcessOrders)]
+        [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> DispatchShipment(
+            Guid id,
+            [FromBody] DispatchShipmentRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.DispatchShipmentAsync(
+                id,
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>[Staff/Admin] Xác nhận vận đơn đã giao thành công</summary>
+        /// <param name="id">Mã đơn hàng</param>
+        /// <param name="request">Ghi chú giao hàng thành công</param>
+        /// <param name="cancellationToken">Token hủy yêu cầu</param>
+        [HttpPost("{id:guid}/shipment/deliver")]
+        [Authorize(Policy = PermissionNames.ProcessOrders)]
+        [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> MarkShipmentDelivered(
+            Guid id,
+            [FromBody] MarkShipmentDeliveredRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.MarkShipmentDeliveredAsync(
+                id,
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>Khách hàng yêu cầu trả một đơn đã giao</summary>
+        /// <param name="id">Mã đơn hàng thuộc khách hàng hiện tại</param>
+        /// <param name="request">Lý do trả hàng</param>
+        /// <param name="cancellationToken">Token hủy yêu cầu</param>
+        [HttpPost("{id:guid}/return-request")]
+        [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
+        [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> RequestReturn(
+            Guid id,
+            [FromBody] CreateReturnRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.RequestReturnAsync(
+                id,
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>[Staff/Admin] Duyệt hoặc từ chối yêu cầu trả hàng</summary>
+        /// <param name="id">Mã đơn hàng</param>
+        /// <param name="request">Quyết định và ghi chú xét duyệt</param>
+        /// <param name="cancellationToken">Token hủy yêu cầu</param>
+        [HttpPost("{id:guid}/return-request/review")]
+        [Authorize(Policy = PermissionNames.ProcessOrders)]
+        [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReviewReturn(
+            Guid id,
+            [FromBody] ReviewReturnRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.ReviewReturnAsync(
+                id,
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>[Staff/Admin] Nhận và kiểm tra hàng hoàn</summary>
+        /// <param name="id">Mã đơn hàng</param>
+        /// <param name="request">Ghi chú kiểm tra hàng hoàn</param>
+        /// <param name="cancellationToken">Token hủy yêu cầu</param>
+        [HttpPost("{id:guid}/return-request/receive")]
+        [Authorize(Policy = PermissionNames.ProcessOrders)]
+        [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ReceiveReturn(
+            Guid id,
+            [FromBody] ReceiveReturnRequest request,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.ReceiveReturnAsync(
+                id,
+                CurrentUserId,
+                request,
+                cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>[Staff/Admin] Ghi nhận hoàn tiền COD đã hoàn tất cho đơn hoàn hàng</summary>
         [HttpPost("{id:guid}/refund")]
         [Authorize(Policy = PermissionNames.ProcessOrders)]

@@ -242,6 +242,22 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void ReturnPolicy_WithInvalidWindow_FailsValidation()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Returns:ReturnWindowDays"] = "0"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<ReturnPolicyOptions>>()
+                .Value);
+    }
+
+    [Fact]
     public void ProductionPasswordResetUrl_MustUsePublicHttps()
     {
         var values = new Dictionary<string, string?>

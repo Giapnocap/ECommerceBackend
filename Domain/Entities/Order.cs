@@ -37,6 +37,8 @@ namespace ECommerceBackend.Domain.Entities
         public Payment? Payment { get; set; }
         public Promotion? Promotion { get; set; }
         public PromotionRedemption? PromotionRedemption { get; set; }
+        public Shipment? Shipment { get; set; }
+        public ReturnRequest? ReturnRequest { get; set; }
 
         public void SetPricing(
             decimal subtotal,
@@ -86,6 +88,23 @@ namespace ECommerceBackend.Domain.Entities
                 throw new DomainRuleViolationException(
                     "order_return_requires_collected_payment",
                     "Chỉ có thể ghi nhận hoàn hàng sau khi đơn hàng đã thu tiền.");
+            }
+
+            if ((nextStatus is OrderStatus.ReturnRequested
+                or OrderStatus.ReturnApproved)
+                && paymentStatus != PaymentStatus.Paid)
+            {
+                throw new DomainRuleViolationException(
+                    "order_return_requires_paid_payment",
+                    "Chỉ có thể xử lý trả hàng cho đơn đã thanh toán.");
+            }
+
+            if (nextStatus == OrderStatus.Refunded
+                && paymentStatus != PaymentStatus.Refunded)
+            {
+                throw new DomainRuleViolationException(
+                    "order_refunded_requires_refunded_payment",
+                    "Chỉ có thể hoàn tất đơn hàng sau khi giao dịch đã được hoàn tiền.");
             }
 
             Status = nextStatus;
@@ -157,7 +176,10 @@ namespace ECommerceBackend.Domain.Entities
                 OrderStatus.Delivered => "Đã giao",
                 OrderStatus.Cancelled => "Đã hủy",
                 OrderStatus.DeliveryFailed => "Giao thất bại",
-                OrderStatus.Returned => "Đã hoàn hàng",
+                OrderStatus.Returned => "Đã nhận hàng hoàn",
+                OrderStatus.ReturnRequested => "Đã yêu cầu trả hàng",
+                OrderStatus.ReturnApproved => "Đã duyệt trả hàng",
+                OrderStatus.Refunded => "Đã hoàn tiền",
                 _ => status.ToString()
             };
     }

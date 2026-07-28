@@ -9,6 +9,8 @@ namespace ECommerceBackend.Application.Services
         private readonly OrderCheckoutUseCase _checkout;
         private readonly OrderCommandService _commands;
         private readonly OrderRefundUseCase _refund;
+        private readonly OrderFulfillmentUseCase _fulfillment;
+        private readonly OrderReturnUseCase _returns;
         private readonly OrderQueryUseCase _queries;
         private readonly OrderPricingUseCase _pricing;
 
@@ -16,12 +18,16 @@ namespace ECommerceBackend.Application.Services
             OrderCheckoutUseCase checkout,
             OrderCommandService commands,
             OrderRefundUseCase refund,
+            OrderFulfillmentUseCase fulfillment,
+            OrderReturnUseCase returns,
             OrderQueryUseCase queries,
             OrderPricingUseCase pricing)
         {
             _checkout = checkout;
             _commands = commands;
             _refund = refund;
+            _fulfillment = fulfillment;
+            _returns = returns;
             _queries = queries;
             _pricing = pricing;
         }
@@ -101,6 +107,61 @@ namespace ECommerceBackend.Application.Services
             RecordOrderRefundRequest request,
             CancellationToken cancellationToken = default)
             => _refund.ExecuteAsync(
+                orderId,
+                actorUserId,
+                request,
+                cancellationToken);
+
+        public Task<OrderResponse> DispatchShipmentAsync(
+            Guid orderId,
+            Guid actorUserId,
+            DispatchShipmentRequest request,
+            CancellationToken cancellationToken = default)
+            => _fulfillment.DispatchAsync(
+                orderId,
+                actorUserId,
+                request,
+                cancellationToken);
+
+        public Task<OrderResponse> MarkShipmentDeliveredAsync(
+            Guid orderId,
+            Guid actorUserId,
+            MarkShipmentDeliveredRequest request,
+            CancellationToken cancellationToken = default)
+            => _fulfillment.MarkDeliveredAsync(
+                orderId,
+                actorUserId,
+                request,
+                cancellationToken);
+
+        public Task<OrderResponse> RequestReturnAsync(
+            Guid orderId,
+            Guid customerUserId,
+            CreateReturnRequest request,
+            CancellationToken cancellationToken = default)
+            => _returns.RequestAsync(
+                orderId,
+                customerUserId,
+                request,
+                cancellationToken);
+
+        public Task<OrderResponse> ReviewReturnAsync(
+            Guid orderId,
+            Guid actorUserId,
+            ReviewReturnRequest request,
+            CancellationToken cancellationToken = default)
+            => _returns.ReviewAsync(
+                orderId,
+                actorUserId,
+                request,
+                cancellationToken);
+
+        public Task<OrderResponse> ReceiveReturnAsync(
+            Guid orderId,
+            Guid actorUserId,
+            ReceiveReturnRequest request,
+            CancellationToken cancellationToken = default)
+            => _returns.ReceiveAsync(
                 orderId,
                 actorUserId,
                 request,

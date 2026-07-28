@@ -73,9 +73,8 @@ namespace ECommerceBackend.Application.Validation
                 .When(x => x.Status == Domain.Enums.OrderStatus.Cancelled && x.Note != null);
 
             RuleFor(x => x.Note)
-                .NotEmpty().WithMessage("Phải nhập lý do giao thất bại hoặc hoàn hàng.")
-                .When(x => x.Status is Domain.Enums.OrderStatus.DeliveryFailed
-                    or Domain.Enums.OrderStatus.Returned);
+                .NotEmpty().WithMessage("Phải nhập lý do giao hàng thất bại.")
+                .When(x => x.Status == Domain.Enums.OrderStatus.DeliveryFailed);
         }
     }
 
@@ -100,6 +99,76 @@ namespace ECommerceBackend.Application.Validation
             RuleFor(x => x.Note)
                 .MaximumLength(500).WithMessage("Ghi chú hoàn tiền không được vượt quá 500 ký tự.")
                 .When(x => x.Note != null);
+        }
+    }
+
+    public sealed class DispatchShipmentRequestValidator
+        : AbstractValidator<DispatchShipmentRequest>
+    {
+        public DispatchShipmentRequestValidator()
+        {
+            RuleFor(x => x.Carrier)
+                .NotEmpty().WithMessage("Đơn vị vận chuyển không được để trống.")
+                .MaximumLength(100).WithMessage("Đơn vị vận chuyển không được vượt quá 100 ký tự.");
+
+            RuleFor(x => x.TrackingNumber)
+                .NotEmpty().WithMessage("Mã vận đơn không được để trống.")
+                .MaximumLength(100).WithMessage("Mã vận đơn không được vượt quá 100 ký tự.");
+
+            RuleFor(x => x.Note)
+                .MaximumLength(500).WithMessage("Ghi chú xuất hàng không được vượt quá 500 ký tự.")
+                .When(x => x.Note != null);
+        }
+    }
+
+    public sealed class MarkShipmentDeliveredRequestValidator
+        : AbstractValidator<MarkShipmentDeliveredRequest>
+    {
+        public MarkShipmentDeliveredRequestValidator()
+        {
+            RuleFor(x => x.Note)
+                .MaximumLength(500).WithMessage("Ghi chú giao hàng không được vượt quá 500 ký tự.")
+                .When(x => x.Note != null);
+        }
+    }
+
+    public sealed class CreateReturnRequestValidator
+        : AbstractValidator<CreateReturnRequest>
+    {
+        public CreateReturnRequestValidator()
+        {
+            RuleFor(x => x.Reason)
+                .NotEmpty().WithMessage("Lý do trả hàng không được để trống.")
+                .MaximumLength(500).WithMessage("Lý do trả hàng không được vượt quá 500 ký tự.");
+        }
+    }
+
+    public sealed class ReviewReturnRequestValidator
+        : AbstractValidator<ReviewReturnRequest>
+    {
+        public ReviewReturnRequestValidator()
+        {
+            RuleFor(x => x.Decision)
+                .IsInEnum().WithMessage("Quyết định xét duyệt không hợp lệ.");
+
+            RuleFor(x => x.Note)
+                .NotEmpty().WithMessage("Phải nhập lý do từ chối yêu cầu trả hàng.")
+                .When(x => x.Decision == Domain.Enums.ReturnReviewDecision.Reject);
+
+            RuleFor(x => x.Note)
+                .MaximumLength(500).WithMessage("Ghi chú xét duyệt không được vượt quá 500 ký tự.")
+                .When(x => x.Note != null);
+        }
+    }
+
+    public sealed class ReceiveReturnRequestValidator
+        : AbstractValidator<ReceiveReturnRequest>
+    {
+        public ReceiveReturnRequestValidator()
+        {
+            RuleFor(x => x.InspectionNote)
+                .NotEmpty().WithMessage("Kết quả kiểm tra hàng hoàn không được để trống.")
+                .MaximumLength(500).WithMessage("Kết quả kiểm tra hàng hoàn không được vượt quá 500 ký tự.");
         }
     }
 

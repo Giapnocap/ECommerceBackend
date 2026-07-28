@@ -121,6 +121,13 @@ namespace ECommerceBackend.API.Extensions
                     "Pricing config is invalid.")
                 .ValidateOnStart();
 
+            services.AddOptions<ReturnPolicyOptions>()
+                .Bind(configuration.GetSection(ReturnPolicyOptions.SectionName))
+                .Validate(
+                    options => options.ReturnWindowDays is >= 1 and <= 90,
+                    "Return policy config is invalid.")
+                .ValidateOnStart();
+
             services.AddOptions<SmtpOptions>()
                 .Bind(configuration.GetSection(SmtpOptions.SectionName))
                 .Validate(

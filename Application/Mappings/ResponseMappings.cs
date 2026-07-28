@@ -117,8 +117,35 @@ public static class ResponseMappings
             ExpiredAt = order.ExpiredAt,
             CancellationReason = order.CancellationReason,
             Payment = order.Payment?.ToResponse(),
+            Shipment = order.Shipment?.ToResponse(),
+            ReturnRequest = order.ReturnRequest?.ToResponse(),
             OrderDetails = order.OrderDetails.Select(ToResponse).ToArray(),
             StatusHistory = order.StatusHistory.Select(ToResponse).ToArray()
+        };
+
+    public static ShipmentResponse ToResponse(this Shipment shipment)
+        => new()
+        {
+            Id = shipment.Id,
+            Carrier = shipment.Carrier,
+            TrackingNumber = shipment.TrackingNumber,
+            ShippedAt = shipment.ShippedAt,
+            DeliveredAt = shipment.DeliveredAt
+        };
+
+    public static ReturnRequestResponse ToResponse(
+        this ReturnRequest returnRequest)
+        => new()
+        {
+            Id = returnRequest.Id,
+            Reason = returnRequest.Reason,
+            Status = returnRequest.Status.ToString(),
+            RequestedAt = returnRequest.RequestedAt,
+            ReviewedAt = returnRequest.ReviewedAt,
+            ReviewNote = returnRequest.ReviewNote,
+            ReceivedAt = returnRequest.ReceivedAt,
+            InspectionNote = returnRequest.InspectionNote,
+            RefundedAt = returnRequest.RefundedAt
         };
 
     public static PromotionResponse ToResponse(this Promotion promotion)

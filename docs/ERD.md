@@ -103,6 +103,27 @@ erDiagram
         int ToStatus
         datetime2 CreatedAt
     }
+    SHIPMENTS {
+        uniqueidentifier Id PK
+        uniqueidentifier OrderId FK,UK
+        nvarchar Carrier
+        nvarchar TrackingNumber UK
+        datetime2 ShippedAt
+        datetime2 DeliveredAt
+        rowversion RowVersion
+    }
+    RETURN_REQUESTS {
+        uniqueidentifier Id PK
+        uniqueidentifier OrderId FK,UK
+        uniqueidentifier RequestedByUserId FK
+        int Status
+        nvarchar Reason
+        datetime2 RequestedAt
+        datetime2 ReviewedAt
+        datetime2 ReceivedAt
+        datetime2 RefundedAt
+        rowversion RowVersion
+    }
     PROMOTIONS {
         uniqueidentifier Id PK
         nvarchar NormalizedCode UK
@@ -187,6 +208,9 @@ erDiagram
     ORDERS ||--|{ ORDER_DETAILS : snapshots
     PRODUCTS ||--o{ ORDER_DETAILS : references
     ORDERS ||--o{ ORDER_STATUS_HISTORIES : records
+    ORDERS ||--o| SHIPMENTS : fulfills
+    ORDERS ||--o| RETURN_REQUESTS : returns
+    USERS ||--o{ RETURN_REQUESTS : requests
     PROMOTIONS o|--o{ ORDERS : snapshots
     PROMOTIONS ||--o{ PROMOTION_REDEMPTIONS : limits
     ORDERS ||--o| PROMOTION_REDEMPTIONS : consumes

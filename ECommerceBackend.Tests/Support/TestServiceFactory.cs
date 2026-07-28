@@ -123,13 +123,15 @@ internal static class TestServiceFactory
         AppDbContext context,
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null,
-        PricingOptions? pricingOptions = null)
+        PricingOptions? pricingOptions = null,
+        ReturnPolicyOptions? returnPolicyOptions = null)
     {
         var orderRepository = new OrderRepository(context);
         var paymentRepository = new PaymentRepository(context);
         var cartRepository = new CartRepository(context);
         var inventoryRepository = new InventoryRepository(context);
         var promotionRepository = new PromotionRepository(context);
+        var fulfillmentRepository = new FulfillmentRepository(context);
         var queries = new OrderQueryUseCase(orderRepository);
         var consistency = Consistency(context);
         var providers = new PaymentProviderResolver(
@@ -168,15 +170,41 @@ internal static class TestServiceFactory
             clock);
         var refund = new OrderRefundUseCase(
             paymentRepository,
+            fulfillmentRepository,
+            orderRepository,
             context,
             consistency,
             outbox,
             queries,
             clock);
+        var fulfillment = new OrderFulfillmentUseCase(
+            fulfillmentRepository,
+            orderRepository,
+            paymentRepository,
+            context,
+            consistency,
+            outbox,
+            NullAuditWriter.Instance,
+            queries,
+            clock);
+        var returns = new OrderReturnUseCase(
+            fulfillmentRepository,
+            orderRepository,
+            inventoryRepository,
+            context,
+            consistency,
+            outbox,
+            NullAuditWriter.Instance,
+            queries,
+            clock,
+            Options.Create(
+                returnPolicyOptions ?? new ReturnPolicyOptions()));
         return new OrderService(
             checkout,
             commands,
             refund,
+            fulfillment,
+            returns,
             queries,
             pricing);
     }

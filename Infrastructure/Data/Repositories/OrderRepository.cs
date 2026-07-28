@@ -126,6 +126,8 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                     .ThenInclude(payment =>
                         payment!.StatusHistory.OrderBy(
                             history => history.CreatedAt))
+                .Include(order => order.Shipment)
+                .Include(order => order.ReturnRequest)
                 .Include(order =>
                     order.StatusHistory.OrderBy(
                         history => history.CreatedAt))

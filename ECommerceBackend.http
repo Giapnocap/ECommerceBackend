@@ -274,24 +274,62 @@ GET {{BaseUrl}}/api/orders?page=1&pageSize=10
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
 
-### Update order status to Shipping - Admin/Staff
-PUT {{BaseUrl}}/api/orders/{{OrderId}}/status
+### Dispatch shipment - Admin/Staff
+POST {{BaseUrl}}/api/orders/{{OrderId}}/shipment/dispatch
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
 {
-  "status": 2,
-  "note": "Order handed to shipping"
+  "carrier": "Giao Hang Nhanh",
+  "trackingNumber": "GHN-DEMO-001",
+  "note": "Da ban giao cho don vi van chuyen"
 }
 
-### Update order status to Delivered - Admin/Staff
-PUT {{BaseUrl}}/api/orders/{{OrderId}}/status
+### Mark shipment delivered - Admin/Staff
+POST {{BaseUrl}}/api/orders/{{OrderId}}/shipment/deliver
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
 {
-  "status": 3,
-  "note": "Delivered and COD collected"
+  "note": "Da giao va thu COD"
+}
+
+### Request return - Customer
+POST {{BaseUrl}}/api/orders/{{OrderId}}/return-request
+Content-Type: application/json
+Authorization: Bearer {{CustomerToken}}
+
+{
+  "reason": "San pham khong con phu hop nhu cau"
+}
+
+### Approve return - Admin/Staff
+POST {{BaseUrl}}/api/orders/{{OrderId}}/return-request/review
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "decision": 0,
+  "note": "Du dieu kien tra hang"
+}
+
+### Receive returned goods - Admin/Staff
+POST {{BaseUrl}}/api/orders/{{OrderId}}/return-request/receive
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "inspectionNote": "Hang nguyen ven va du phu kien"
+}
+
+### Record COD refund - Admin/Staff
+POST {{BaseUrl}}/api/orders/{{OrderId}}/refund
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "reference": "REFUND-DEMO-001",
+  "note": "Da hoan tien"
 }
 
 ### Low-stock products - Admin/Staff

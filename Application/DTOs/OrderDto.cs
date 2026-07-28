@@ -47,6 +47,28 @@ namespace ECommerceBackend.Application.DTOs
         public DateTime CreatedAt { get; set; }
     }
 
+    public sealed class ShipmentResponse
+    {
+        public Guid Id { get; set; }
+        public string Carrier { get; set; } = string.Empty;
+        public string TrackingNumber { get; set; } = string.Empty;
+        public DateTime ShippedAt { get; set; }
+        public DateTime? DeliveredAt { get; set; }
+    }
+
+    public sealed class ReturnRequestResponse
+    {
+        public Guid Id { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTime RequestedAt { get; set; }
+        public DateTime? ReviewedAt { get; set; }
+        public string? ReviewNote { get; set; }
+        public DateTime? ReceivedAt { get; set; }
+        public string? InspectionNote { get; set; }
+        public DateTime? RefundedAt { get; set; }
+    }
+
     public class OrderResponse
     {
         public Guid Id { get; set; }
@@ -69,6 +91,8 @@ namespace ECommerceBackend.Application.DTOs
         public DateTime? ExpiredAt { get; set; }
         public string? CancellationReason { get; set; }
         public PaymentResponse? Payment { get; set; }
+        public ShipmentResponse? Shipment { get; set; }
+        public ReturnRequestResponse? ReturnRequest { get; set; }
         public IEnumerable<OrderDetailResponse> OrderDetails { get; set; } = Enumerable.Empty<OrderDetailResponse>();
         public IEnumerable<OrderStatusHistoryResponse> StatusHistory { get; set; } = Enumerable.Empty<OrderStatusHistoryResponse>();
     }
@@ -118,6 +142,34 @@ namespace ECommerceBackend.Application.DTOs
     {
         public string Reference { get; set; } = string.Empty;
         public string? Note { get; set; }
+    }
+
+    public sealed class DispatchShipmentRequest
+    {
+        public string Carrier { get; set; } = string.Empty;
+        public string TrackingNumber { get; set; } = string.Empty;
+        public string? Note { get; set; }
+    }
+
+    public sealed class MarkShipmentDeliveredRequest
+    {
+        public string? Note { get; set; }
+    }
+
+    public sealed class CreateReturnRequest
+    {
+        public string Reason { get; set; } = string.Empty;
+    }
+
+    public sealed class ReviewReturnRequest
+    {
+        public ReturnReviewDecision Decision { get; set; }
+        public string? Note { get; set; }
+    }
+
+    public sealed class ReceiveReturnRequest
+    {
+        public string InspectionNote { get; set; } = string.Empty;
     }
 
     public class OrderQueryParams

@@ -8,6 +8,9 @@ namespace ECommerceBackend.Domain.Enums
         Delivered = 3,
         Cancelled = 4,
         DeliveryFailed = 5,
-        Returned = 6
+        Returned = 6,
+        ReturnRequested = 7,
+        ReturnApproved = 8,
+        Refunded = 9
     }
 }

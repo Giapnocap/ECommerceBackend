@@ -39,7 +39,7 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             builder.ToTable(table =>
             {
                 table.HasCheckConstraint("CK_Orders_TotalAmount_Positive", "[TotalAmount] > 0");
-                table.HasCheckConstraint("CK_Orders_Status_Valid", "[Status] BETWEEN 0 AND 6");
+                table.HasCheckConstraint("CK_Orders_Status_Valid", "[Status] BETWEEN 0 AND 9");
                 table.HasCheckConstraint(
                     "CK_Orders_ShippingMethod_Valid",
                     "[ShippingMethod] BETWEEN 0 AND 1");
@@ -119,7 +119,7 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             {
                 table.HasCheckConstraint(
                     "CK_OrderStatusHistories_Status_Valid",
-                    "[ToStatus] BETWEEN 0 AND 6 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 6)");
+                    "[ToStatus] BETWEEN 0 AND 9 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 9)");
                 table.HasCheckConstraint(
                     "CK_OrderStatusHistories_Status_Changed",
                     "[FromStatus] IS NULL OR [FromStatus] <> [ToStatus]");

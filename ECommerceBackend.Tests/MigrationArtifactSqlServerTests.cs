@@ -79,7 +79,7 @@ public sealed class MigrationArtifactSqlServerTests
 
     [Fact]
     [Trait("Category", "SqlServerIntegration")]
-    public async Task GeneratedRollback_RejectsDestructivePromotionData()
+    public async Task GeneratedRollback_RejectsDestructiveFulfillmentData()
     {
         SqlServerIntegrationTestGate.Require();
 
@@ -123,21 +123,53 @@ public sealed class MigrationArtifactSqlServerTests
             await ExecuteScriptAsync(
                 connectionString,
                 """
-                INSERT dbo.Promotions
+                DECLARE @UserId uniqueidentifier = NEWID();
+                DECLARE @OrderId uniqueidentifier = NEWID();
+                DECLARE @Now datetime2 = SYSUTCDATETIME();
+
+                INSERT dbo.Users
                 (
-                    Id, Code, NormalizedCode, Type, Value,
-                    MinimumSubtotal, MaximumDiscountAmount,
-                    StartsAt, EndsAt, UsageLimit,
-                    UsageLimitPerCustomer, UsedCount,
-                    IsActive, CreatedAt, UpdatedAt
+                    Id, UserName, NormalizedUserName, Email,
+                    NormalizedEmail, PasswordHash, FullName,
+                    Phone, IsDeleted, CreatedAt, PasswordChangedAt,
+                    TokenVersion
                 )
                 VALUES
                 (
-                    NEWID(), N'ROLLBACK-GUARD', N'ROLLBACK-GUARD',
-                    0, 10000, 0, NULL,
-                    DATEADD(DAY, -1, SYSUTCDATETIME()),
-                    DATEADD(DAY, 1, SYSUTCDATETIME()),
-                    1, 1, 0, 1, SYSUTCDATETIME(), NULL
+                    @UserId, N'rollback.fulfillment',
+                    N'ROLLBACK.FULFILLMENT',
+                    N'rollback.fulfillment@example.com',
+                    N'ROLLBACK.FULFILLMENT@EXAMPLE.COM',
+                    N'not-used', N'Rollback Fulfillment',
+                    NULL, 0, @Now, NULL, 0
+                );
+
+                INSERT dbo.Orders
+                (
+                    Id, UserId, OrderNumber, IdempotencyKey,
+                    IdempotencyRequestHash, OrderDate,
+                    SubtotalAmount, DiscountAmount, ShippingFee,
+                    TaxAmount, TotalAmount, Status,
+                    ShippingAddress, Note
+                )
+                VALUES
+                (
+                    @OrderId, @UserId, N'ORD-ROLLBACK-FULFILLMENT',
+                    N'rollback-fulfillment',
+                    REPLICATE(N'A', 64), @Now,
+                    100, 0, 0, 0, 100, 1,
+                    N'Rollback address', NULL
+                );
+
+                INSERT dbo.Shipments
+                (
+                    Id, OrderId, Carrier, TrackingNumber,
+                    CreatedByUserId, ShippedAt, DeliveredAt
+                )
+                VALUES
+                (
+                    NEWID(), @OrderId, N'Rollback Carrier',
+                    N'ROLLBACK-TRACKING', @UserId, @Now, NULL
                 );
                 """);
 
@@ -146,7 +178,7 @@ public sealed class MigrationArtifactSqlServerTests
                     connectionString,
                     rollbackScript));
 
-            Assert.Equal(51030, exception.Number);
+            Assert.Equal(51040, exception.Number);
             Assert.True(
                 await HasMigrationAsync(
                     connectionString,

@@ -9,8 +9,8 @@ following boundaries are intentional and visible in the design.
   contract but is not a complete integration with a real payment gateway.
 - Checkout supports configurable shipping/tax rules and bounded promotion codes. It does not
   calculate carrier-specific live rates, stack multiple promotions or model jurisdictional tax.
-- Product variants, vouchers, shipment-provider integration and multi-warehouse inventory are
-  outside the current domain.
+- Shipment records and return processing are internal workflows. Carrier label creation, live
+  tracking synchronization, product variants and multi-warehouse inventory are outside the domain.
 - Email verification is not required for sign-in. Password reset, lockout and session revocation
   are implemented.
 

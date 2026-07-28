@@ -427,6 +427,16 @@
         },
         "type": "object"
       },
+      "CreateReturnRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "DataRetentionRequest": {
         "additionalProperties": false,
         "properties": {
@@ -558,6 +568,24 @@
             "format": "int32",
             "readOnly": true,
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "DispatchShipmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "carrier": {
+            "nullable": true,
+            "type": "string"
+          },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          },
+          "trackingNumber": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -742,6 +770,16 @@
         },
         "type": "object"
       },
+      "MarkShipmentDeliveredRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "MessageResponse": {
         "additionalProperties": false,
         "description": "Simple success message payload.",
@@ -904,6 +942,12 @@
             "nullable": true,
             "type": "string"
           },
+          "returnRequest": {
+            "$ref": "#/components/schemas/ReturnRequestResponse"
+          },
+          "shipment": {
+            "$ref": "#/components/schemas/ShipmentResponse"
+          },
           "shippingAddress": {
             "nullable": true,
             "type": "string"
@@ -992,7 +1036,10 @@
           3,
           4,
           5,
-          6
+          6,
+          7,
+          8,
+          9
         ],
         "format": "int32",
         "type": "integer"
@@ -1401,6 +1448,16 @@
         "format": "int32",
         "type": "integer"
       },
+      "ReceiveReturnRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "inspectionNote": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RecordOrderRefundRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1482,6 +1539,72 @@
         },
         "type": "object"
       },
+      "ReturnRequestResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "inspectionNote": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "receivedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "refundedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "reviewNote": {
+            "nullable": true,
+            "type": "string"
+          },
+          "reviewedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ReturnReviewDecision": {
+        "enum": [
+          0,
+          1
+        ],
+        "format": "int32",
+        "type": "integer"
+      },
+      "ReviewReturnRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/ReturnReviewDecision"
+          },
+          "note": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "SalesSummaryResponse": {
         "additionalProperties": false,
         "properties": {
@@ -1553,6 +1676,33 @@
           "totalOrders": {
             "format": "int32",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ShipmentResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "carrier": {
+            "nullable": true,
+            "type": "string"
+          },
+          "deliveredAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "shippedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "trackingNumber": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -4583,6 +4733,541 @@
           }
         ],
         "summary": "[Staff/Admin] Ghi nh\u1EADn ho\u00E0n ti\u1EC1n COD \u0111\u00E3 ho\u00E0n t\u1EA5t cho \u0111\u01A1n ho\u00E0n h\u00E0ng",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/orders/{id}/return-request": {
+      "post": {
+        "parameters": [
+          {
+            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng thu\u1ED9c kh\u00E1ch h\u00E0ng hi\u1EC7n t\u1EA1i",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReturnRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReturnRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReturnRequest"
+              }
+            }
+          },
+          "description": "L\u00FD do tr\u1EA3 h\u00E0ng"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "Kh\u00E1ch h\u00E0ng y\u00EAu c\u1EA7u tr\u1EA3 m\u1ED9t \u0111\u01A1n \u0111\u00E3 giao",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/orders/{id}/return-request/receive": {
+      "post": {
+        "parameters": [
+          {
+            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiveReturnRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiveReturnRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiveReturnRequest"
+              }
+            }
+          },
+          "description": "Ghi ch\u00FA ki\u1EC3m tra h\u00E0ng ho\u00E0n"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Staff/Admin] Nh\u1EADn v\u00E0 ki\u1EC3m tra h\u00E0ng ho\u00E0n",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/orders/{id}/return-request/review": {
+      "post": {
+        "parameters": [
+          {
+            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewReturnRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewReturnRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewReturnRequest"
+              }
+            }
+          },
+          "description": "Quy\u1EBFt \u0111\u1ECBnh v\u00E0 ghi ch\u00FA x\u00E9t duy\u1EC7t"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Staff/Admin] Duy\u1EC7t ho\u1EB7c t\u1EEB ch\u1ED1i y\u00EAu c\u1EA7u tr\u1EA3 h\u00E0ng",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/orders/{id}/shipment/deliver": {
+      "post": {
+        "parameters": [
+          {
+            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkShipmentDeliveredRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkShipmentDeliveredRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkShipmentDeliveredRequest"
+              }
+            }
+          },
+          "description": "Ghi ch\u00FA giao h\u00E0ng th\u00E0nh c\u00F4ng"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Staff/Admin] X\u00E1c nh\u1EADn v\u1EADn \u0111\u01A1n \u0111\u00E3 giao th\u00E0nh c\u00F4ng",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/orders/{id}/shipment/dispatch": {
+      "post": {
+        "parameters": [
+          {
+            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchShipmentRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchShipmentRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DispatchShipmentRequest"
+              }
+            }
+          },
+          "description": "Th\u00F4ng tin \u0111\u01A1n v\u1ECB v\u1EADn chuy\u1EC3n v\u00E0 m\u00E3 v\u1EADn \u0111\u01A1n"
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Bad Request - validation or business rule error."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden - authenticated user does not have enough permission."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Internal Server Error."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Staff/Admin] T\u1EA1o v\u1EADn \u0111\u01A1n v\u00E0 xu\u1EA5t giao \u0111\u01A1n h\u00E0ng",
         "tags": [
           "Order"
         ]
