@@ -14,7 +14,8 @@ $allowedFixturePaths = @(
     'scripts/TestRepositorySecrets.ps1'
 )
 $allowedPrefixes = @(
-    'tests/ECommerceBackend.Tests/'
+    'tests/ECommerceBackend.UnitTests/',
+    'tests/ECommerceBackend.IntegrationTests/'
 )
 $patterns = [ordered]@{
     PrivateKey = '-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'

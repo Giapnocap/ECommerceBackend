@@ -2,7 +2,6 @@ using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Application.Validation;
 using ECommerceBackend.Domain.Entities;
-using ECommerceBackend.Tests.Support;
 
 namespace ECommerceBackend.Tests;
 

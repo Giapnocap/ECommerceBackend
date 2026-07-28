@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <Import Project="..\TestProject.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ECommerceBackend.Application\ECommerceBackend.Application.csproj" />
+    <ProjectReference Include="..\..\src\ECommerceBackend.Domain\ECommerceBackend.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -10,7 +10,7 @@ REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NE
 - FluentValidation và mapping response tường minh
 - Serilog, ProblemDetails, correlation ID
 - Swagger/OpenAPI
-- xUnit, EF Core InMemory và SQL Server integration tests
+- xUnit unit tests, API/EF Core integration tests và SQL Server integration tests
 
 ## Chức Năng Chính
 
@@ -60,11 +60,19 @@ src/
     Notifications/    Outbox processing và notification adapters
     Payments/         Payment provider adapters
 tests/
-  ECommerceBackend.Tests/ Unit, contract và SQL Server integration tests
+  ECommerceBackend.UnitTests/
+    Application/     Validator và application rules không dùng Infrastructure
+    Domain/          Aggregate, policy và state-machine tests
+  ECommerceBackend.IntegrationTests/
+    API/             HTTP contracts, middleware và OpenAPI baseline
+    Auth, Catalog, Carts, Orders, Payments, Operations/
+                     Service/repository workflows theo feature
+    SqlServer/       Migration, transaction, recovery và performance tests
+    Support/         Fixture và factory dùng chung
 ```
 
-Solution gồm năm project: API host `src/ECommerceBackend/ECommerceBackend.csproj`, `Domain`, `Application`,
-`Infrastructure` và `ECommerceBackend.Tests`. Khi chạy bằng Visual Studio, đặt project
+Solution gồm sáu project: API host `src/ECommerceBackend/ECommerceBackend.csproj`, `Domain`, `Application`,
+`Infrastructure`, `ECommerceBackend.UnitTests` và `ECommerceBackend.IntegrationTests`. Khi chạy bằng Visual Studio, đặt project
 `API` trong solution folder `src` làm Startup Project; các project layer là class library và không chạy
 độc lập.
 
@@ -167,10 +175,17 @@ Demo seed còn tạo mã `WELCOME10`: giảm 10%, tối đa 100.000 đ, cho đơ
 
 ## Chạy Test
 
-Unit và application tests:
+Unit tests thuần Domain/Application:
 
 ```powershell
-dotnet test ECommerceBackend.sln --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration&Category!=SqlServerPerformance"
+dotnet test tests/ECommerceBackend.UnitTests/ECommerceBackend.UnitTests.csproj
+```
+
+API, repository và application integration tests không yêu cầu SQL Server:
+
+```powershell
+dotnet test tests/ECommerceBackend.IntegrationTests/ECommerceBackend.IntegrationTests.csproj `
+  --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration&Category!=SqlServerPerformance"
 ```
 
 SQL Server integration tests dùng database riêng:
@@ -180,7 +195,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildMigrationArti
 $env:RUN_SQL_INTEGRATION_TESTS = "1"
 $env:ECOMMERCE_TEST_SQL_CONNECTION = "Server=.;Database=ECommerceBackendIntegration;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
 $env:ECOMMERCE_MIGRATION_ARTIFACTS_DIRECTORY = (Resolve-Path .\MigrationArtifacts)
-dotnet test tests/ECommerceBackend.Tests/ECommerceBackend.Tests.csproj --filter "Category=SqlServerIntegration"
+dotnet test tests/ECommerceBackend.IntegrationTests/ECommerceBackend.IntegrationTests.csproj `
+  --filter "Category=SqlServerIntegration"
 ```
 
 Các test này tạo và xóa database tạm. `ECOMMERCE_TEST_SQL_CONNECTION` phải trỏ tới database

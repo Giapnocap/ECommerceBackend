@@ -42,20 +42,30 @@ jobs:
           ./scripts/BuildMigrationArtifacts.ps1
           -OutputDirectory ./MigrationArtifacts
           -DotNetEfPath ./.tools/dotnet-ef
-      - run: >-
-          dotnet test tests/ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
+      - name: Run unit tests
+        run: >-
+          dotnet test tests/ECommerceBackend.UnitTests/ECommerceBackend.UnitTests.csproj
+          --configuration Release
+          --no-build
+          --settings coverage.runsettings
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults/Unit
+          --logger "console;verbosity=normal"
+      - name: Run integration and contract tests
+        run: >-
+          dotnet test tests/ECommerceBackend.IntegrationTests/ECommerceBackend.IntegrationTests.csproj
           --configuration Release
           --no-build
           --settings coverage.runsettings
           --filter "Category!=SqlServerIntegration&Category!=SqlServerRecoveryIntegration&Category!=SqlServerPerformance"
           --collect:"XPlat Code Coverage"
-          --results-directory ./TestResults
+          --results-directory ./TestResults/Integration
           --logger "console;verbosity=normal"
       - shell: pwsh
         run: >-
           ./scripts/VerifyCoverage.ps1
           -ReportDirectory ./TestResults
-          -MinimumLineRate 75
+          -MinimumLineRate 80
           -MinimumBranchRate 60
       - shell: pwsh
         run: >-
@@ -131,7 +141,7 @@ jobs:
           -OutputDirectory ./MigrationArtifacts
           -DotNetEfPath ./.tools/dotnet-ef
       - run: >-
-          dotnet test tests/ECommerceBackend.Tests/ECommerceBackend.Tests.csproj
+          dotnet test tests/ECommerceBackend.IntegrationTests/ECommerceBackend.IntegrationTests.csproj
           --configuration Release
           --no-build
           --filter "Category=SqlServerIntegration|Category=SqlServerRecoveryIntegration"

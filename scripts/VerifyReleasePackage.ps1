@@ -45,6 +45,8 @@ try {
             'app/Domain/',
             'app/Infrastructure/',
             'app/ECommerceBackend.Tests/',
+            'app/ECommerceBackend.UnitTests/',
+            'app/ECommerceBackend.IntegrationTests/',
             'app/TestResults/',
             'app/PerformanceResults/',
             'app/ReleasePackage/',

@@ -164,6 +164,48 @@ public sealed class ArchitectureBoundaryTests
     }
 
     [Fact]
+    public void UnitTestProject_DoesNotReferenceApiOrPersistence()
+    {
+        var unitTestDirectory = Path.Combine(
+            FindRepositoryRoot(),
+            "tests",
+            "ECommerceBackend.UnitTests");
+        var forbiddenReferences = Directory
+            .EnumerateFiles(unitTestDirectory, "*", SearchOption.AllDirectories)
+            .Where(file => !file.Contains(
+                    $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase)
+                && !file.Contains(
+                    $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase))
+            .Where(file => file.EndsWith(".cs", StringComparison.Ordinal)
+                || file.EndsWith(".csproj", StringComparison.Ordinal))
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = index + 1,
+                    Text = line
+                }))
+            .Where(source => source.Text.Contains(
+                    "ECommerceBackend.API",
+                    StringComparison.Ordinal)
+                || source.Text.Contains(
+                    "ECommerceBackend.Infrastructure",
+                    StringComparison.Ordinal)
+                || source.Text.Contains(
+                    "Microsoft.EntityFrameworkCore",
+                    StringComparison.Ordinal)
+                || source.Text.Contains(
+                    "TestAppDbContext",
+                    StringComparison.Ordinal))
+            .Select(source => $"{source.File}:{source.Line}")
+            .ToArray();
+
+        Assert.Empty(forbiddenReferences);
+    }
+
+    [Fact]
     public void RepositoryContracts_DoNotExposeQueryableOrDbSet()
     {
         var repositoryContracts = typeof(IOrderRepository).Assembly

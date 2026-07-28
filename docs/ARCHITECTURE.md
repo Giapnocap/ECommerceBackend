@@ -5,7 +5,8 @@
 The system is a modular monolith: one ASP.NET Core API process and one SQL Server database.
 Client applications and container orchestration are intentionally outside this repository.
 
-The solution uses separate `Domain`, `Application`, `Infrastructure`, API host and test projects.
+The solution uses separate `Domain`, `Application`, `Infrastructure`, API host, unit-test and
+integration-test projects.
 Project references enforce the dependency direction while deployment remains a single process.
 
 ## Dependency Direction
@@ -83,6 +84,18 @@ Repositories are feature-specific rather than generic. Their contracts expose bu
 queries and persistence operations without leaking `DbSet` or `IQueryable`. Application services
 retain transaction orchestration and call `IUnitOfWork` at the same commit points as the business
 use case; all repositories in one request share the same scoped `AppDbContext`.
+
+## Testing Boundaries
+
+`ECommerceBackend.UnitTests` references only Application and Domain. It covers validators, domain
+invariants, policies and state machines without API hosting or persistence adapters.
+
+`ECommerceBackend.IntegrationTests` references the API composition root and is organized by
+feature. EF Core InMemory tests verify service/repository composition only; they are not used as
+evidence for relational constraints, transactions or concurrency. Tests tagged
+`SqlServerIntegration`, `SqlServerRecoveryIntegration` and `SqlServerPerformance` use an isolated
+SQL Server database for those guarantees. OpenAPI and architecture contract tests remain in this
+project because they verify the assembled system rather than one class in isolation.
 
 ## Checkout Flow
 
