@@ -1,5 +1,5 @@
-using ECommerceBackend.API.Extensions;
 using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Infrastructure;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Tests.Support;
 using Microsoft.EntityFrameworkCore;

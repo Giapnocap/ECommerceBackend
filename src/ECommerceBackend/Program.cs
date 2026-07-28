@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using ECommerceBackend.API.Extensions;
 using ECommerceBackend.API.Middlewares;
+using ECommerceBackend.Application;
+using ECommerceBackend.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Serilog;
 
@@ -40,8 +42,8 @@ try
         .AddECommerceReverseProxy(builder.Configuration)
         .AddECommerceValidation()
         .AddECommerceObservability(builder.Configuration, builder.Environment)
-        .AddECommerceDatabase(builder.Configuration)
-        .AddECommerceRepositoriesAndServices()
+        .AddECommerceApplication()
+        .AddECommerceInfrastructure(builder.Configuration)
         .AddECommerceCors(builder.Configuration, builder.Environment)
         .AddECommerceJwtAuthentication(builder.Configuration, builder.Environment)
         .AddECommerceAuthorization()

@@ -70,8 +70,10 @@ Solution gồm năm project: API host `src/ECommerceBackend/ECommerceBackend.csp
 
 `src/ECommerceBackend/Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
 
-Đăng ký dependency được chia theo trách nhiệm trong
-`src/ECommerceBackend/API/Extensions/ServiceCollectionExtensions.*.cs`. `AppDbContext` chỉ khai báo `DbSet` và nạp
+Đăng ký dependency thuộc về
+`ECommerceBackend.Application/DependencyInjection.cs` và
+`ECommerceBackend.Infrastructure/DependencyInjection.cs`; API chỉ ghép các module tại composition root.
+`AppDbContext` chỉ khai báo `DbSet` và nạp
 `IEntityTypeConfiguration<T>` từ `src/ECommerceBackend.Infrastructure/Data/Configurations`; mapping không nằm trong
 application service. Repository là các contract theo feature, không sử dụng generic repository và
 không expose `DbSet` hoặc `IQueryable` qua tầng Application.

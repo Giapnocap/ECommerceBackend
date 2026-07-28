@@ -35,8 +35,9 @@ rejects EF Core references under `Application`.
 
 The compiler enforces `Application -> Domain` and
 `Infrastructure -> Application + Domain`; the API host references both to compose the process.
-Composition registration is split by responsibility across
-`ServiceCollectionExtensions.Configuration`, `.Infrastructure`, `.Security` and `.Web`.
+Application services and infrastructure adapters own their registrations through their respective
+`DependencyInjection` classes. The API host composes those modules with its web, security and
+configuration registrations.
 `AppDbContext` discovers per-entity `IEntityTypeConfiguration<T>` implementations from
 `src/ECommerceBackend.Infrastructure/Data/Configurations`; indexes, constraints, relationships and authorization seed
 data are kept at that persistence boundary.
