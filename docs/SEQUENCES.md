@@ -6,12 +6,12 @@
 sequenceDiagram
     actor Client
     participant API as Auth/User API
-    participant Auth as AuthSessionService
+    participant Auth as AuthLoginUseCase
     participant DB as SQL Server
     participant JWT as AuthTokenIssuer
 
     Client->>API: POST /api/auth/login
-    API->>Auth: LoginAsync(credentials)
+    API->>Auth: ExecuteAsync(credentials)
     Auth->>DB: Lock user and load roles/permissions
     Auth->>Auth: Constant-work BCrypt verification
     Auth->>DB: Insert hashed refresh token family
@@ -69,34 +69,38 @@ sequenceDiagram
     actor Staff
     actor Customer
     participant API as OrderController
-    participant Commands as OrderCommandService
-    participant Fulfillment as OrderFulfillmentUseCase
-    participant Returns as OrderReturnUseCase
+    participant Dispatch as ShipmentDispatchUseCase
+    participant Delivery as ShipmentDeliveryUseCase
+    participant ReturnRequest as OrderReturnRequestUseCase
+    participant ReturnReview as OrderReturnReviewUseCase
+    participant ReturnReceipt as OrderReturnReceiptUseCase
     participant Refund as OrderRefundUseCase
     participant Rules as Order/Payment/Inventory Policies
     participant DB as SQL Server
 
     Staff->>API: POST shipment/dispatch (carrier + tracking)
-    API->>Fulfillment: DispatchAsync
-    Fulfillment->>DB: Lock order and shipment
-    Fulfillment->>DB: Insert shipment + Shipping history + commit
+    API->>Dispatch: ExecuteAsync
+    Dispatch->>DB: Lock order and shipment
+    Dispatch->>DB: Insert shipment + Shipping history + commit
 
     Staff->>API: POST shipment/deliver
-    API->>Fulfillment: MarkDeliveredAsync
-    Fulfillment->>DB: Lock order, shipment and payment
-    Fulfillment->>Rules: Delivered + collect COD
-    Fulfillment->>DB: Commit histories atomically
+    API->>Delivery: ExecuteAsync
+    Delivery->>DB: Lock order, shipment and payment
+    Delivery->>Rules: Delivered + collect COD
+    Delivery->>DB: Commit histories atomically
 
     Customer->>API: POST return-request
-    API->>Returns: RequestAsync
-    Returns->>DB: Verify owner, delivery time and return window
-    Returns->>DB: Insert request + ReturnRequested history
+    API->>ReturnRequest: ExecuteAsync
+    ReturnRequest->>DB: Verify owner, delivery time and return window
+    ReturnRequest->>DB: Insert request + ReturnRequested history
     Staff->>API: POST return-request/review
-    Returns->>DB: Approve or reject under order lock
+    API->>ReturnReview: ExecuteAsync
+    ReturnReview->>DB: Approve or reject under order lock
     Staff->>API: POST return-request/receive
-    Returns->>DB: Lock products in stable order
-    Returns->>Rules: Receive inspection and release stock once
-    Returns->>DB: Append Returned history + ledger + commit
+    API->>ReturnReceipt: ExecuteAsync
+    ReturnReceipt->>DB: Lock products in stable order
+    ReturnReceipt->>Rules: Receive inspection and release stock once
+    ReturnReceipt->>DB: Append Returned history + ledger + commit
 
     Staff->>API: POST /api/orders/{id}/refund + receipt reference
     API->>Refund: RecordRefundAsync

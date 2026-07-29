@@ -24,7 +24,10 @@ namespace ECommerceBackend.Application
         {
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<AuthRegistrationUseCase>();
-            services.AddScoped<AuthSessionService>();
+            services.AddScoped<AuthLoginUseCase>();
+            services.AddScoped<AuthRefreshUseCase>();
+            services.AddScoped<AuthLogoutUseCase>();
+            services.AddScoped<AuthLogoutAllUseCase>();
             services.AddScoped<PasswordResetUseCase>();
             services.AddScoped<AuthTokenIssuer>();
             services.AddScoped<IUserService, UserService>();
@@ -43,11 +46,22 @@ namespace ECommerceBackend.Application
         {
             services.AddScoped<ICartService, CartService>();
             services.AddScoped<IOrderService, OrderService>();
+            services.AddScoped<CheckoutCartLoader>();
+            services.AddScoped<CheckoutOrderFactory>();
+            services.AddScoped<CheckoutOrderWriter>();
             services.AddScoped<OrderCheckoutUseCase>();
             services.AddScoped<OrderPricingUseCase>();
-            services.AddScoped<OrderCommandService>();
-            services.AddScoped<OrderFulfillmentUseCase>();
-            services.AddScoped<OrderReturnUseCase>();
+            services.AddScoped<OrderCancellationWorkflow>();
+            services.AddScoped<OrderStatusUpdateUseCase>();
+            services.AddScoped<CustomerOrderCancellationUseCase>();
+            services.AddScoped<PendingOrderExpirationUseCase>();
+            services.AddScoped<OrderFulfillmentWorkflow>();
+            services.AddScoped<ShipmentDispatchUseCase>();
+            services.AddScoped<ShipmentDeliveryUseCase>();
+            services.AddScoped<OrderReturnWorkflow>();
+            services.AddScoped<OrderReturnRequestUseCase>();
+            services.AddScoped<OrderReturnReviewUseCase>();
+            services.AddScoped<OrderReturnReceiptUseCase>();
             services.AddScoped<OrderRefundUseCase>();
             services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();

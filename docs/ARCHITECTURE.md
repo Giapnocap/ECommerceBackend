@@ -79,6 +79,9 @@ Public application service interfaces remain stable facades for controllers and 
 The large auth, order and operations implementations are composed from focused use cases:
 registration/session/password reset, checkout/order queries/lifecycle commands, and
 dead-letter/audit/retention operations. Facades do not own `DbContext` or transaction dependencies.
+Session, shipment, order cancellation and return commands each have a dedicated use case.
+Checkout remains one transaction-owning use case and delegates cart loading, aggregate creation
+and persistence staging to focused collaborators.
 
 Repositories are feature-specific rather than generic. Their contracts expose business-oriented
 queries and persistence operations without leaking `DbSet` or `IQueryable`. Application services

@@ -89,7 +89,7 @@ internal static class TestServiceFactory
                 hasher,
                 tokenIssuer,
                 clock),
-            new AuthSessionService(
+            new AuthLoginUseCase(
                 userRepository,
                 authSessionRepository,
                 context,
@@ -98,6 +98,23 @@ internal static class TestServiceFactory
                 options,
                 hasher,
                 audit,
+                clock),
+            new AuthRefreshUseCase(
+                userRepository,
+                authSessionRepository,
+                context,
+                consistency,
+                tokenIssuer,
+                clock),
+            new AuthLogoutUseCase(
+                authSessionRepository,
+                context,
+                consistency,
+                clock),
+            new AuthLogoutAllUseCase(
+                authSessionRepository,
+                context,
+                consistency,
                 clock),
             new PasswordResetUseCase(
                 userRepository,
@@ -146,28 +163,55 @@ internal static class TestServiceFactory
             clock,
             Options.Create(
                 pricingOptions ?? new PricingOptions()));
-        var checkout = new OrderCheckoutUseCase(
+        var checkoutCartLoader = new CheckoutCartLoader(
+            cartRepository,
+            consistency);
+        var checkoutOrderFactory = new CheckoutOrderFactory(
+            providers,
+            options);
+        var checkoutOrderWriter = new CheckoutOrderWriter(
             orderRepository,
             paymentRepository,
             cartRepository,
-            inventoryRepository,
+            inventoryRepository);
+        var checkout = new OrderCheckoutUseCase(
+            orderRepository,
             context,
             consistency,
-            providers,
             outbox,
+            checkoutCartLoader,
+            checkoutOrderFactory,
+            checkoutOrderWriter,
             pricing,
             queries,
             clock,
             options);
-        var commands = new OrderCommandService(
+        var cancellation = new OrderCancellationWorkflow(
             orderRepository,
             paymentRepository,
             inventoryRepository,
+            consistency,
+            outbox);
+        var statusUpdate = new OrderStatusUpdateUseCase(
             context,
             consistency,
             outbox,
+            NullAuditWriter.Instance,
+            cancellation,
             queries,
             clock);
+        var customerCancellation =
+            new CustomerOrderCancellationUseCase(
+                context,
+                consistency,
+                cancellation,
+                queries,
+                clock);
+        var expiration = new PendingOrderExpirationUseCase(
+            orderRepository,
+            context,
+            consistency,
+            cancellation);
         var refund = new OrderRefundUseCase(
             paymentRepository,
             fulfillmentRepository,
@@ -177,34 +221,67 @@ internal static class TestServiceFactory
             outbox,
             queries,
             clock);
-        var fulfillment = new OrderFulfillmentUseCase(
-            fulfillmentRepository,
+        var fulfillmentWorkflow = new OrderFulfillmentWorkflow(
             orderRepository,
             paymentRepository,
+            consistency,
+            queries);
+        var shipmentDispatch = new ShipmentDispatchUseCase(
+            fulfillmentRepository,
             context,
             consistency,
             outbox,
             NullAuditWriter.Instance,
-            queries,
+            fulfillmentWorkflow,
             clock);
-        var returns = new OrderReturnUseCase(
+        var shipmentDelivery = new ShipmentDeliveryUseCase(
             fulfillmentRepository,
+            context,
+            consistency,
+            outbox,
+            NullAuditWriter.Instance,
+            fulfillmentWorkflow,
+            clock);
+        var returnWorkflow = new OrderReturnWorkflow(
             orderRepository,
             inventoryRepository,
+            consistency,
+            NullAuditWriter.Instance,
+            queries);
+        var returnRequest = new OrderReturnRequestUseCase(
+            fulfillmentRepository,
             context,
             consistency,
             outbox,
-            NullAuditWriter.Instance,
-            queries,
+            returnWorkflow,
             clock,
             Options.Create(
                 returnPolicyOptions ?? new ReturnPolicyOptions()));
+        var returnReview = new OrderReturnReviewUseCase(
+            fulfillmentRepository,
+            context,
+            consistency,
+            outbox,
+            returnWorkflow,
+            clock);
+        var returnReceipt = new OrderReturnReceiptUseCase(
+            fulfillmentRepository,
+            context,
+            consistency,
+            outbox,
+            returnWorkflow,
+            clock);
         return new OrderService(
             checkout,
-            commands,
+            statusUpdate,
+            customerCancellation,
+            expiration,
             refund,
-            fulfillment,
-            returns,
+            shipmentDispatch,
+            shipmentDelivery,
+            returnRequest,
+            returnReview,
+            returnReceipt,
             queries,
             pricing);
     }

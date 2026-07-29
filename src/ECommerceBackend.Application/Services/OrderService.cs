@@ -7,27 +7,43 @@ namespace ECommerceBackend.Application.Services
     public sealed class OrderService : IOrderService
     {
         private readonly OrderCheckoutUseCase _checkout;
-        private readonly OrderCommandService _commands;
+        private readonly OrderStatusUpdateUseCase _statusUpdate;
+        private readonly CustomerOrderCancellationUseCase
+            _customerCancellation;
+        private readonly PendingOrderExpirationUseCase _expiration;
         private readonly OrderRefundUseCase _refund;
-        private readonly OrderFulfillmentUseCase _fulfillment;
-        private readonly OrderReturnUseCase _returns;
+        private readonly ShipmentDispatchUseCase _shipmentDispatch;
+        private readonly ShipmentDeliveryUseCase _shipmentDelivery;
+        private readonly OrderReturnRequestUseCase _returnRequest;
+        private readonly OrderReturnReviewUseCase _returnReview;
+        private readonly OrderReturnReceiptUseCase _returnReceipt;
         private readonly OrderQueryUseCase _queries;
         private readonly OrderPricingUseCase _pricing;
 
         public OrderService(
             OrderCheckoutUseCase checkout,
-            OrderCommandService commands,
+            OrderStatusUpdateUseCase statusUpdate,
+            CustomerOrderCancellationUseCase customerCancellation,
+            PendingOrderExpirationUseCase expiration,
             OrderRefundUseCase refund,
-            OrderFulfillmentUseCase fulfillment,
-            OrderReturnUseCase returns,
+            ShipmentDispatchUseCase shipmentDispatch,
+            ShipmentDeliveryUseCase shipmentDelivery,
+            OrderReturnRequestUseCase returnRequest,
+            OrderReturnReviewUseCase returnReview,
+            OrderReturnReceiptUseCase returnReceipt,
             OrderQueryUseCase queries,
             OrderPricingUseCase pricing)
         {
             _checkout = checkout;
-            _commands = commands;
+            _statusUpdate = statusUpdate;
+            _customerCancellation = customerCancellation;
+            _expiration = expiration;
             _refund = refund;
-            _fulfillment = fulfillment;
-            _returns = returns;
+            _shipmentDispatch = shipmentDispatch;
+            _shipmentDelivery = shipmentDelivery;
+            _returnRequest = returnRequest;
+            _returnReview = returnReview;
+            _returnReceipt = returnReceipt;
             _queries = queries;
             _pricing = pricing;
         }
@@ -84,7 +100,7 @@ namespace ECommerceBackend.Application.Services
             Guid actorUserId,
             UpdateOrderStatusRequest request,
             CancellationToken cancellationToken = default)
-            => _commands.UpdateStatusAsync(
+            => _statusUpdate.ExecuteAsync(
                 orderId,
                 actorUserId,
                 request,
@@ -95,7 +111,7 @@ namespace ECommerceBackend.Application.Services
             Guid customerUserId,
             CancelOrderRequest request,
             CancellationToken cancellationToken = default)
-            => _commands.CancelByCustomerAsync(
+            => _customerCancellation.ExecuteAsync(
                 orderId,
                 customerUserId,
                 request,
@@ -117,7 +133,7 @@ namespace ECommerceBackend.Application.Services
             Guid actorUserId,
             DispatchShipmentRequest request,
             CancellationToken cancellationToken = default)
-            => _fulfillment.DispatchAsync(
+            => _shipmentDispatch.ExecuteAsync(
                 orderId,
                 actorUserId,
                 request,
@@ -128,7 +144,7 @@ namespace ECommerceBackend.Application.Services
             Guid actorUserId,
             MarkShipmentDeliveredRequest request,
             CancellationToken cancellationToken = default)
-            => _fulfillment.MarkDeliveredAsync(
+            => _shipmentDelivery.ExecuteAsync(
                 orderId,
                 actorUserId,
                 request,
@@ -139,7 +155,7 @@ namespace ECommerceBackend.Application.Services
             Guid customerUserId,
             CreateReturnRequest request,
             CancellationToken cancellationToken = default)
-            => _returns.RequestAsync(
+            => _returnRequest.ExecuteAsync(
                 orderId,
                 customerUserId,
                 request,
@@ -150,7 +166,7 @@ namespace ECommerceBackend.Application.Services
             Guid actorUserId,
             ReviewReturnRequest request,
             CancellationToken cancellationToken = default)
-            => _returns.ReviewAsync(
+            => _returnReview.ExecuteAsync(
                 orderId,
                 actorUserId,
                 request,
@@ -161,7 +177,7 @@ namespace ECommerceBackend.Application.Services
             Guid actorUserId,
             ReceiveReturnRequest request,
             CancellationToken cancellationToken = default)
-            => _returns.ReceiveAsync(
+            => _returnReceipt.ExecuteAsync(
                 orderId,
                 actorUserId,
                 request,
@@ -171,7 +187,7 @@ namespace ECommerceBackend.Application.Services
             DateTime asOf,
             int batchSize,
             CancellationToken cancellationToken = default)
-            => _commands.GetDuePendingOrderIdsAsync(
+            => _expiration.GetDueOrderIdsAsync(
                 asOf,
                 batchSize,
                 cancellationToken);
@@ -180,7 +196,7 @@ namespace ECommerceBackend.Application.Services
             Guid orderId,
             DateTime asOf,
             CancellationToken cancellationToken = default)
-            => _commands.ExpirePendingOrderAsync(
+            => _expiration.ExecuteAsync(
                 orderId,
                 asOf,
                 cancellationToken);

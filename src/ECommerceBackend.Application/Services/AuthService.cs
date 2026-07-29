@@ -6,16 +6,25 @@ namespace ECommerceBackend.Application.Services
     public sealed class AuthService : IAuthService
     {
         private readonly AuthRegistrationUseCase _registration;
-        private readonly AuthSessionService _sessions;
+        private readonly AuthLoginUseCase _login;
+        private readonly AuthRefreshUseCase _refresh;
+        private readonly AuthLogoutUseCase _logout;
+        private readonly AuthLogoutAllUseCase _logoutAll;
         private readonly PasswordResetUseCase _passwordReset;
 
         public AuthService(
             AuthRegistrationUseCase registration,
-            AuthSessionService sessions,
+            AuthLoginUseCase login,
+            AuthRefreshUseCase refresh,
+            AuthLogoutUseCase logout,
+            AuthLogoutAllUseCase logoutAll,
             PasswordResetUseCase passwordReset)
         {
             _registration = registration;
-            _sessions = sessions;
+            _login = login;
+            _refresh = refresh;
+            _logout = logout;
+            _logoutAll = logoutAll;
             _passwordReset = passwordReset;
         }
 
@@ -27,7 +36,7 @@ namespace ECommerceBackend.Application.Services
         public Task<AuthResponse> LoginAsync(
             LoginRequest request,
             CancellationToken cancellationToken = default)
-            => _sessions.LoginAsync(request, cancellationToken);
+            => _login.ExecuteAsync(request, cancellationToken);
 
         public Task RequestPasswordResetAsync(
             ForgotPasswordRequest request,
@@ -42,17 +51,17 @@ namespace ECommerceBackend.Application.Services
         public Task<AuthResponse> RefreshAsync(
             RefreshTokenRequest request,
             CancellationToken cancellationToken = default)
-            => _sessions.RefreshAsync(request, cancellationToken);
+            => _refresh.ExecuteAsync(request, cancellationToken);
 
         public Task LogoutAsync(
             Guid userId,
             LogoutRequest request,
             CancellationToken cancellationToken = default)
-            => _sessions.LogoutAsync(userId, request, cancellationToken);
+            => _logout.ExecuteAsync(userId, request, cancellationToken);
 
         public Task LogoutAllAsync(
             Guid userId,
             CancellationToken cancellationToken = default)
-            => _sessions.LogoutAllAsync(userId, cancellationToken);
+            => _logoutAll.ExecuteAsync(userId, cancellationToken);
     }
 }

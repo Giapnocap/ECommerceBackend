@@ -53,18 +53,45 @@ public sealed class ArchitectureBoundaryTests
     public void UseCaseServices_HaveFocusedPublicSurface()
     {
         AssertPublicMethodCount<AuthRegistrationUseCase>(1);
-        AssertPublicMethodCount<AuthSessionService>(4);
+        AssertPublicMethodCount<AuthLoginUseCase>(1);
+        AssertPublicMethodCount<AuthRefreshUseCase>(1);
+        AssertPublicMethodCount<AuthLogoutUseCase>(1);
+        AssertPublicMethodCount<AuthLogoutAllUseCase>(1);
         AssertPublicMethodCount<PasswordResetUseCase>(2);
         AssertPublicMethodCount<OrderQueryUseCase>(3);
         AssertPublicMethodCount<OrderCheckoutUseCase>(1);
         AssertPublicMethodCount<OrderPricingUseCase>(1);
-        AssertPublicMethodCount<OrderCommandService>(4);
-        AssertPublicMethodCount<OrderFulfillmentUseCase>(2);
-        AssertPublicMethodCount<OrderReturnUseCase>(3);
+        AssertPublicMethodCount<OrderStatusUpdateUseCase>(1);
+        AssertPublicMethodCount<CustomerOrderCancellationUseCase>(1);
+        AssertPublicMethodCount<PendingOrderExpirationUseCase>(2);
+        AssertPublicMethodCount<ShipmentDispatchUseCase>(1);
+        AssertPublicMethodCount<ShipmentDeliveryUseCase>(1);
+        AssertPublicMethodCount<OrderReturnRequestUseCase>(1);
+        AssertPublicMethodCount<OrderReturnReviewUseCase>(1);
+        AssertPublicMethodCount<OrderReturnReceiptUseCase>(1);
         AssertPublicMethodCount<OrderRefundUseCase>(1);
         AssertPublicMethodCount<DeadLetterUseCase>(2);
         AssertPublicMethodCount<AuditQueryUseCase>(1);
         AssertPublicMethodCount<DataRetentionUseCase>(1);
+    }
+
+    [Fact]
+    public void LegacyMultiCommandServices_AreNotPartOfApplicationAssembly()
+    {
+        var legacyTypeNames = new[]
+        {
+            "AuthSessionService",
+            "OrderCommandService",
+            "OrderFulfillmentUseCase",
+            "OrderReturnUseCase"
+        };
+        var applicationTypes = typeof(AuthService).Assembly.GetTypes();
+
+        Assert.DoesNotContain(
+            applicationTypes,
+            type => legacyTypeNames.Contains(
+                type.Name,
+                StringComparer.Ordinal));
     }
 
     [Fact]
@@ -225,12 +252,23 @@ public sealed class ArchitectureBoundaryTests
     [Fact]
     public void Checkout_IsOwnedByOrderCheckoutUseCase()
     {
-        var commandMethods = typeof(OrderCommandService)
-            .GetMethods(
+        var lifecycleUseCases = new[]
+        {
+            typeof(OrderStatusUpdateUseCase),
+            typeof(CustomerOrderCancellationUseCase),
+            typeof(PendingOrderExpirationUseCase),
+            typeof(ShipmentDispatchUseCase),
+            typeof(ShipmentDeliveryUseCase),
+            typeof(OrderReturnRequestUseCase),
+            typeof(OrderReturnReviewUseCase),
+            typeof(OrderReturnReceiptUseCase)
+        };
+        var commandMethods = lifecycleUseCases.SelectMany(type =>
+            type.GetMethods(
                 System.Reflection.BindingFlags.Instance
                 | System.Reflection.BindingFlags.Public
                 | System.Reflection.BindingFlags.NonPublic
-                | System.Reflection.BindingFlags.DeclaredOnly);
+                | System.Reflection.BindingFlags.DeclaredOnly));
 
         Assert.DoesNotContain(
             commandMethods,

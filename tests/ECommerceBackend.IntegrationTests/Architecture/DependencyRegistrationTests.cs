@@ -40,6 +40,21 @@ public sealed class DependencyRegistrationTests
         AssertRegistration<OrderCheckoutUseCase, OrderCheckoutUseCase>(
             services,
             ServiceLifetime.Scoped);
+        AssertRegistration<AuthLoginUseCase, AuthLoginUseCase>(
+            services,
+            ServiceLifetime.Scoped);
+        AssertRegistration<AuthRefreshUseCase, AuthRefreshUseCase>(
+            services,
+            ServiceLifetime.Scoped);
+        AssertRegistration<OrderStatusUpdateUseCase, OrderStatusUpdateUseCase>(
+            services,
+            ServiceLifetime.Scoped);
+        AssertRegistration<ShipmentDispatchUseCase, ShipmentDispatchUseCase>(
+            services,
+            ServiceLifetime.Scoped);
+        AssertRegistration<OrderReturnRequestUseCase, OrderReturnRequestUseCase>(
+            services,
+            ServiceLifetime.Scoped);
 
         var timeProvider = Assert.Single(
             services,
