@@ -2,6 +2,9 @@
 
 REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NET Core 8 và SQL Server. Dự án tập trung vào tính nhất quán dữ liệu, phân quyền, xử lý đồng thời và khả năng vận hành của các luồng backend thực tế.
 
+Phạm vi repository là backend và database. Frontend, container và hạ tầng cloud không thuộc phạm
+vi triển khai để giữ trọng tâm vào API, nghiệp vụ, persistence và độ tin cậy dữ liệu.
+
 ## Công Nghệ
 
 - .NET 8, ASP.NET Core Web API
@@ -112,6 +115,23 @@ Các endpoint quản trị sử dụng permission policies. Riêng operations re
 - Swagger/OpenAPI v1: `/swagger/v1/swagger.json` và `/swagger`.
 - Thông báo và `ProblemDetails` dùng tiếng Việt; trường `code` giữ tiếng Anh ổn định cho client.
 
+## Bằng Chứng Chất Lượng
+
+| Hạng mục | Cơ chế kiểm chứng |
+|---|---|
+| Chất lượng build | Nullable reference types và warning-as-error cho toàn solution |
+| Biên kiến trúc | Test chặn dependency sai chiều và EF Core rò rỉ vào Application |
+| Hợp đồng API | OpenAPI v1 snapshot test, kiểm tra route cũ và `/api/v1` |
+| Tính đúng dữ liệu | SQL Server integration test cho transaction, lock, idempotency và concurrency |
+| Migration | Kiểm tra model drift, script nâng cấp/rollback, backup và restore drill |
+| Coverage | CI chặn khi line coverage dưới 80% hoặc branch coverage dưới 60% |
+| Hiệu năng | Budget tự động cho catalog, session validation và checkout trên SQL Server |
+| Release | ZIP có manifest, SHA-256, migration artifact và smoke test health endpoint |
+
+Chi tiết và giới hạn của các kết quả đo được ghi tại
+[Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng
+[Giới hạn hệ thống](docs/LIMITATIONS.md); các con số không được trình bày như năng lực production.
+
 ## Chạy Local
 
 Yêu cầu:
@@ -119,6 +139,8 @@ Yêu cầu:
 - .NET SDK 8.x
 - SQL Server
 - Visual Studio 2022 hoặc .NET CLI
+
+Repository có `global.json` để chọn SDK .NET 8 mới nhất đang cài trên máy.
 
 Tạo cấu hình local:
 
@@ -135,7 +157,7 @@ $env:ConnectionStrings__Default = "Server=.;Database=ECommerceDB;Trusted_Connect
 Khởi tạo và chạy:
 
 ```powershell
-dotnet restore
+dotnet restore ECommerceBackend.sln
 dotnet ef database update `
   --project src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj `
   --startup-project src/ECommerceBackend/ECommerceBackend.csproj
@@ -171,11 +193,26 @@ Các tài khoản và mật khẩu trên chỉ dùng cho database development lo
 Demo seed còn tạo mã `WELCOME10`: giảm 10%, tối đa 100.000 đ, cho đơn từ
 500.000 đ và mỗi khách sử dụng một lần.
 
+### Kịch Bản Demo End-to-End
+
+1. Admin tạo danh mục, sản phẩm và tải ảnh qua `/api/v1/categories` và `/api/v1/products`.
+2. Customer đăng nhập, thêm sản phẩm vào giỏ và gọi `/api/v1/orders/quote`.
+3. Customer đặt hàng với `Idempotency-Key`; gửi lại cùng request nhận đúng đơn cũ.
+4. Staff xác nhận đơn, tạo vận đơn, xuất giao và ghi nhận giao thành công.
+5. Customer gửi yêu cầu trả hàng trong thời hạn cấu hình.
+6. Staff duyệt, nhận kiểm hàng; hệ thống hoàn tồn kho và ghi inventory ledger trong transaction.
+7. Staff ghi nhận hoàn tiền COD; payment history và order history được cập nhật đồng bộ.
+8. Admin kiểm tra báo cáo, audit trail, outbox lỗi và lịch sử tồn kho.
+
+Các request theo đúng thứ tự này có trong
+[ECommerceBackend.http](src/ECommerceBackend/ECommerceBackend.http). Dùng route `/api/v1`; route
+`/api` chỉ được giữ để kiểm tra tương thích ngược.
+
 ## Kiểm Thử API
 
 - Swagger hỗ trợ Bearer authentication và mô tả success/error contracts.
-- `POST /api/orders/quote` tính giá hiện tại; `POST /api/orders` luôn tính lại trong transaction.
-- Admin quản lý promotion qua `/api/promotions` bằng quyền quản lý sản phẩm.
+- `POST /api/v1/orders/quote` tính giá hiện tại; `POST /api/v1/orders` luôn tính lại trong transaction.
+- Admin quản lý promotion qua `/api/v1/promotions` bằng quyền quản lý sản phẩm.
 - Staff/Admin xuất giao qua `/shipment/dispatch`, xác nhận giao qua `/shipment/deliver`.
 - Customer tạo `/return-request`; Staff/Admin xét duyệt, nhận hàng hoàn rồi mới ghi nhận refund.
 - [ECommerceBackend.http](src/ECommerceBackend/ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
@@ -267,8 +304,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\VerifyReleasePacka
   -SmokeTest
 ```
 
-Push tag dạng `v*` sẽ chạy workflow `Backend Release` và lưu package đã xác minh dưới dạng
-GitHub Actions artifact.
+Workflow `Backend Release` có thể chạy thủ công để kiểm tra trước, hoặc tự chạy khi push tag dạng
+`v*`; package đã xác minh được lưu dưới dạng GitHub Actions artifact.
 
 ## Điểm Kỹ Thuật Nổi Bật
 

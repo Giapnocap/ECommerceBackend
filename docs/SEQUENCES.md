@@ -10,7 +10,7 @@ sequenceDiagram
     participant DB as SQL Server
     participant JWT as AuthTokenIssuer
 
-    Client->>API: POST /api/auth/login
+    Client->>API: POST /api/v1/auth/login
     API->>Auth: ExecuteAsync(credentials)
     Auth->>DB: Lock user and load roles/permissions
     Auth->>Auth: Constant-work BCrypt verification
@@ -41,7 +41,7 @@ sequenceDiagram
     participant DB as SQL Server
     participant Outbox as Outbox Dispatcher
 
-    Customer->>API: POST /api/orders + Idempotency-Key
+    Customer->>API: POST /api/v1/orders + Idempotency-Key
     API->>Checkout: PlaceOrderAsync
     Checkout->>DB: Begin transaction
     Checkout->>DB: Check key, lock cart, recheck key
@@ -102,7 +102,7 @@ sequenceDiagram
     ReturnReceipt->>Rules: Receive inspection and release stock once
     ReturnReceipt->>DB: Append Returned history + ledger + commit
 
-    Staff->>API: POST /api/orders/{id}/refund + receipt reference
+    Staff->>API: POST /api/v1/orders/{id}/refund + receipt reference
     API->>Refund: RecordRefundAsync
     Refund->>DB: Lock order/payment/return request
     Refund->>Rules: Require received return and Paid payment

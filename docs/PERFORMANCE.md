@@ -47,6 +47,10 @@ The first accepted LocalDB run measured catalog p95 `53.3 ms`, session validatio
 and checkout p95 `23.8 ms`. Thresholds are intentionally wider than one developer machine and
 can be overridden with the `PERFORMANCE_*` environment variables.
 
+The final phase-8 verification on SQL Server with .NET SDK 8 measured catalog p95 `76.9 ms`,
+session validation p95 `11.2 ms` and checkout p95 `39.1 ms`. These local measurements confirm the
+regression budgets; they are not production capacity claims.
+
 Run the suite with `scripts/RunPerformanceTests.ps1`. The weekly/manual GitHub workflow uploads
 `performance-results.json` for comparison.
 

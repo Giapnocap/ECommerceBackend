@@ -1,9 +1,12 @@
 @BaseUrl = http://localhost:5171
+@ApiBase = {{BaseUrl}}/api/v1
 @AdminPassword = replace-with-local-admin-password
+@StaffPassword = Staff@ECommerce2026!
 
 # Update these values from responses when your HTTP client does not support named-response variables.
 @AdminToken =
 @AdminRefreshToken =
+@StaffToken =
 @CustomerToken =
 @CustomerRefreshToken =
 @CategoryId =
@@ -36,7 +39,7 @@ Accept: application/json
 
 ### Admin login
 # @name adminLogin
-POST {{BaseUrl}}/api/auth/login
+POST {{ApiBase}}/auth/login
 Content-Type: application/json
 
 {
@@ -44,18 +47,28 @@ Content-Type: application/json
   "password": "{{AdminPassword}}"
 }
 
+### Staff login - after running SeedDemoData.sql
+# @name staffLogin
+POST {{ApiBase}}/auth/login
+Content-Type: application/json
+
+{
+  "userName": "demo.staff",
+  "password": "{{StaffPassword}}"
+}
+
 ### Admin profile
-GET {{BaseUrl}}/api/users/me
+GET {{ApiBase}}/users/me
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
 
 ### List users - Admin
-GET {{BaseUrl}}/api/users?page=1&pageSize=20
+GET {{ApiBase}}/users?page=1&pageSize=20
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
 
 ### Assign role - Admin
-PUT {{BaseUrl}}/api/users/{{UserId}}/role
+PUT {{ApiBase}}/users/{{UserId}}/role
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
@@ -65,7 +78,7 @@ Authorization: Bearer {{AdminToken}}
 
 ### Create category - Admin
 # @name createCategory
-POST {{BaseUrl}}/api/categories
+POST {{ApiBase}}/categories
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
@@ -75,16 +88,16 @@ Authorization: Bearer {{AdminToken}}
 }
 
 ### List categories
-GET {{BaseUrl}}/api/categories
+GET {{ApiBase}}/categories
 Accept: application/json
 
 ### Get category by id
-GET {{BaseUrl}}/api/categories/{{CategoryId}}
+GET {{ApiBase}}/categories/{{CategoryId}}
 Accept: application/json
 
 ### Create product - Admin
 # @name createProduct
-POST {{BaseUrl}}/api/products
+POST {{ApiBase}}/products
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
@@ -97,15 +110,15 @@ Authorization: Bearer {{AdminToken}}
 }
 
 ### List products with filter/sort/page
-GET {{BaseUrl}}/api/products?keyword=Demo&sortBy=price&sortOrder=asc&page=1&pageSize=12
+GET {{ApiBase}}/products?keyword=Demo&sortBy=price&sortOrder=asc&page=1&pageSize=12
 Accept: application/json
 
 ### Get product by id
-GET {{BaseUrl}}/api/products/{{ProductId}}
+GET {{ApiBase}}/products/{{ProductId}}
 Accept: application/json
 
 ### Update product - Admin
-PUT {{BaseUrl}}/api/products/{{ProductId}}
+PUT {{ApiBase}}/products/{{ProductId}}
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
@@ -119,7 +132,7 @@ Authorization: Bearer {{AdminToken}}
 
 ### Upload product image - Admin
 # Replace ./sample-product.jpg with a real local image path before sending.
-POST {{BaseUrl}}/api/products/{{ProductId}}/images?isMain=true
+POST {{ApiBase}}/products/{{ProductId}}/images?isMain=true
 Authorization: Bearer {{AdminToken}}
 Content-Type: multipart/form-data; boundary=BoundaryDemoProduct
 
@@ -133,7 +146,7 @@ Content-Type: image/jpeg
 ### Register customer
 # Change userName/email when re-running after the user already exists.
 # @name registerCustomer
-POST {{BaseUrl}}/api/auth/register
+POST {{ApiBase}}/auth/register
 Content-Type: application/json
 
 {
@@ -146,7 +159,7 @@ Content-Type: application/json
 
 ### Customer login
 # @name customerLogin
-POST {{BaseUrl}}/api/auth/login
+POST {{ApiBase}}/auth/login
 Content-Type: application/json
 
 {
@@ -155,12 +168,12 @@ Content-Type: application/json
 }
 
 ### Customer profile
-GET {{BaseUrl}}/api/users/me
+GET {{ApiBase}}/users/me
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
 ### Update customer profile
-PUT {{BaseUrl}}/api/users/me
+PUT {{ApiBase}}/users/me
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -170,13 +183,13 @@ Authorization: Bearer {{CustomerToken}}
 }
 
 ### Get cart
-GET {{BaseUrl}}/api/cart
+GET {{ApiBase}}/cart
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
 ### Add product to cart
 # @name addToCart
-POST {{BaseUrl}}/api/cart/items
+POST {{ApiBase}}/cart/items
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -186,7 +199,7 @@ Authorization: Bearer {{CustomerToken}}
 }
 
 ### Update cart item quantity
-PUT {{BaseUrl}}/api/cart/items/{{CartItemId}}
+PUT {{ApiBase}}/cart/items/{{CartItemId}}
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -195,17 +208,17 @@ Authorization: Bearer {{CustomerToken}}
 }
 
 ### Remove cart item
-DELETE {{BaseUrl}}/api/cart/items/{{CartItemId}}
+DELETE {{ApiBase}}/cart/items/{{CartItemId}}
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
 ### Clear cart
-DELETE {{BaseUrl}}/api/cart
+DELETE {{ApiBase}}/cart
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
 ### Add product to cart for checkout
-POST {{BaseUrl}}/api/cart/items
+POST {{ApiBase}}/cart/items
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -216,7 +229,7 @@ Authorization: Bearer {{CustomerToken}}
 
 ### Create promotion - Admin
 # @name createPromotion
-POST {{BaseUrl}}/api/promotions
+POST {{ApiBase}}/promotions
 Content-Type: application/json
 Authorization: Bearer {{AdminToken}}
 
@@ -234,7 +247,7 @@ Authorization: Bearer {{AdminToken}}
 
 ### Quote current cart
 # @name quoteOrder
-POST {{BaseUrl}}/api/orders/quote
+POST {{ApiBase}}/orders/quote
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -245,7 +258,7 @@ Authorization: Bearer {{CustomerToken}}
 
 ### Place order
 # @name placeOrder
-POST {{BaseUrl}}/api/orders
+POST {{ApiBase}}/orders
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 Idempotency-Key: {{IdempotencyKey}}
@@ -260,24 +273,34 @@ Idempotency-Key: {{IdempotencyKey}}
 }
 
 ### My orders
-GET {{BaseUrl}}/api/orders/my?page=1&pageSize=10
+GET {{ApiBase}}/orders/my?page=1&pageSize=10
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
 ### Get order by id
-GET {{BaseUrl}}/api/orders/{{OrderId}}
+GET {{ApiBase}}/orders/{{OrderId}}
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
 ### List all orders - Admin/Staff
-GET {{BaseUrl}}/api/orders?page=1&pageSize=10
+GET {{ApiBase}}/orders?page=1&pageSize=10
 Accept: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
+
+### Confirm order - Admin/Staff
+PUT {{ApiBase}}/orders/{{OrderId}}/status
+Content-Type: application/json
+Authorization: Bearer {{StaffToken}}
+
+{
+  "status": 1,
+  "note": "Đã xác nhận đơn hàng"
+}
 
 ### Dispatch shipment - Admin/Staff
-POST {{BaseUrl}}/api/orders/{{OrderId}}/shipment/dispatch
+POST {{ApiBase}}/orders/{{OrderId}}/shipment/dispatch
 Content-Type: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
 
 {
   "carrier": "Giao Hang Nhanh",
@@ -286,16 +309,16 @@ Authorization: Bearer {{AdminToken}}
 }
 
 ### Mark shipment delivered - Admin/Staff
-POST {{BaseUrl}}/api/orders/{{OrderId}}/shipment/deliver
+POST {{ApiBase}}/orders/{{OrderId}}/shipment/deliver
 Content-Type: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
 
 {
   "note": "Da giao va thu COD"
 }
 
 ### Request return - Customer
-POST {{BaseUrl}}/api/orders/{{OrderId}}/return-request
+POST {{ApiBase}}/orders/{{OrderId}}/return-request
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -304,9 +327,9 @@ Authorization: Bearer {{CustomerToken}}
 }
 
 ### Approve return - Admin/Staff
-POST {{BaseUrl}}/api/orders/{{OrderId}}/return-request/review
+POST {{ApiBase}}/orders/{{OrderId}}/return-request/review
 Content-Type: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
 
 {
   "decision": 0,
@@ -314,18 +337,18 @@ Authorization: Bearer {{AdminToken}}
 }
 
 ### Receive returned goods - Admin/Staff
-POST {{BaseUrl}}/api/orders/{{OrderId}}/return-request/receive
+POST {{ApiBase}}/orders/{{OrderId}}/return-request/receive
 Content-Type: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
 
 {
   "inspectionNote": "Hang nguyen ven va du phu kien"
 }
 
 ### Record COD refund - Admin/Staff
-POST {{BaseUrl}}/api/orders/{{OrderId}}/refund
+POST {{ApiBase}}/orders/{{OrderId}}/refund
 Content-Type: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
 
 {
   "reference": "REFUND-DEMO-001",
@@ -333,24 +356,44 @@ Authorization: Bearer {{AdminToken}}
 }
 
 ### Low-stock products - Admin/Staff
-GET {{BaseUrl}}/api/inventory/low-stock?threshold=10&page=1&pageSize=20
+GET {{ApiBase}}/inventory/low-stock?threshold=10&page=1&pageSize=20
 Accept: application/json
-Authorization: Bearer {{AdminToken}}
+Authorization: Bearer {{StaffToken}}
 
 ### Product inventory history - Admin/Staff
-GET {{BaseUrl}}/api/inventory/products/{{ProductId}}/transactions?page=1&pageSize=20
+GET {{ApiBase}}/inventory/products/{{ProductId}}/transactions?page=1&pageSize=20
+Accept: application/json
+Authorization: Bearer {{StaffToken}}
+
+### Sales summary - Admin
+GET {{ApiBase}}/reports/sales-summary?lowStockThreshold=10&topProductLimit=10
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
 
-### Sales summary - Admin
-GET {{BaseUrl}}/api/reports/sales-summary?lowStockThreshold=10&topProductLimit=10
+### Outbox lỗi - Admin
+GET {{ApiBase}}/operations/outbox/dead-letters?page=1&pageSize=20
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
+
+### Audit sự kiện - Admin
+GET {{ApiBase}}/operations/audit-events?page=1&pageSize=20
+Accept: application/json
+Authorization: Bearer {{AdminToken}}
+
+### Xem trước dọn dữ liệu vận hành - Admin
+POST {{ApiBase}}/operations/data-retention
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+
+{
+  "applyChanges": false,
+  "maxBatchSize": 100
+}
 
 ### Signed payment webhook (enable/configure GenericHmac first)
 # Accepted status values: paid, failed, cancelled, refunded.
 # Signature input: {{PaymentEventId}} + "." + the exact raw JSON body below.
-POST {{BaseUrl}}/api/payments/webhooks/{{PaymentProvider}}
+POST {{ApiBase}}/payments/webhooks/{{PaymentProvider}}
 Content-Type: application/json
 X-Payment-Event-Id: {{PaymentEventId}}
 X-Payment-Signature: {{PaymentSignature}}
@@ -363,11 +406,11 @@ X-Payment-Signature: {{PaymentSignature}}
 }
 
 ### Checkout payment methods
-GET {{BaseUrl}}/api/payments/methods
+GET {{ApiBase}}/payments/methods
 Accept: application/json
 
 ### Refresh customer token
-POST {{BaseUrl}}/api/auth/refresh
+POST {{ApiBase}}/auth/refresh
 Content-Type: application/json
 
 {
@@ -375,7 +418,7 @@ Content-Type: application/json
 }
 
 ### Logout customer
-POST {{BaseUrl}}/api/auth/logout
+POST {{ApiBase}}/auth/logout
 Content-Type: application/json
 Authorization: Bearer {{CustomerToken}}
 
@@ -384,20 +427,20 @@ Authorization: Bearer {{CustomerToken}}
 }
 
 ### Logout customer from all sessions
-POST {{BaseUrl}}/api/auth/logout-all
+POST {{ApiBase}}/auth/logout-all
 Authorization: Bearer {{CustomerToken}}
 
 ### Delete product image - Admin
-DELETE {{BaseUrl}}/api/products/{{ProductId}}/images/{{ProductImageId}}
+DELETE {{ApiBase}}/products/{{ProductId}}/images/{{ProductImageId}}
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
 
 ### Delete product - Admin
-DELETE {{BaseUrl}}/api/products/{{ProductId}}
+DELETE {{ApiBase}}/products/{{ProductId}}
 Accept: application/json
 Authorization: Bearer {{AdminToken}}
 
 ### Delete category - Admin
-DELETE {{BaseUrl}}/api/categories/{{CategoryId}}
+DELETE {{ApiBase}}/categories/{{CategoryId}}
 Accept: application/json
 Authorization: Bearer {{AdminToken}}

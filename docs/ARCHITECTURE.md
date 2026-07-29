@@ -120,7 +120,7 @@ Idempotency-Key lookup
 
 The same user and idempotency key return the original order. Reusing that key with a
 different address, note, payment method, shipping method or promotion returns `409 Conflict`.
-`POST /api/orders/quote` is informational and expires after the configured interval. Checkout
+`POST /api/v1/orders/quote` is informational and expires after the configured interval. Checkout
 never trusts a total from the client: it recalculates the quote after locking the relevant rows.
 Promotion usage is consumed when the order is committed and is not restored by cancellation.
 Clients may send the optional `ExpectedTotalAmount` from the latest quote. Checkout returns
@@ -199,7 +199,7 @@ number. A delivery failure keeps stock reserved; staff can retry the same shipme
 Customer return requests are bounded by `Returns:ReturnWindowDays`; Staff approves or rejects them.
 Stock is restored only when approved goods are physically received and inspected.
 
-`POST /api/orders/{id}/refund` records a completed offline COD refund only after the order is
+`POST /api/v1/orders/{id}/refund` records a completed offline COD refund only after the order is
 `Returned`, the return request is `Received` and the payment is `Paid`. The request requires the external receipt/reference. Replaying
 the same reference is idempotent; a different reference returns `409` instead of rewriting financial
 history. Return acceptance and refund recording are intentionally separate because receiving the
@@ -214,12 +214,12 @@ pending-order limit.
 
 ## Payment Webhooks
 
-`GET /api/payments/methods` is the public capability contract for checkout clients. It lists only
+`GET /api/v1/payments/methods` is the public capability contract for checkout clients. It lists only
 methods that have a registered checkout provider; webhook-only adapters are excluded. Checkout
 still resolves the selected method server-side and rejects an unregistered provider, so publishing
 a new enum value alone cannot enable an incomplete payment path.
 
-`POST /api/payments/webhooks/{providerCode}` reads a bounded, strict UTF-8 raw body. The generic
+`POST /api/v1/payments/webhooks/{providerCode}` reads a bounded, strict UTF-8 raw body. The generic
 HMAC adapter verifies `HMAC_SHA256(secret, eventId + "." + rawBody)` from
 `X-Payment-Signature`; `X-Payment-Event-Id` is unique per provider. Reusing an event ID with
 different content returns `409`. A replay returns the result stored for the original event,
@@ -298,7 +298,7 @@ missing referenced files are reported and never removed from the database automa
 
 ## Reporting Semantics
 
-`GET /api/reports/sales-summary` uses the half-open UTC range `[From, To)` and limits a
+`GET /api/v1/reports/sales-summary` uses the half-open UTC range `[From, To)` and limits a
 request to 366 days. `TotalOrders` and `OrdersByStatus` are cohorts of orders created in the
 range. `DeliveredOrders`, `CancelledOrders` and top products use the matching
 `OrderStatusHistory` transition time. Gross cash collected uses `PaidAt`; refunds use the
