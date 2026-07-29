@@ -4,17 +4,34 @@ namespace ECommerceBackend.Tests;
 
 public class PaymentRulesTests
 {
+    private static readonly HashSet<(PaymentStatus Current, PaymentStatus Next)>
+        AllowedTransitions =
+        [
+            (PaymentStatus.Pending, PaymentStatus.Paid),
+            (PaymentStatus.Pending, PaymentStatus.Failed),
+            (PaymentStatus.Pending, PaymentStatus.Cancelled),
+            (PaymentStatus.Paid, PaymentStatus.Refunded)
+        ];
+
+    public static IEnumerable<object[]> TransitionCases()
+    {
+        foreach (var current in Enum.GetValues<PaymentStatus>())
+        {
+            foreach (var next in Enum.GetValues<PaymentStatus>())
+            {
+                yield return
+                [
+                    current,
+                    next,
+                    current == next
+                        || AllowedTransitions.Contains((current, next))
+                ];
+            }
+        }
+    }
+
     [Theory]
-    [InlineData(PaymentStatus.Pending, PaymentStatus.Paid, true)]
-    [InlineData(PaymentStatus.Pending, PaymentStatus.Failed, true)]
-    [InlineData(PaymentStatus.Pending, PaymentStatus.Cancelled, true)]
-    [InlineData(PaymentStatus.Pending, PaymentStatus.Refunded, false)]
-    [InlineData(PaymentStatus.Paid, PaymentStatus.Refunded, true)]
-    [InlineData(PaymentStatus.Paid, PaymentStatus.Failed, false)]
-    [InlineData(PaymentStatus.Paid, PaymentStatus.Cancelled, false)]
-    [InlineData(PaymentStatus.Failed, PaymentStatus.Paid, false)]
-    [InlineData(PaymentStatus.Cancelled, PaymentStatus.Paid, false)]
-    [InlineData(PaymentStatus.Refunded, PaymentStatus.Paid, false)]
+    [MemberData(nameof(TransitionCases))]
     public void PaymentStatusTransition_FollowsBusinessStateMachine(
         PaymentStatus current,
         PaymentStatus next,

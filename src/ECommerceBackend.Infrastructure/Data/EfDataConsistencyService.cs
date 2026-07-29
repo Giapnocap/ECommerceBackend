@@ -30,6 +30,19 @@ namespace ECommerceBackend.Infrastructure.Data
         }
 
         public async Task<bool> TryAcquireDataRetentionLockAsync(CancellationToken cancellationToken = default)
+            => await TryAcquireTransactionLockAsync(
+                "ECommerceBackend.DataRetention",
+                cancellationToken);
+
+        public async Task<bool> TryAcquireRoleAssignmentLockAsync(
+            CancellationToken cancellationToken = default)
+            => await TryAcquireTransactionLockAsync(
+                "ECommerceBackend.RoleAssignment",
+                cancellationToken);
+
+        private async Task<bool> TryAcquireTransactionLockAsync(
+            string resource,
+            CancellationToken cancellationToken)
         {
             if (!_context.Database.IsSqlServer())
                 return true;
@@ -43,12 +56,16 @@ namespace ECommerceBackend.Infrastructure.Data
             command.CommandText = """
                 DECLARE @result int;
                 EXEC @result = sys.sp_getapplock
-                    @Resource = N'ECommerceBackend.DataRetention',
+                    @Resource = @resource,
                     @LockMode = N'Exclusive',
                     @LockOwner = N'Transaction',
                     @LockTimeout = 10000;
                 SELECT @result;
                 """;
+            var resourceParameter = command.CreateParameter();
+            resourceParameter.ParameterName = "@resource";
+            resourceParameter.Value = resource;
+            command.Parameters.Add(resourceParameter);
 
             var result = Convert.ToInt32(
                 await command.ExecuteScalarAsync(cancellationToken),

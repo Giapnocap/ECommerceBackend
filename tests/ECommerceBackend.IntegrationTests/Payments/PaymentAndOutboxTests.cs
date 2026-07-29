@@ -66,6 +66,54 @@ public class PaymentAndOutboxTests
     }
 
     [Fact]
+    public async Task PaymentWebhook_ReusedEventIdWithDifferentPayload_IsRejected()
+    {
+        await using var context = TestAppDbContext.Create();
+        var (payment, _) = await SeedPaymentAsync(
+            context,
+            "generic-hmac",
+            "txn-event-reuse");
+        var options = PaymentOptions();
+        var service = new PaymentWebhookService(
+            new PaymentRepository(context),
+            context,
+            new EfDataConsistencyService(context),
+            new PaymentProviderResolver(
+                [new GenericHmacPaymentProvider(options)]),
+            new OutboxWriter(new OutboxRepository(context)),
+            options);
+        const string paidPayload =
+            "{\"providerTransactionId\":\"txn-event-reuse\",\"status\":\"paid\",\"amount\":100}";
+        const string refundedPayload =
+            "{\"providerTransactionId\":\"txn-event-reuse\",\"status\":\"refunded\",\"amount\":100}";
+
+        _ = await service.HandleAsync(
+            "generic-hmac",
+            new PaymentWebhookRequest(
+                "evt-reused",
+                Sign("evt-reused", paidPayload),
+                paidPayload));
+        var exception =
+            await Assert.ThrowsAsync<Application.Exceptions.ConflictException>(
+                () => service.HandleAsync(
+                    "generic-hmac",
+                    new PaymentWebhookRequest(
+                        "evt-reused",
+                        Sign("evt-reused", refundedPayload),
+                        refundedPayload)));
+
+        Assert.Equal(
+            "webhook_event_payload_mismatch",
+            exception.Code);
+        Assert.Equal(
+            PaymentStatus.Paid,
+            (await context.Payments.FindAsync(payment.Id))!.Status);
+        Assert.Single(await context.PaymentWebhookEvents.ToListAsync());
+        Assert.Equal(2, await context.PaymentStatusHistories.CountAsync());
+        Assert.Single(await context.OutboxMessages.ToListAsync());
+    }
+
+    [Fact]
     public async Task PaymentWebhook_RetainsRawPayloadOnlyWhenExplicitlyEnabled()
     {
         await using var context = TestAppDbContext.Create();
@@ -120,6 +168,66 @@ public class PaymentAndOutboxTests
         Assert.Equal(2, await context.PaymentWebhookEvents.CountAsync());
         Assert.Equal(3, await context.PaymentStatusHistories.CountAsync());
         Assert.Equal(2, await context.OutboxMessages.CountAsync());
+    }
+
+    [Fact]
+    public async Task PaymentWebhook_RefundRetries_DoNotDuplicateOutcome()
+    {
+        await using var context = TestAppDbContext.Create();
+        var (payment, _) = await SeedPaymentAsync(
+            context,
+            "generic-hmac",
+            "txn-refund-retry");
+        var options = PaymentOptions();
+        var service = new PaymentWebhookService(
+            new PaymentRepository(context),
+            context,
+            new EfDataConsistencyService(context),
+            new PaymentProviderResolver(
+                [new GenericHmacPaymentProvider(options)]),
+            new OutboxWriter(new OutboxRepository(context)),
+            options);
+        const string paidPayload =
+            "{\"providerTransactionId\":\"txn-refund-retry\",\"status\":\"paid\",\"amount\":100}";
+        const string refundPayload =
+            "{\"providerTransactionId\":\"txn-refund-retry\",\"status\":\"refunded\",\"amount\":100}";
+        var refundRequest = new PaymentWebhookRequest(
+            "evt-refund-first",
+            Sign("evt-refund-first", refundPayload),
+            refundPayload);
+
+        _ = await service.HandleAsync(
+            "generic-hmac",
+            new PaymentWebhookRequest(
+                "evt-paid-first",
+                Sign("evt-paid-first", paidPayload),
+                paidPayload));
+        var firstRefund = await service.HandleAsync(
+            "generic-hmac",
+            refundRequest);
+        var exactReplay = await service.HandleAsync(
+            "generic-hmac",
+            refundRequest);
+        var providerRetry = await service.HandleAsync(
+            "generic-hmac",
+            new PaymentWebhookRequest(
+                "evt-refund-second",
+                Sign("evt-refund-second", refundPayload),
+                refundPayload));
+
+        Assert.False(firstRefund.Duplicate);
+        Assert.True(exactReplay.Duplicate);
+        Assert.False(providerRetry.Duplicate);
+        Assert.Equal(nameof(PaymentStatus.Refunded), providerRetry.Status);
+        Assert.Equal(
+            PaymentStatus.Refunded,
+            (await context.Payments.FindAsync(payment.Id))!.Status);
+        Assert.Equal(3, await context.PaymentWebhookEvents.CountAsync());
+        Assert.Equal(3, await context.PaymentStatusHistories.CountAsync());
+        Assert.Equal(2, await context.OutboxMessages.CountAsync());
+        Assert.False((await context.PaymentWebhookEvents.SingleAsync(
+            item => item.ProviderEventId == "evt-refund-second"))
+            .StatusChanged);
     }
 
     [Fact]

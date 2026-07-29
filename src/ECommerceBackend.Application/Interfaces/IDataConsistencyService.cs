@@ -10,6 +10,7 @@ namespace ECommerceBackend.Application.Interfaces
             CancellationToken cancellationToken = default);
 
         Task<bool> TryAcquireDataRetentionLockAsync(CancellationToken cancellationToken = default);
+        Task<bool> TryAcquireRoleAssignmentLockAsync(CancellationToken cancellationToken = default);
 
         Task<Cart?> LockCartByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
         Task<Category?> LockCategoryAsync(Guid categoryId, bool activeOnly, CancellationToken cancellationToken = default);

@@ -72,6 +72,58 @@ public sealed class FulfillmentWorkflowTests
     }
 
     [Fact]
+    public async Task DeliveryFailure_RetryRequiresTheOriginalShipment()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedConfirmedOrderAsync(context);
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now));
+        var dispatchRequest = new DispatchShipmentRequest
+        {
+            Carrier = "Viettel Post",
+            TrackingNumber = "VTP-RETRY-001"
+        };
+
+        _ = await service.DispatchShipmentAsync(
+            fixture.Order.Id,
+            fixture.Staff.Id,
+            dispatchRequest);
+        var failed = await service.UpdateStatusAsync(
+            fixture.Order.Id,
+            fixture.Staff.Id,
+            new UpdateOrderStatusRequest
+            {
+                Status = OrderStatus.DeliveryFailed,
+                Note = "Customer was unavailable"
+            });
+        var mismatch = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.DispatchShipmentAsync(
+                fixture.Order.Id,
+                fixture.Staff.Id,
+                new DispatchShipmentRequest
+                {
+                    Carrier = "Viettel Post",
+                    TrackingNumber = "VTP-REPLACEMENT"
+                }));
+        var retried = await service.DispatchShipmentAsync(
+            fixture.Order.Id,
+            fixture.Staff.Id,
+            dispatchRequest);
+
+        Assert.Equal(nameof(OrderStatus.DeliveryFailed), failed.Status);
+        Assert.Equal("shipment_identity_mismatch", mismatch.Code);
+        Assert.Equal(nameof(OrderStatus.Shipping), retried.Status);
+        Assert.Single(await context.Shipments.ToListAsync());
+        Assert.Equal(2, await context.OrderStatusHistories.CountAsync(
+            history => history.OrderId == fixture.Order.Id
+                && history.ToStatus == OrderStatus.Shipping));
+        Assert.Equal(1, await context.OrderStatusHistories.CountAsync(
+            history => history.OrderId == fixture.Order.Id
+                && history.ToStatus == OrderStatus.DeliveryFailed));
+    }
+
+    [Fact]
     public async Task RejectedReturn_RestoresDeliveredStateWithoutRestoringStock()
     {
         await using var context = TestAppDbContext.Create();
@@ -114,6 +166,63 @@ public sealed class FulfillmentWorkflowTests
             .Where(transaction =>
                 transaction.Type == InventoryTransactionType.OrderReturned)
             .ToListAsync());
+    }
+
+    [Fact]
+    public async Task RejectedReturn_AllowsOnlyAnIdempotentReplay()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedDeliveredOrderAsync(context);
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now));
+        var request = new CreateReturnRequest
+        {
+            Reason = "Product does not meet expectations"
+        };
+
+        _ = await service.RequestReturnAsync(
+            fixture.Order.Id,
+            fixture.Customer.Id,
+            request);
+        _ = await service.ReviewReturnAsync(
+            fixture.Order.Id,
+            fixture.Staff.Id,
+            new ReviewReturnRequest
+            {
+                Decision = ReturnReviewDecision.Reject,
+                Note = "The item does not satisfy the return policy"
+            });
+        var historyCount = await context.OrderStatusHistories.CountAsync();
+        var outboxCount = await context.OutboxMessages.CountAsync();
+
+        var replay = await service.RequestReturnAsync(
+            fixture.Order.Id,
+            fixture.Customer.Id,
+            request);
+        var differentRequest =
+            await Assert.ThrowsAsync<ConflictException>(() =>
+                service.RequestReturnAsync(
+                    fixture.Order.Id,
+                    fixture.Customer.Id,
+                    new CreateReturnRequest
+                    {
+                        Reason = "A different return reason"
+                    }));
+
+        Assert.Equal(nameof(OrderStatus.Delivered), replay.Status);
+        Assert.Equal(
+            "return_request_already_exists",
+            differentRequest.Code);
+        Assert.Equal(
+            ReturnRequestStatus.Rejected,
+            (await context.ReturnRequests.SingleAsync()).Status);
+        Assert.Equal(
+            historyCount,
+            await context.OrderStatusHistories.CountAsync());
+        Assert.Equal(
+            outboxCount,
+            await context.OutboxMessages.CountAsync());
     }
 
     [Fact]

@@ -82,6 +82,14 @@ namespace ECommerceBackend.Domain.Entities
                     "Không thể hủy đơn hàng đã thanh toán trước khi hoàn tiền.");
             }
 
+            if (nextStatus == OrderStatus.Cancelled
+                && paymentStatus == PaymentStatus.Refunded)
+            {
+                throw new DomainRuleViolationException(
+                    "order_refunded_cancellation_forbidden",
+                    "Không thể hủy đơn hàng có giao dịch đã hoàn tiền.");
+            }
+
             if (nextStatus == OrderStatus.Returned
                 && paymentStatus is not (PaymentStatus.Paid or PaymentStatus.Refunded))
             {

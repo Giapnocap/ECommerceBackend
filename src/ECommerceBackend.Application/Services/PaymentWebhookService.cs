@@ -259,6 +259,7 @@ namespace ECommerceBackend.Application.Services
             if (!string.Equals(webhook.PayloadHash, payloadHash, StringComparison.Ordinal))
             {
                 throw new ConflictException(
+                    "webhook_event_payload_mismatch",
                     "Mã sự kiện của cổng thanh toán đã được dùng với nội dung khác.");
             }
 

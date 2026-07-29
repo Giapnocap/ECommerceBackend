@@ -160,8 +160,16 @@ public class OrderRulesTests
         Assert.Equal(nameof(PaymentStatus.Pending), response.Payment?.Status);
     }
 
-    [Fact]
-    public async Task UpdateStatusAsync_RejectsCancellationUntilPaidPaymentIsRefunded()
+    [Theory]
+    [InlineData(
+        PaymentStatus.Paid,
+        "order_paid_cancellation_forbidden")]
+    [InlineData(
+        PaymentStatus.Refunded,
+        "order_refunded_cancellation_forbidden")]
+    public async Task UpdateStatusAsync_RejectsCancellationForSettledPayment(
+        PaymentStatus paymentStatus,
+        string expectedCode)
     {
         await using var context = TestAppDbContext.Create();
         var occurredAt = DateTime.UtcNow;
@@ -200,6 +208,12 @@ public class OrderRulesTests
             CreatedAt = occurredAt
         };
         payment.ChangeStatus(PaymentStatus.Paid, occurredAt);
+        if (paymentStatus == PaymentStatus.Refunded)
+        {
+            payment.ChangeStatus(
+                PaymentStatus.Refunded,
+                occurredAt.AddSeconds(1));
+        }
 
         context.AddRange(user, order, payment);
         await context.SaveChangesAsync();
@@ -211,9 +225,9 @@ public class OrderRulesTests
                 user.Id,
                 new UpdateOrderStatusRequest { Status = OrderStatus.Cancelled }));
 
-        Assert.Equal("order_paid_cancellation_forbidden", exception.Code);
+        Assert.Equal(expectedCode, exception.Code);
         Assert.Equal(OrderStatus.Confirmed, order.Status);
-        Assert.Equal(PaymentStatus.Paid, order.Payment?.Status);
+        Assert.Equal(paymentStatus, order.Payment?.Status);
     }
 
     [Fact]

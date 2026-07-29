@@ -55,6 +55,10 @@ public sealed class CancellationFlowTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<bool> TryAcquireRoleAssignmentLockAsync(
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<Cart?> LockCartByUserIdAsync(
             Guid userId,
             CancellationToken cancellationToken = default)

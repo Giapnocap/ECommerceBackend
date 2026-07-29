@@ -181,6 +181,14 @@ namespace ECommerceBackend.Application.Services
 
             try
             {
+                if (!await _consistency.TryAcquireRoleAssignmentLockAsync(
+                    cancellationToken))
+                {
+                    throw new ConflictException(
+                        "role_concurrency_conflict",
+                        "Không thể khóa thao tác phân quyền. Vui lòng thử lại.");
+                }
+
                 var user = await LoadUserForUpdateAsync(userId, cancellationToken)
                     ?? throw new NotFoundException("Không tìm thấy người dùng.");
                 await _userRepository.LoadRolesAsync(

@@ -1935,6 +1935,326 @@ public sealed class SqlServerCommerceFlowTests
 
     [Fact]
     [Trait("Category", "SqlServerIntegration")]
+    public async Task ConcurrentCheckoutAndStockAdjustment_PreserveInventoryLedger()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName =
+            $"ECommerceBackendIntegration_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        var now = new DateTimeOffset(
+            2026,
+            7,
+            29,
+            8,
+            0,
+            0,
+            TimeSpan.Zero);
+        const int initialStock = 5;
+        const int adjustedStock = 10;
+
+        try
+        {
+            Guid userId;
+            Guid categoryId;
+            Guid productId;
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.MigrateAsync();
+                var category = new Category
+                {
+                    Id = Guid.NewGuid(),
+                    Name = "Inventory concurrency",
+                    NormalizedName = "INVENTORY CONCURRENCY"
+                };
+                var user = CreatePromotionCustomer(
+                    "inventory_customer",
+                    now);
+                var cart = new Cart
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id
+                };
+                var product = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = category.Id,
+                    Name = "Inventory race product",
+                    Price = 500_000m,
+                    StockQuantity = initialStock,
+                    Description = "Inventory race product",
+                    CreatedAt = now.UtcDateTime
+                };
+                userId = user.Id;
+                categoryId = category.Id;
+                productId = product.Id;
+
+                setupContext.AddRange(
+                    category,
+                    user,
+                    cart,
+                    product,
+                    new CartItem
+                    {
+                        Id = Guid.NewGuid(),
+                        CartId = cart.Id,
+                        ProductId = product.Id,
+                        Quantity = 1,
+                        UnitPrice = product.Price
+                    });
+                await setupContext.SaveChangesAsync();
+            }
+
+            async Task<Exception?> CheckoutAsync()
+            {
+                await using var context = new AppDbContext(options);
+                var service = TestServiceFactory.CreateOrderService(
+                    context,
+                    new FixedTimeProvider(now));
+                return await Record.ExceptionAsync(() =>
+                    service.PlaceOrderAsync(
+                        userId,
+                        new PlaceOrderRequest
+                        {
+                            ShippingAddress =
+                                "1 Inventory Concurrency Street",
+                            PaymentMethod =
+                                PaymentMethod.CashOnDelivery
+                        },
+                        "inventory-concurrency-checkout"));
+            }
+
+            async Task<Exception?> AdjustStockAsync()
+            {
+                await using var context = new AppDbContext(options);
+                var service = TestServiceFactory.CreateProductService(
+                    context,
+                    new FixedTimeProvider(now));
+                return await Record.ExceptionAsync(() =>
+                    service.UpdateAsync(
+                        productId,
+                        new UpdateProductRequest
+                        {
+                            CategoryId = categoryId,
+                            Name = "Inventory race product",
+                            Price = 500_000m,
+                            StockQuantity = adjustedStock,
+                            Description = "Inventory race product"
+                        },
+                        userId));
+            }
+
+            var outcomes = await Task.WhenAll(
+                CheckoutAsync(),
+                AdjustStockAsync());
+
+            Assert.All(outcomes, Assert.Null);
+
+            await using var verificationContext =
+                new AppDbContext(options);
+            var finalStock = await verificationContext.Products
+                .Where(product => product.Id == productId)
+                .Select(product => product.StockQuantity)
+                .SingleAsync();
+            var ledger = await verificationContext.InventoryTransactions
+                .Where(transaction => transaction.ProductId == productId)
+                .ToListAsync();
+
+            Assert.Equal(2, ledger.Count);
+            Assert.Single(
+                ledger,
+                transaction => transaction.Type
+                    == InventoryTransactionType.OrderPlaced);
+            Assert.Single(
+                ledger,
+                transaction => transaction.Type
+                    == InventoryTransactionType.ManualAdjustment);
+            Assert.Equal(
+                finalStock,
+                initialStock
+                    + ledger.Sum(transaction =>
+                        transaction.QuantityChange));
+            Assert.Contains(
+                finalStock,
+                new[] { adjustedStock - 1, adjustedStock });
+            Assert.Single(await verificationContext.Orders.ToListAsync());
+            Assert.Empty(await verificationContext.CartItems.ToListAsync());
+        }
+        finally
+        {
+            await using var cleanupContext =
+                new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task ConcurrentAdminDemotions_PreserveTheLastActiveAdmin()
+    {
+        SqlServerIntegrationTestGate.Require();
+
+        var databaseName =
+            $"ECommerceBackendIntegration_{Guid.NewGuid():N}";
+        var connectionString = BuildConnectionString(databaseName);
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        var now = new DateTimeOffset(
+            2026,
+            7,
+            29,
+            8,
+            0,
+            0,
+            TimeSpan.Zero);
+
+        try
+        {
+            Guid actorUserId;
+            Guid firstAdminId;
+            Guid secondAdminId;
+            await using (var setupContext = new AppDbContext(options))
+            {
+                await setupContext.Database.MigrateAsync();
+                var adminRole = await setupContext.Roles.SingleAsync(
+                    role => role.Name == RoleNames.Admin);
+                var staffRole = await setupContext.Roles.SingleAsync(
+                    role => role.Name == RoleNames.Staff);
+                var seededAdmin = await setupContext.Users.SingleAsync(
+                    user => user.UserName == "admin");
+                seededAdmin.IsDeleted = true;
+                var actor = CreatePromotionCustomer(
+                    "role_actor",
+                    now);
+                var firstAdmin = CreatePromotionCustomer(
+                    "concurrent_admin_one",
+                    now);
+                var secondAdmin = CreatePromotionCustomer(
+                    "concurrent_admin_two",
+                    now);
+                actorUserId = actor.Id;
+                firstAdminId = firstAdmin.Id;
+                secondAdminId = secondAdmin.Id;
+
+                setupContext.AddRange(
+                    actor,
+                    firstAdmin,
+                    secondAdmin,
+                    new UserRole
+                    {
+                        UserId = actor.Id,
+                        RoleId = staffRole.Id
+                    },
+                    new UserRole
+                    {
+                        UserId = firstAdmin.Id,
+                        RoleId = adminRole.Id
+                    },
+                    new UserRole
+                    {
+                        UserId = secondAdmin.Id,
+                        RoleId = adminRole.Id
+                    });
+                await setupContext.SaveChangesAsync();
+            }
+
+            async Task<(Guid UserId, Exception? Exception)> DemoteAsync(
+                Guid userId)
+            {
+                await using var context = new AppDbContext(options);
+                var service = TestServiceFactory.CreateUserService(
+                    context,
+                    new FixedTimeProvider(now));
+                var exception = await Record.ExceptionAsync(() =>
+                    service.AssignRoleAsync(
+                        actorUserId,
+                        userId,
+                        new AssignRoleRequest
+                        {
+                            RoleName = RoleNames.Staff
+                        }));
+                return (userId, exception);
+            }
+
+            var outcomes = await Task.WhenAll(
+                DemoteAsync(firstAdminId),
+                DemoteAsync(secondAdminId));
+
+            Assert.Single(
+                outcomes,
+                outcome => outcome.Exception == null);
+            var rejected = Assert.Single(
+                outcomes,
+                outcome => outcome.Exception != null);
+            Assert.True(
+                rejected.Exception is BusinessException
+                {
+                    Code: "last_admin_demotion_forbidden"
+                }
+                or ConflictException
+                {
+                    Code: "role_concurrency_conflict"
+                });
+
+            if (rejected.Exception is ConflictException)
+            {
+                await using var retryContext =
+                    new AppDbContext(options);
+                var retryService =
+                    TestServiceFactory.CreateUserService(
+                        retryContext,
+                        new FixedTimeProvider(now));
+                var retry = await Assert.ThrowsAsync<BusinessException>(
+                    () => retryService.AssignRoleAsync(
+                        actorUserId,
+                        rejected.UserId,
+                        new AssignRoleRequest
+                        {
+                            RoleName = RoleNames.Staff
+                        }));
+                Assert.Equal(
+                    "last_admin_demotion_forbidden",
+                    retry.Code);
+            }
+
+            await using var verificationContext =
+                new AppDbContext(options);
+            var activeAdminCount =
+                await verificationContext.UserRoles.CountAsync(
+                    userRole => userRole.Role != null
+                        && userRole.Role.Name == RoleNames.Admin
+                        && userRole.User != null
+                        && !userRole.User.IsDeleted);
+            var targetRoles = await verificationContext.UserRoles
+                .Where(userRole =>
+                    userRole.UserId == firstAdminId
+                    || userRole.UserId == secondAdminId)
+                .Include(userRole => userRole.Role)
+                .ToListAsync();
+
+            Assert.Equal(1, activeAdminCount);
+            Assert.Equal(2, targetRoles.Count);
+            Assert.Single(
+                targetRoles,
+                userRole => userRole.Role?.Name == RoleNames.Admin);
+            Assert.Single(
+                targetRoles,
+                userRole => userRole.Role?.Name == RoleNames.Staff);
+        }
+        finally
+        {
+            await using var cleanupContext =
+                new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
     public async Task ConcurrentPromotionCheckouts_RespectGlobalUsageLimit()
     {
         SqlServerIntegrationTestGate.Require();

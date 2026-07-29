@@ -148,6 +148,52 @@ Payment: Pending -> Paid -> Refunded
 COD reaches Paid when the order is Delivered and Cancelled when the order is Cancelled.
 ```
 
+The lifecycle decision tables are the source of truth for commands and tests:
+
+| Current order | Accepted next state | Required condition |
+| --- | --- | --- |
+| `Pending` | `Confirmed`, `Cancelled` | Cancellation requires payment not to be `Paid` or `Refunded` |
+| `Confirmed` | `Shipping`, `Cancelled` | Dispatch owns `Shipping`; cancellation requires payment not to be `Paid` or `Refunded` |
+| `Shipping` | `Delivered`, `DeliveryFailed` | Shipment workflow owns delivery; failure requires an operational note |
+| `DeliveryFailed` | `Shipping`, `Cancelled` | Retry must use the existing carrier and tracking number; cancellation requires payment not to be `Paid` or `Refunded` |
+| `Delivered` | `ReturnRequested` | Payment must be `Paid` and the request must be within the return window |
+| `ReturnRequested` | `ReturnApproved`, `Delivered` | Approval continues the return; rejection restores `Delivered` |
+| `ReturnApproved` | `Returned` | Approved goods must be received and inspected |
+| `Returned` | `Refunded` | Payment and return request must already be `Refunded` |
+| `Cancelled` | None | Terminal |
+| `Refunded` | None | Terminal |
+
+At the domain boundary, changing to the current state is an idempotent no-op. API commands may
+still reject a generic transition when a dedicated shipment, return or refund command owns it.
+
+| Current payment | Accepted next state | Retry behavior |
+| --- | --- | --- |
+| `Pending` | `Paid`, `Failed`, `Cancelled` | A new event for the current state is audited without another outcome |
+| `Paid` | `Refunded` | The capture time is retained and refund time cannot precede it |
+| `Failed` | None | Terminal |
+| `Cancelled` | None | Terminal |
+| `Refunded` | None | Terminal; another provider event is audited without another notification |
+
+| Shipment situation | Result |
+| --- | --- |
+| Confirmed order without shipment | Create shipment and move to `Shipping` |
+| Shipping order with the same carrier/tracking | Idempotent replay |
+| Shipping order with different carrier/tracking | `409 shipment_identity_mismatch` |
+| Delivery failed with the same carrier/tracking | Record another `Shipping` attempt |
+| Delivery failed with different carrier/tracking | `409 shipment_identity_mismatch` |
+| Delivered shipment replay | Idempotent replay; COD is collected once |
+
+| Return situation | Result |
+| --- | --- |
+| Delivered, paid, in-window order without a request | Create one `Pending` request and move the order to `ReturnRequested` |
+| Existing request with the same normalized reason | Idempotent replay at its current outcome |
+| Existing request with another reason | `409 return_request_already_exists` |
+| Rejected request | Terminal; a second request is not created for the same order |
+| Pending request approved/rejected | Move to `Approved`, or `Rejected` and restore order to `Delivered` |
+| Approved request received | Restore stock once and move request/order to `Received`/`Returned` |
+| Received request refunded with the same reference | Complete once, then return the stored result on replay |
+| Refunded request replayed with another reference | `409 refund_reference_mismatch` |
+
 Stock is reserved while an order is Pending. Shipment dispatch requires a carrier and tracking
 number. A delivery failure keeps stock reserved; staff can retry the same shipment or cancel.
 Customer return requests are bounded by `Returns:ReturnWindowDays`; Staff approves or rejects them.
@@ -276,6 +322,12 @@ discounts, shipping fees and taxes are intentionally not allocated across indivi
 JWT roles are informational; protected administration endpoints require permission claims.
 Access-token validation also verifies the user token version and an active refresh-token
 family in SQL Server. Password and role changes revoke all existing sessions immediately.
+Customer cart, order, cancellation and return commands scope every lookup to the authenticated
+user; a cross-owner identifier returns `404` rather than disclosing that the resource exists.
+Role assignment forbids self-changes and runs under `Serializable` isolation with a
+transaction-scoped `ECommerceBackend.RoleAssignment` application lock. Concurrent demotions
+therefore cannot remove the last active `Admin`; the second command observes the committed first
+change and rejects removal of the remaining admin.
 
 A user account is the serialization boundary for session mutations. Login, refresh, logout,
 logout-all, password changes and role changes lock the user before touching refresh tokens;
