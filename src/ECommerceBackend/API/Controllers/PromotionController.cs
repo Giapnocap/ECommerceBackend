@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -9,7 +10,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Quản lý mã khuyến mãi</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/promotions")]
+    [Route("api/v{version:apiVersion}/promotions")]
     [Authorize(Policy = PermissionNames.ManageProducts)]
     [Produces("application/json")]
     public sealed class PromotionController : ControllerBase

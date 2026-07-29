@@ -13,8 +13,12 @@ namespace ECommerceBackend.API.Swagger
                 typeof(ApiErrorResponse),
                 context.SchemaRepository);
 
-            AddErrorResponse(operation, "400", "Bad Request - validation or business rule error.", errorSchema);
-            AddErrorResponse(operation, "500", "Internal Server Error.", errorSchema);
+            AddErrorResponse(
+                operation,
+                "400",
+                "Yêu cầu không hợp lệ do dữ liệu đầu vào hoặc quy tắc nghiệp vụ.",
+                errorSchema);
+            AddErrorResponse(operation, "500", "Lỗi xử lý nội bộ của máy chủ.", errorSchema);
 
             if (SwaggerAuthorizationMetadata.RequiresAuthorization(context.MethodInfo)
                 || IsPaymentWebhook(context))
@@ -24,14 +28,24 @@ namespace ECommerceBackend.API.Swagger
 
             if (SwaggerAuthorizationMetadata.RequiresAuthorization(context.MethodInfo))
             {
-                AddErrorResponse(operation, "403", "Forbidden - authenticated user does not have enough permission.", errorSchema);
+                AddErrorResponse(
+                    operation,
+                    "403",
+                    "Người dùng đã xác thực nhưng không có đủ quyền thực hiện thao tác.",
+                    errorSchema);
             }
 
             if (CanReturnNotFound(context))
                 AddErrorResponse(operation, "404", "Không tìm thấy tài nguyên được yêu cầu.", errorSchema);
 
             if (CanReturnConflict(context))
-                AddErrorResponse(operation, "409", "Conflict - resource was modified by another operation.", errorSchema);
+            {
+                AddErrorResponse(
+                    operation,
+                    "409",
+                    "Dữ liệu xung đột do tài nguyên đã được một thao tác khác thay đổi.",
+                    errorSchema);
+            }
 
             if (CanReturnPayloadTooLarge(context))
                 AddErrorResponse(operation, "413", "Dữ liệu gửi lên vượt quá giới hạn cấu hình.", errorSchema);

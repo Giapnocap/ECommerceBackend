@@ -37,7 +37,10 @@ following boundaries are intentional and visible in the design.
 
 ## Compatibility
 
-- OpenAPI v1 is snapshot-tested. Intentional breaking changes require a reviewed versioning plan.
+- OpenAPI v1 is snapshot-tested. `/api/v1` is the canonical route and `/api` remains a
+  backward-compatible alias that assumes v1.
+- A breaking request or response change requires a new API version; the v1 DTO and error-code
+  contracts remain stable.
 - Order and payment status names are public API values; renaming them is backward incompatible.
 - Historical order details and immutable ledgers must not be reconstructed from current catalog
   values.

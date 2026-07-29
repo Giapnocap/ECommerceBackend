@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -9,7 +10,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Quản lý giỏ hàng</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/cart")]
+    [Route("api/v{version:apiVersion}/cart")]
     [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
     [Produces("application/json")]
     public class CartController : ControllerBase

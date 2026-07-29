@@ -1,9 +1,9 @@
 namespace ECommerceBackend.Application.DTOs
 {
-    /// <summary>Simple success message payload.</summary>
+    /// <summary>Dữ liệu thông báo thành công.</summary>
     public class MessageResponse
     {
-        /// <summary>Human-readable success message.</summary>
+        /// <summary>Thông báo thành công dành cho người dùng.</summary>
         public string Message { get; set; } = string.Empty;
     }
 }

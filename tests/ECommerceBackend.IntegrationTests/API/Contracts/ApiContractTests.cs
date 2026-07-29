@@ -53,6 +53,58 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task VersionOneRoutes_PreserveLegacyRoutesAndAdvertiseVersion()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+
+        using var legacy = await client.GetAsync("/api/products?page=1&pageSize=10");
+        using var versioned = await client.GetAsync("/api/v1/products?page=1&pageSize=10");
+        using var openApiResponse = await client.GetAsync("/swagger/v1/swagger.json");
+        using var openApi = await ReadJsonAsync(openApiResponse);
+
+        Assert.Equal(HttpStatusCode.OK, legacy.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, versioned.StatusCode);
+        Assert.Contains(
+            "1.0",
+            versioned.Headers.GetValues("api-supported-versions"));
+
+        var paths = openApi.RootElement.GetProperty("paths");
+        Assert.True(paths.TryGetProperty("/api/v1/products", out _));
+        Assert.False(paths.TryGetProperty("/api/products", out _));
+    }
+
+    [Fact]
+    public async Task FrameworkErrors_ReturnStableVietnameseProblemDetails()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+
+        await AssertVietnameseProblemAsync(
+            await client.GetAsync("/api/not-a-real-endpoint"),
+            HttpStatusCode.NotFound,
+            "endpoint_not_found",
+            "Không tìm thấy endpoint được yêu cầu.");
+        await AssertVietnameseProblemAsync(
+            await client.GetAsync("/api/v2/products"),
+            HttpStatusCode.NotFound,
+            "endpoint_not_found",
+            "Không tìm thấy endpoint được yêu cầu.");
+        await AssertVietnameseProblemAsync(
+            await client.SendAsync(new HttpRequestMessage(
+                HttpMethod.Patch,
+                "/api/products")),
+            HttpStatusCode.MethodNotAllowed,
+            "method_not_allowed",
+            "Phương thức HTTP không được hỗ trợ cho endpoint này.");
+        await AssertVietnameseProblemAsync(
+            await client.PostAsync(
+                "/api/auth/login",
+                new StringContent("plain", Encoding.UTF8, "text/plain")),
+            HttpStatusCode.UnsupportedMediaType,
+            "unsupported_media_type",
+            "Định dạng dữ liệu gửi lên không được hỗ trợ.");
+    }
+
+    [Fact]
     public async Task OpenApi_DescribesSecurityAndCriticalRequestContracts()
     {
         using var client = await _factory.CreateInitializedClientAsync();
@@ -61,24 +113,24 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         using var document = await ReadJsonAsync(response);
         var paths = document.RootElement.GetProperty("paths");
 
-        var checkout = paths.GetProperty("/api/orders").GetProperty("post");
+        var checkout = paths.GetProperty("/api/v1/orders").GetProperty("post");
         Assert.True(checkout.TryGetProperty("security", out _));
         AssertRequiredParameter(checkout, "Idempotency-Key", "header");
         var quote = paths
-            .GetProperty("/api/orders/quote")
+            .GetProperty("/api/v1/orders/quote")
             .GetProperty("post");
         Assert.True(quote.TryGetProperty("security", out _));
         var promotions = paths
-            .GetProperty("/api/promotions")
+            .GetProperty("/api/v1/promotions")
             .GetProperty("get");
         Assert.True(promotions.TryGetProperty("security", out _));
         foreach (var fulfillmentPath in new[]
         {
-            "/api/orders/{id}/shipment/dispatch",
-            "/api/orders/{id}/shipment/deliver",
-            "/api/orders/{id}/return-request",
-            "/api/orders/{id}/return-request/review",
-            "/api/orders/{id}/return-request/receive"
+            "/api/v1/orders/{id}/shipment/dispatch",
+            "/api/v1/orders/{id}/shipment/deliver",
+            "/api/v1/orders/{id}/return-request",
+            "/api/v1/orders/{id}/return-request/review",
+            "/api/v1/orders/{id}/return-request/receive"
         })
         {
             var operation = paths
@@ -90,11 +142,11 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             AssertRequiredParameter(operation, "id", "path");
         }
 
-        var publicProducts = paths.GetProperty("/api/products").GetProperty("get");
+        var publicProducts = paths.GetProperty("/api/v1/products").GetProperty("get");
         Assert.False(publicProducts.TryGetProperty("security", out _));
 
         var webhook = paths
-            .GetProperty("/api/payments/webhooks/{providerCode}")
+            .GetProperty("/api/v1/payments/webhooks/{providerCode}")
             .GetProperty("post");
         Assert.False(webhook.TryGetProperty("security", out _));
         AssertRequiredParameter(webhook, "providerCode", "path");
@@ -280,6 +332,30 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             UserName = userName,
             Password = password
         });
+    }
+
+    private static async Task AssertVietnameseProblemAsync(
+        HttpResponseMessage response,
+        HttpStatusCode expectedStatus,
+        string expectedCode,
+        string expectedMessage)
+    {
+        using (response)
+        using (var problem = await ReadJsonAsync(response))
+        {
+            Assert.Equal(expectedStatus, response.StatusCode);
+            Assert.StartsWith(
+                ApiProblemDetails.ContentType,
+                response.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(
+                expectedCode,
+                problem.RootElement.GetProperty("code").GetString());
+            Assert.Equal(
+                expectedMessage,
+                problem.RootElement.GetProperty("message").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(
+                problem.RootElement.GetProperty("traceId").GetString()));
+        }
     }
 
     private static async Task<AuthResponse> PostAuthAsync<TRequest>(

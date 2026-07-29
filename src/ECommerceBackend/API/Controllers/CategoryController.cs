@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -9,7 +10,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Quản lý danh mục sản phẩm</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/categories")]
+    [Route("api/v{version:apiVersion}/categories")]
     [Produces("application/json")]
     public class CategoryController : ControllerBase
     {
@@ -69,7 +72,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Xóa danh mục (soft delete)</summary>
+        /// <summary>[Admin] Xóa mềm danh mục</summary>
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]

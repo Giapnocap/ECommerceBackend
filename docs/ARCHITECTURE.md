@@ -375,6 +375,9 @@ measurement-gated because their operational cost and invalidation rules are not 
 Exception, MVC validation, authentication, authorization and rate-limit failures share the
 `application/problem+json` contract. Standard `ProblemDetails` fields coexist with the stable
 compatibility fields `message`, `code`, `traceId`, `details` and `errors`.
+Client-facing titles and messages are Vietnamese while `code` remains a stable English identifier.
+Version 1 is available under `/api/v1`; the original `/api` routes assume version 1 and remain
+covered by contract tests for backward compatibility.
 
 Client-aborted requests are recorded as cancellation instead of an internal server error and do
 not attempt to write JSON to a closed connection. Exceptions raised after response headers start

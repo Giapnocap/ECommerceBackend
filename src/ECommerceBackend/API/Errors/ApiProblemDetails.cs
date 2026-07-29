@@ -39,8 +39,11 @@ namespace ECommerceBackend.API.Errors
                 StatusCodes.Status401Unauthorized => "Chưa xác thực",
                 StatusCodes.Status403Forbidden => "Không có quyền truy cập",
                 StatusCodes.Status404NotFound => "Không tìm thấy",
+                StatusCodes.Status405MethodNotAllowed => "Phương thức không được hỗ trợ",
+                StatusCodes.Status406NotAcceptable => "Định dạng phản hồi không được hỗ trợ",
                 StatusCodes.Status409Conflict => "Xung đột dữ liệu",
                 StatusCodes.Status413PayloadTooLarge => "Dữ liệu gửi lên quá lớn",
+                StatusCodes.Status415UnsupportedMediaType => "Định dạng dữ liệu không được hỗ trợ",
                 StatusCodes.Status429TooManyRequests => "Quá nhiều yêu cầu",
                 StatusCodes.Status500InternalServerError => "Lỗi máy chủ",
                 _ => "Lỗi xử lý yêu cầu"

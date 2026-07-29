@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Text;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
@@ -11,9 +12,11 @@ using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Nhận payment webhook đã ký từ provider được cấu hình</summary>
+    /// <summary>Nhận thông báo thanh toán đã ký từ cổng được cấu hình</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/payments")]
+    [Route("api/v{version:apiVersion}/payments")]
     [Produces("application/json")]
     public sealed class PaymentController : ControllerBase
     {
@@ -53,7 +56,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(methods);
         }
 
-        /// <summary>Process a signed payment provider webhook</summary>
+        /// <summary>Xử lý thông báo đã ký từ cổng thanh toán</summary>
         /// <remarks>Chữ ký được xác minh bằng chính xác nội dung JSON UTF-8 của yêu cầu.</remarks>
         [HttpPost("webhooks/{providerCode}")]
         [AllowAnonymous]

@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -6,9 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Administrative commerce reports</summary>
+    /// <summary>Báo cáo thương mại dành cho quản trị viên</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/reports")]
+    [Route("api/v{version:apiVersion}/reports")]
     [Authorize(Policy = PermissionNames.ViewReports)]
     [Produces("application/json")]
     public sealed class ReportController : ControllerBase

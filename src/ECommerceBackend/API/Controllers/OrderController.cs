@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -10,7 +11,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Quản lý đơn hàng</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/orders")]
+    [Route("api/v{version:apiVersion}/orders")]
     [Authorize]
     [Produces("application/json")]
     public class OrderController : ControllerBase
@@ -21,7 +24,7 @@ namespace ECommerceBackend.API.Controllers
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         private bool CanProcessOrders => User.HasClaim(AuthClaimTypes.Permission, PermissionNames.ProcessOrders);
 
-        /// <summary>Đặt hàng từ giỏ hàng hiện tại (có Transaction)</summary>
+        /// <summary>Đặt hàng từ giỏ hàng hiện tại trong một giao dịch dữ liệu</summary>
         [HttpPost]
         [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
         [EnableRateLimiting("checkout")]
@@ -39,7 +42,7 @@ namespace ECommerceBackend.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
 
-        /// <summary>Tính lại giá giỏ hàng theo promotion và phương thức giao hàng</summary>
+        /// <summary>Tính lại giá giỏ hàng theo khuyến mãi và phương thức giao hàng</summary>
         [HttpPost("quote")]
         [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
         [EnableRateLimiting("checkout")]
@@ -77,7 +80,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Staff/Admin] Lấy tất cả đơn hàng với filter</summary>
+        /// <summary>[Staff/Admin] Lấy tất cả đơn hàng theo bộ lọc</summary>
         [HttpGet]
         [Authorize(Policy = PermissionNames.ProcessOrders)]
         [ProducesResponseType(typeof(PagedResult<OrderResponse>), StatusCodes.Status200OK)]
@@ -219,7 +222,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Cancel one of the current customer's eligible orders</summary>
+        /// <summary>Hủy một đơn hàng hợp lệ của khách hàng hiện tại</summary>
         [HttpPost("{id:guid}/cancel")]
         [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
         [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]

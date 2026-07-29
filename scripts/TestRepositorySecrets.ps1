@@ -3,14 +3,8 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-# CI SQL credentials belong only to disposable localhost containers and are intentionally
-# reviewable fixtures. Application configuration and every other tracked path remain scanned.
 $allowedFixturePaths = @(
-    '.github/workflows/ci.yml',
-    '.github/workflows/performance.yml',
-    'README.md',
     'src/ECommerceBackend/ECommerceBackend.http',
-    'scripts/SeedDemoData.sql',
     'scripts/TestRepositorySecrets.ps1'
 )
 $allowedPrefixes = @(
@@ -25,6 +19,7 @@ $patterns = [ordered]@{
     SlackToken = '\bxox[baprs]-[A-Za-z0-9-]{20,}\b'
     StripeLiveKey = '\bsk_live_[A-Za-z0-9]{20,}\b'
     JsonCredential = '"(?:Password|Secret|ApiKey|AccessToken|PrivateKey|Key)"\s*:\s*"(?<value>[^"]+)"'
+    NamedCredential = '(?im)^\s*(?:[A-Z0-9_]*(?:PASSWORD|SECRET|API_KEY|ACCESS_TOKEN|PRIVATE_KEY|JWT_KEY)[A-Z0-9_]*)\s*:\s*["'']?(?<value>[^"''#\r\n]+)'
     ConnectionPassword = '(?i)(?:Password|Pwd)\s*=\s*(?<value>[^;"\s]+)'
 }
 
@@ -71,7 +66,8 @@ foreach ($relativePath in $trackedFiles) {
 
             $isPlaceholder = [string]::IsNullOrWhiteSpace($value) `
                 -or $value -match '^(?:YOUR_|replace-with|change-me|test-|example|placeholder|generate-a-|set-a-)' `
-                -or $value -match '^<.+>$'
+                -or $value -match '^<.+>$' `
+                -or $value -match '\$\{\{[^}]+\}\}'
             if ($isPlaceholder) {
                 continue
             }

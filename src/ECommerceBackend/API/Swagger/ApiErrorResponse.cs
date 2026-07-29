@@ -2,22 +2,22 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Swagger
 {
-    /// <summary>Standard error payload returned by validation, business rules and exception middleware.</summary>
+    /// <summary>Dữ liệu lỗi chuẩn trả về từ kiểm tra dữ liệu, quy tắc nghiệp vụ và lớp xử lý ngoại lệ.</summary>
     public sealed class ApiErrorResponse : ProblemDetails
     {
-        /// <summary>Human-readable error message.</summary>
+        /// <summary>Thông báo lỗi dành cho người dùng.</summary>
         public string Message { get; set; } = string.Empty;
 
-        /// <summary>Stable machine-readable error code.</summary>
+        /// <summary>Mã lỗi ổn định dành cho ứng dụng gọi API.</summary>
         public string Code { get; set; } = string.Empty;
 
-        /// <summary>Request trace identifier for troubleshooting.</summary>
+        /// <summary>Mã truy vết yêu cầu dùng để điều tra sự cố.</summary>
         public string TraceId { get; set; } = string.Empty;
 
-        /// <summary>Development-only diagnostic details when available.</summary>
+        /// <summary>Thông tin chẩn đoán chỉ xuất hiện trong môi trường phát triển khi có.</summary>
         public string Details { get; set; } = string.Empty;
 
-        /// <summary>Field-level validation errors keyed by request property name.</summary>
+        /// <summary>Lỗi kiểm tra dữ liệu theo tên thuộc tính của yêu cầu.</summary>
         public IDictionary<string, string[]>? Errors { get; set; }
     }
 }

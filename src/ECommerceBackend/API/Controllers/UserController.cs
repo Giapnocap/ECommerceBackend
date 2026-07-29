@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -9,7 +10,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Quản lý người dùng</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/users")]
+    [Route("api/v{version:apiVersion}/users")]
     [Authorize]
     [Produces("application/json")]
     public class UserController : ControllerBase
@@ -19,7 +22,7 @@ namespace ECommerceBackend.API.Controllers
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>Lấy thông tin profile của chính mình</summary>
+        /// <summary>Lấy thông tin hồ sơ của chính mình</summary>
         [HttpGet("me")]
         [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetMyProfile(CancellationToken cancellationToken)
@@ -28,7 +31,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Cập nhật profile cá nhân</summary>
+        /// <summary>Cập nhật hồ sơ cá nhân</summary>
         [HttpPut("me")]
         [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateMyProfile(
@@ -65,7 +68,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Gán role cho người dùng</summary>
+        /// <summary>[Admin] Gán vai trò cho người dùng</summary>
         [HttpPut("{id:guid}/role")]
         [Authorize(Policy = PermissionNames.ManageUsers)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
@@ -79,7 +82,7 @@ namespace ECommerceBackend.API.Controllers
                 id,
                 request,
                 cancellationToken);
-            return Ok(new { message = $"Đã gán role '{request.RoleName}' cho người dùng." });
+            return Ok(new { message = $"Đã gán vai trò '{request.RoleName}' cho người dùng." });
         }
     }
 }

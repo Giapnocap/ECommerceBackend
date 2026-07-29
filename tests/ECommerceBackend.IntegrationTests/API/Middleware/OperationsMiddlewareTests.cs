@@ -4,11 +4,14 @@ using ECommerceBackend.API.Extensions;
 using ECommerceBackend.API.Middlewares;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Tests.Support;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -138,6 +141,33 @@ public sealed class OperationsMiddlewareTests
         Assert.Equal("Giá trị không hợp lệ hoặc không đúng định dạng.", Assert.Single(errors["Email"]));
         await result.ExecuteResultAsync(actionContext);
         Assert.StartsWith(ApiProblemDetails.ContentType, httpContext.Response.ContentType);
+    }
+
+    [Theory]
+    [InlineData(StatusCodes.Status415UnsupportedMediaType, ApiProblemDetails.ContentType)]
+    [InlineData(StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task ProblemDetailsContentType_OnlyNormalizesFrameworkErrors(
+        int statusCode,
+        string expectedContentType)
+    {
+        using var server = new TestServer(new WebHostBuilder()
+            .Configure(app =>
+            {
+                app.UseECommerceProblemDetailsContentType();
+                app.Run(async context =>
+                {
+                    context.Response.StatusCode = statusCode;
+                    context.Response.ContentType = "application/json; charset=utf-8";
+                    await context.Response.WriteAsync("{}");
+                });
+            }));
+        using var client = server.CreateClient();
+
+        using var response = await client.GetAsync("/");
+
+        Assert.StartsWith(
+            expectedContentType,
+            response.Content.Headers.ContentType?.MediaType);
     }
 
     private static ExceptionMiddleware CreateExceptionMiddleware(RequestDelegate next)

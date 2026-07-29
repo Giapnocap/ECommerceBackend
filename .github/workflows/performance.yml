@@ -16,18 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      ECOMMERCE_TEST_SQL_CONNECTION: "Server=localhost,1433;Database=ECommerceBackendPerformance;User Id=sa;Password=ECommerce!CiSql2026;TrustServerCertificate=True;Encrypt=False;"
+      ECOMMERCE_TEST_SQL_CONNECTION: "Server=localhost,1433;Database=ECommerceBackendPerformance;User Id=sa;Password=CiSql!${{github.run_id}}aA9;TrustServerCertificate=True;Encrypt=False;"
 
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
           ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: "ECommerce!CiSql2026"
+          MSSQL_SA_PASSWORD: "CiSql!${{github.run_id}}aA9"
         ports:
           - 1433:1433
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'ECommerce!CiSql2026' -Q 'SELECT 1' || exit 1"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'CiSql!${{github.run_id}}aA9' -Q 'SELECT 1' || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10

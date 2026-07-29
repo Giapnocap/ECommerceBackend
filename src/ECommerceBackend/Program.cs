@@ -38,6 +38,7 @@ try
     builder.Services
         .AddECommerceDataProtection(builder.Configuration, builder.Environment)
         .AddECommerceControllers()
+        .AddECommerceApiVersioning()
         .AddECommerceConfigurationValidation(builder.Configuration, builder.Environment)
         .AddECommerceReverseProxy(builder.Configuration)
         .AddECommerceValidation()
@@ -71,8 +72,11 @@ try
 
     app.UseProductImageStaticFiles(builder.Environment.ContentRootPath);
 
+    app.UseRouting();
     app.UseCors();
     app.UseMiddleware<ExceptionMiddleware>();
+    app.UseECommerceStatusCodePages();
+    app.UseECommerceProblemDetailsContentType();
     var swaggerEnabled = builder.Configuration.GetValue<bool?>("Swagger:Enabled")
         ?? app.Environment.IsDevelopment();
     if (swaggerEnabled)
@@ -85,6 +89,7 @@ try
         });
     }
 
+    app.UseECommerceUnmatchedEndpoint();
     app.UseAuthentication();
     app.UseRateLimiter();
     app.UseAuthorization();

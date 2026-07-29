@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -9,7 +10,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Các thao tác khôi phục, nhật ký và đối soát dành cho quản trị viên</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/operations")]
+    [Route("api/v{version:apiVersion}/operations")]
     [Authorize(Roles = RoleNames.Admin)]
     [Produces("application/json")]
     public sealed class OperationsController : ControllerBase
@@ -27,7 +30,7 @@ namespace ECommerceBackend.API.Controllers
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>List outbox messages that exhausted delivery retries</summary>
+        /// <summary>Liệt kê thông báo không gửi được sau khi đã thử lại hết số lần</summary>
         [HttpGet("outbox/dead-letters")]
         [ProducesResponseType(typeof(PagedResult<DeadLetterResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetDeadLetters(
@@ -35,7 +38,7 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.GetDeadLettersAsync(query, cancellationToken));
 
-        /// <summary>Return a dead-lettered outbox message to the delivery queue</summary>
+        /// <summary>Đưa thông báo lỗi trở lại hàng đợi gửi</summary>
         [HttpPost("outbox/dead-letters/{id:guid}/redrive")]
         [ProducesResponseType(typeof(RedriveOutboxResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RedriveDeadLetter(

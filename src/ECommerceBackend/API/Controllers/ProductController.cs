@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -10,7 +11,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Quản lý sản phẩm</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/products")]
+    [Route("api/v{version:apiVersion}/products")]
     [Produces("application/json")]
     public class ProductController : ControllerBase
     {
@@ -80,7 +83,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Xóa sản phẩm (soft delete)</summary>
+        /// <summary>[Admin] Xóa mềm sản phẩm</summary>
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
@@ -90,7 +93,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(new { message = "Xóa sản phẩm thành công." });
         }
 
-        /// <summary>[Admin] Upload ảnh cho sản phẩm</summary>
+        /// <summary>[Admin] Tải ảnh lên cho sản phẩm</summary>
         [HttpPost("{id:guid}/images")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [EnableRateLimiting("upload")]

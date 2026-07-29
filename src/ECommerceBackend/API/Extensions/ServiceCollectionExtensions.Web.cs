@@ -1,4 +1,5 @@
 using System.Reflection;
+using Asp.Versioning;
 using ECommerceBackend.API.Errors;
 using ECommerceBackend.API.Swagger;
 using ECommerceBackend.Application.Common;
@@ -7,6 +8,8 @@ using FluentValidation;
 using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.OpenApi.Models;
 
 namespace ECommerceBackend.API.Extensions
@@ -16,6 +19,9 @@ namespace ECommerceBackend.API.Extensions
         public static IServiceCollection AddECommerceControllers(this IServiceCollection services)
         {
             services.AddControllers();
+            services.Replace(ServiceDescriptor.Singleton<
+                ProblemDetailsFactory,
+                ECommerceProblemDetailsFactory>());
             services.Configure<ApiBehaviorOptions>(options =>
             {
                 options.InvalidModelStateResponseFactory = context =>
@@ -35,6 +41,26 @@ namespace ECommerceBackend.API.Extensions
                         errors));
                 };
             });
+
+            return services;
+        }
+
+        public static IServiceCollection AddECommerceApiVersioning(this IServiceCollection services)
+        {
+            services
+                .AddApiVersioning(options =>
+                {
+                    options.DefaultApiVersion = new ApiVersion(1, 0);
+                    options.AssumeDefaultVersionWhenUnspecified = true;
+                    options.ReportApiVersions = true;
+                    options.ApiVersionReader = new UrlSegmentApiVersionReader();
+                })
+                .AddMvc()
+                .AddApiExplorer(options =>
+                {
+                    options.GroupNameFormat = "'v'VVV";
+                    options.SubstituteApiVersionInUrl = true;
+                });
 
             return services;
         }
@@ -105,7 +131,7 @@ namespace ECommerceBackend.API.Extensions
                 {
                     Title = "ECommerce API",
                     Version = "v1",
-                    Description = "E-Commerce Backend API với Clean Architecture - ASP.NET Core 8, JWT Auth, EF Core, SQL Server."
+                    Description = "API E-Commerce phiên bản 1. Route /api/v1 được khuyến nghị; route /api được giữ để tương thích ngược."
                 });
 
                 options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -118,6 +144,14 @@ namespace ECommerceBackend.API.Extensions
                     Description = "Nhập token dạng: Bearer {token}"
                 });
 
+                options.DocInclusionPredicate(
+                    (documentName, description) =>
+                        description.GroupName == null
+                        || string.Equals(
+                            description.GroupName,
+                            documentName,
+                            StringComparison.OrdinalIgnoreCase));
+                options.DocumentFilter<CanonicalApiVersionDocumentFilter>();
                 options.OperationFilter<AuthorizeOperationFilter>();
                 options.OperationFilter<RequestContractOperationFilter>();
                 options.OperationFilter<DefaultResponseOperationFilter>();

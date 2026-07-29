@@ -18,6 +18,20 @@ The migration adds `(IsDeleted ASC, CreatedAt DESC, Id DESC)`, matching the defa
 filter and stable sort. The performance test also verifies that SQL Server's estimated plan
 references this index.
 
+## Query And Paging Review
+
+- Every public list normalizes paging and limits `pageSize` to 100.
+- Catalog and order reads use `AsNoTracking`; collection graphs use split queries to avoid
+  cartesian row multiplication.
+- Inventory, audit, dead-letter and reporting reads project directly to response models and do
+  not materialize writable entities.
+- Order list endpoints intentionally retain the full `OrderResponse` graph because it is part of
+  the v1 contract. A smaller summary response belongs in a future API version rather than a
+  backward-incompatible v1 change.
+- No index or migration was added during the API v1 review. The measured default catalog index,
+  order lifecycle indexes and retention indexes already match the current hot queries; additional
+  indexes require query-plan or telemetry evidence.
+
 ## Automated Budgets
 
 `SqlServerPerformanceTests` creates an isolated SQL Server database, applies all migrations,

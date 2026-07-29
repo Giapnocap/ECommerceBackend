@@ -13,7 +13,7 @@ namespace ECommerceBackend.API.Swagger
                 ConfigureRequiredHeader(
                     operation,
                     "Idempotency-Key",
-                    "Unique key for safely retrying this checkout request.");
+                    "Khóa duy nhất để thử lại yêu cầu đặt hàng một cách an toàn.");
             }
 
             if (!IsAction<PaymentController>(context, nameof(PaymentController.HandleWebhook)))
@@ -23,16 +23,16 @@ namespace ECommerceBackend.API.Swagger
                 operation,
                 "providerCode",
                 ParameterLocation.Path,
-                "Code of the configured payment provider.",
+                "Mã của cổng thanh toán đã cấu hình.",
                 required: true);
             ConfigureRequiredHeader(
                 operation,
                 "X-Payment-Event-Id",
-                "Provider event identifier used for webhook idempotency.");
+                "Mã sự kiện của cổng thanh toán dùng để chống xử lý trùng.");
             ConfigureRequiredHeader(
                 operation,
                 "X-Payment-Signature",
-                "Signature calculated by the configured payment provider.");
+                "Chữ ký do cổng thanh toán đã cấu hình tạo ra.");
 
             operation.RequestBody = new OpenApiRequestBody
             {

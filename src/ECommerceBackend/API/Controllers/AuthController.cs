@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Asp.Versioning;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,9 @@ namespace ECommerceBackend.API.Controllers
 {
     /// <summary>Xác thực người dùng — Đăng ký / Đăng nhập</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/auth")]
+    [Route("api/v{version:apiVersion}/auth")]
     [Produces("application/json")]
     public class AuthController : ControllerBase
     {
@@ -18,7 +21,7 @@ namespace ECommerceBackend.API.Controllers
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>Đăng ký tài khoản mới (tự động gán role Customer)</summary>
+        /// <summary>Đăng ký tài khoản mới (tự động gán vai trò Customer)</summary>
         [HttpPost("register")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -31,7 +34,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Đăng nhập và nhận JWT token</summary>
+        /// <summary>Đăng nhập và nhận mã truy cập JWT</summary>
         [HttpPost("login")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -76,7 +79,7 @@ namespace ECommerceBackend.API.Controllers
             });
         }
 
-        /// <summary>Làm mới access token bằng refresh token</summary>
+        /// <summary>Làm mới mã truy cập bằng mã làm mới</summary>
         [HttpPost("refresh")]
         [AllowAnonymous]
         [EnableRateLimiting("refresh")]
@@ -89,7 +92,7 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Đăng xuất và thu hồi refresh token hiện tại</summary>
+        /// <summary>Đăng xuất và thu hồi mã làm mới hiện tại</summary>
         [HttpPost("logout")]
         [Authorize]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]

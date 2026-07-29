@@ -104,6 +104,14 @@ Tài liệu thiết kế:
 
 Các endpoint quản trị sử dụng permission policies. Riêng operations recovery và audit yêu cầu role `Admin`.
 
+## Phiên Bản API
+
+- Route khuyến nghị: `/api/v1/...`.
+- Route cũ `/api/...` vẫn hoạt động với phiên bản mặc định `1.0` để không phá client hiện tại.
+- Response của endpoint hợp lệ có header `api-supported-versions`.
+- Swagger/OpenAPI v1: `/swagger/v1/swagger.json` và `/swagger`.
+- Thông báo và `ProblemDetails` dùng tiếng Việt; trường `code` giữ tiếng Anh ổn định cho client.
+
 ## Chạy Local
 
 Yêu cầu:

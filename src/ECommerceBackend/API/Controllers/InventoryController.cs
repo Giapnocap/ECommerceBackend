@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
@@ -6,9 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Inventory reporting and transaction history</summary>
+    /// <summary>Báo cáo tồn kho và lịch sử biến động</summary>
     [ApiController]
+    [ApiVersion(1.0)]
     [Route("api/inventory")]
+    [Route("api/v{version:apiVersion}/inventory")]
     [Authorize(Policy = PermissionNames.ViewInventory)]
     [Produces("application/json")]
     public sealed class InventoryController : ControllerBase
