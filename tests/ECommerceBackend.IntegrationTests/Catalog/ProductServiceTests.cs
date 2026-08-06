@@ -40,7 +40,7 @@ public class ProductServiceTests
     }
 
     [Fact]
-    public async Task UpdateAsync_WritesInventoryMutationWithInjectedTimestamp()
+    public async Task AdjustStockAsync_WritesInventoryMutationWithInjectedTimestamp()
     {
         var now = new DateTimeOffset(2026, 7, 20, 0, 0, 0, TimeSpan.Zero);
         var actorUserId = Guid.NewGuid();
@@ -60,16 +60,16 @@ public class ProductServiceTests
             Description = "Inventory product",
             CategoryId = category.Id
         }, actorUserId);
-        await service.UpdateAsync(created.Id, new UpdateProductRequest
-        {
-            Name = "Inventory Product",
-            Price = 25m,
-            StockQuantity = 2,
-            Description = "Inventory product",
-            CategoryId = category.Id
-        }, actorUserId);
-
         var product = await context.Products.SingleAsync(candidate => candidate.Id == created.Id);
+        product.RowVersion = [1, 2, 3, 4, 5, 6, 7, 8];
+        await context.SaveChangesAsync();
+
+        await service.AdjustStockAsync(created.Id, new AdjustProductStockRequest
+        {
+            TargetQuantity = 2,
+            Reason = "  Kiểm kê kho  "
+        }, product.RowVersion.ToArray(), actorUserId);
+
         var ledger = await context.InventoryTransactions
             .Where(transaction => transaction.ProductId == created.Id)
             .OrderBy(transaction => transaction.Type)
@@ -88,8 +88,70 @@ public class ProductServiceTests
             {
                 Assert.Equal(-3, adjustment.QuantityChange);
                 Assert.Equal(2, adjustment.BalanceAfter);
+                Assert.Equal("Kiểm kê kho", adjustment.Reason);
                 Assert.Equal(now.UtcDateTime, adjustment.CreatedAt);
             });
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenSubmittedStockIsStale_RejectsMetadataUpdate()
+    {
+        await using var context = TestAppDbContext.Create();
+        var category = new Category { Id = Guid.NewGuid(), Name = "Stale stock" };
+        context.Categories.Add(category);
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateProductService(context);
+        var created = await service.CreateAsync(new CreateProductRequest
+        {
+            Name = "Original name",
+            Price = 25m,
+            StockQuantity = 5,
+            Description = "Original description",
+            CategoryId = category.Id
+        });
+        var product = await context.Products.SingleAsync(candidate => candidate.Id == created.Id);
+        _ = product.AdjustStockTo(4);
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.UpdateAsync(created.Id, new UpdateProductRequest
+            {
+                Name = "Stale overwrite",
+                Price = 30m,
+                StockQuantity = 5,
+                Description = "Stale overwrite",
+                CategoryId = category.Id
+            }));
+
+        Assert.Equal("inventory_adjustment_required", exception.Code);
+        Assert.Equal("Original name", product.Name);
+        Assert.Equal(4, product.StockQuantity);
+    }
+
+    [Fact]
+    public async Task AdjustStockAsync_WhenVersionIsStale_DoesNotChangeInventory()
+    {
+        await using var context = TestAppDbContext.Create();
+        var category = new Category { Id = Guid.NewGuid(), Name = "Versioned stock" };
+        var product = Product("Versioned product", 25m, category.Id);
+        product.RowVersion = [1, 2, 3, 4, 5, 6, 7, 8];
+        context.AddRange(category, product);
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateProductService(context);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.AdjustStockAsync(
+                product.Id,
+                new AdjustProductStockRequest
+                {
+                    TargetQuantity = 20,
+                    Reason = "Kiểm kê kho"
+                },
+                [8, 7, 6, 5, 4, 3, 2, 1]));
+
+        Assert.Equal("inventory_version_conflict", exception.Code);
+        Assert.Equal(10, product.StockQuantity);
+        Assert.Empty(context.InventoryTransactions);
     }
 
     [Fact]
@@ -126,6 +188,47 @@ public class ProductServiceTests
             items,
             item => Assert.Equal("Cable", item.Name),
             item => Assert.Equal("Adapter", item.Name));
+    }
+
+    [Fact]
+    public async Task GetSummariesAsync_ProjectsOnlyListFieldsAndMainImage()
+    {
+        await using var context = TestAppDbContext.Create();
+        var category = new Category { Id = Guid.NewGuid(), Name = "Summary category" };
+        var product = Product("Summary product", 25m, category.Id);
+        product.Images.Add(new ProductImage
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            ImageUrl = "/uploads/products/secondary.png",
+            IsMain = false
+        });
+        product.Images.Add(new ProductImage
+        {
+            Id = Guid.NewGuid(),
+            ProductId = product.Id,
+            ImageUrl = "/uploads/products/main.png",
+            IsMain = true
+        });
+        context.AddRange(category, product);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = TestServiceFactory.CreateProductService(context);
+
+        var result = await service.GetSummariesAsync(new ProductQueryParams
+        {
+            Keyword = "Summary",
+            Page = 1,
+            PageSize = 10
+        });
+
+        var summary = Assert.Single(result.Items);
+        Assert.Equal(product.Id, summary.Id);
+        Assert.Equal("Summary category", summary.CategoryName);
+        Assert.Equal("/uploads/products/main.png", summary.MainImageUrl);
+        Assert.Null(typeof(ProductSummaryResponse).GetProperty("Description"));
+        Assert.Null(typeof(ProductSummaryResponse).GetProperty("Images"));
+        Assert.Empty(context.ChangeTracker.Entries());
     }
 
     [Fact]

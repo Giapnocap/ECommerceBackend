@@ -25,44 +25,69 @@ references this index.
   cartesian row multiplication.
 - Inventory, audit, dead-letter and reporting reads project directly to response models and do
   not materialize writable entities.
-- Order list endpoints intentionally retain the full `OrderResponse` graph because it is part of
-  the v1 contract. A smaller summary response belongs in a future API version rather than a
-  backward-incompatible v1 change.
+- Existing order list endpoints retain the full `OrderResponse` graph for compatibility. Product
+  and order summary endpoints provide bounded SQL projections for list-only clients without
+  changing those version 1 contracts.
 - No index or migration was added during the API v1 review. The measured default catalog index,
   order lifecycle indexes and retention indexes already match the current hot queries; additional
   indexes require query-plan or telemetry evidence.
 
 ## Automated Budgets
 
-`SqlServerPerformanceTests` creates an isolated SQL Server database, applies all migrations,
-seeds 20,000 products, warms each path and measures:
+`SqlServerPerformanceTests` creates an isolated SQL Server database, applies all migrations and
+seeds representative shapes: 20,000 products, 100 image-heavy products with 20 images each,
+5,000 historical orders for one customer and 50-line carts. Every path is warmed before measuring:
 
 | Path | Workload | Default budget |
 |---|---|---:|
 | Catalog | 40 requests, concurrency 8 | p95 <= 500 ms |
+| Keyword catalog summary | 20 requests, concurrency 4 | p95 <= 750 ms |
+| Image-heavy catalog summary | 20 requests, concurrency 4 | p95 <= 750 ms |
+| Customer order-history summary | 20 requests, concurrency 4 | p95 <= 750 ms |
 | Session validation | 200 requests, concurrency 16 | p95 <= 500 ms, >= 20 req/s |
-| COD checkout | 12 independent checkouts, concurrency 12 | p95 <= 2,000 ms, >= 3 req/s |
+| 50-line COD checkout | 12 independent checkouts, concurrency 12 | p95 <= 2,000 ms, >= 3 req/s |
 
-The first accepted LocalDB run measured catalog p95 `53.3 ms`, session validation p95 `9.9 ms`
-and checkout p95 `23.8 ms`. Thresholds are intentionally wider than one developer machine and
-can be overridden with the `PERFORMANCE_*` environment variables.
+Earlier one-line checkout baselines measured catalog p95 between `53.3 ms` and `76.9 ms`, session
+validation between `9.9 ms` and `11.2 ms`, and checkout between `23.8 ms` and `39.1 ms`. They are
+retained only as historical evidence and are not directly comparable with the current 50-line
+checkout workload. Thresholds are intentionally wider than one developer machine and can be
+overridden with the matching `PERFORMANCE_*` environment variables.
 
-The final phase-8 verification on SQL Server with .NET SDK 8 measured catalog p95 `76.9 ms`,
-session validation p95 `11.2 ms` and checkout p95 `39.1 ms`. These local measurements confirm the
-regression budgets; they are not production capacity claims.
+The first representative-shape LocalDB run measured catalog p95 `32.1 ms`, keyword summary
+`344.3 ms`, image-heavy summary `79.7 ms`, order-history summary `42.8 ms`, session validation
+`17.4 ms` and 50-line checkout `179.9 ms`. These values establish a regression baseline for the
+same local workload; they are not production latency or capacity claims.
+
+The final Windows SQL Server verification on 2026-08-06 measured catalog p95 `37.5 ms`, keyword
+summary `406.5 ms`, image-heavy summary `128.8 ms`, order-history summary `38.6 ms`, session
+validation `13.4 ms` and 50-line checkout `228.2 ms`. Every path remained within its configured
+budget. This is another local regression sample, not a production capacity estimate.
 
 Run the suite with `scripts/RunPerformanceTests.ps1`. The weekly/manual GitHub workflow uploads
 `performance-results.json` for comparison.
 
 ## Scale Decisions
 
-- Keep session validation on SQL Server. The current indexed lookup is comfortably inside the
-  baseline; Redis would add cache invalidation and availability failure modes without measured
-  benefit.
-- Keep the existing in-process rate limiter for the current single API instance. A distributed
-  limiter becomes necessary only when multiple API replicas are deployed.
-- Keep product images on local storage for the current single-instance scope. Move to object
-  storage before horizontal API scaling or when backup/storage measurements require it.
+- Keep session validation on SQL Server while `auth.session.validation.duration` p95 remains within
+  the `500 ms` budget and SQL wait statistics do not identify it as a material database load.
+  `auth.session.validations` provides bounded outcome volume without user, session or token tags.
+  Consider Redis only after a sustained budget breach is reproduced under representative load;
+  include cache invalidation, revocation consistency and cache-unavailable behavior in that change.
+- Keep SQL-backed catalog search while keyword p95 remains within the `750 ms` budget and the
+  required behavior is bounded keyword filtering. Review the query plan and SQL full-text search
+  first. Add a dedicated search engine only when measured latency remains over budget or product
+  requirements need relevance ranking, typo tolerance or language-aware tokenization.
+- Keep the SQL outbox and hosted processor while `outbox.backlog.pending` remains stable and
+  `outbox.backlog.oldest_age` stays below `Outbox:MaxPendingAgeMinutes`. Investigate provider and
+  worker failures before changing architecture. Consider a separate worker or broker only for a
+  sustained growing backlog, independently scaled consumers or new fan-out delivery requirements.
+- Keep the existing in-process rate limiter and local image storage for the current single API
+  instance. Before adding a second replica, introduce a distributed limiter and object storage or
+  a tested shared durable volume.
+
+The outbox readiness check also emits `outbox.backlog.dead_lettered`. These three backlog metrics
+are sampled whenever `/health/ready`, `/health` or `/health/details` runs and can be exported by
+the existing optional OTLP configuration without adding another telemetry stack.
 
 Revisit these decisions using production telemetry, database wait statistics and representative
 network load before adding infrastructure.

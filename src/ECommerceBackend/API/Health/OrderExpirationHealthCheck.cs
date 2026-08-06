@@ -34,10 +34,12 @@ namespace ECommerceBackend.API.Health
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!_options.ExpirationEnabled && _options.RequireExpirationProcessing)
             {
                 return HealthCheckResult.Unhealthy(
-                    "Xử lý đơn hết hạn là bắt buộc nhưng worker đang tắt.",
+                    "Xử lý đơn hết hạn là bắt buộc nhưng tiến trình nền đang tắt.",
                     data: new Dictionary<string, object>
                     {
                         ["enabled"] = false,
@@ -77,17 +79,25 @@ namespace ECommerceBackend.API.Health
                         || now - worker.LastSuccessfulCycleAt.Value > heartbeatAgeLimit))
                 {
                     return HealthCheckResult.Unhealthy(
-                        "Worker xử lý đơn hết hạn chưa có heartbeat hợp lệ.",
+                        "Tiến trình xử lý đơn hết hạn chưa có tín hiệu hoạt động hợp lệ.",
                         data: data);
                 }
 
                 if (_options.ExpirationDryRun && overdueCount > 0)
-                    return HealthCheckResult.Degraded("Expiration dry-run found overdue orders.", data: data);
+                {
+                    return HealthCheckResult.Degraded(
+                        "Chế độ chạy thử phát hiện đơn hàng đã quá hạn xử lý.",
+                        data: data);
+                }
 
                 if (overdueCount > 0)
                     return HealthCheckResult.Unhealthy("Có đơn hàng chờ xử lý quá thời hạn cho phép.", data: data);
 
                 return HealthCheckResult.Healthy("Xử lý đơn hàng hết hạn đang hoạt động bình thường.", data);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

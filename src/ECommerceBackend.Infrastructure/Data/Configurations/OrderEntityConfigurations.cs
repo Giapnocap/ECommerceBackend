@@ -28,6 +28,8 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             builder.HasIndex(order => order.OrderDate);
 
             builder.Property(order => order.ShippingAddress).HasMaxLength(500);
+            builder.Property(order => order.RecipientName).HasMaxLength(100);
+            builder.Property(order => order.RecipientPhone).HasMaxLength(20);
             builder.Property(order => order.Note).HasMaxLength(500);
             builder.Property(order => order.OrderNumber).HasMaxLength(32);
             builder.Property(order => order.IdempotencyKey).HasMaxLength(100);

@@ -6,7 +6,8 @@ following boundaries are intentional and visible in the design.
 ## Current Scope
 
 - Checkout supports cash on delivery only. The generic signed webhook demonstrates a provider
-  contract but is not a complete integration with a real payment gateway.
+  contract in Development/Testing and startup validation rejects enabling it in Production; it is
+  not a complete integration with a real payment gateway.
 - Checkout supports configurable shipping/tax rules and bounded promotion codes. It does not
   calculate carrier-specific live rates, stack multiple promotions or model jurisdictional tax.
 - Shipment records and return processing are internal workflows. Carrier label creation, live
@@ -18,7 +19,8 @@ following boundaries are intentional and visible in the design.
 
 - One API instance and one SQL Server database are the supported topology.
 - Product images use local disk. Horizontal API scaling requires object storage or a shared
-  durable volume.
+  durable volume. Readiness verifies that the current process can create, flush and remove a probe
+  file; it does not prove shared durability, backup coverage or sufficient future disk capacity.
 - Rate limiting is in process. Multiple API replicas require a distributed limiter.
 - Session validation reads SQL Server on protected requests. Current load tests do not justify
   adding Redis.

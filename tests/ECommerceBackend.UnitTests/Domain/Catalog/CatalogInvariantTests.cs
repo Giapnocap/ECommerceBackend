@@ -6,7 +6,7 @@ namespace ECommerceBackend.Tests;
 public sealed class CatalogInvariantTests
 {
     [Fact]
-    public void Product_CreateAndUpdate_NormalizesDetailsAndReturnsStockMutation()
+    public void Product_UpdateDetailsAndAdjustStock_KeepSeparateInvariants()
     {
         var categoryId = Guid.NewGuid();
         var createdAt = new DateTime(2026, 7, 28, 8, 0, 0, DateTimeKind.Utc);
@@ -19,12 +19,12 @@ public sealed class CatalogInvariantTests
             "  Description  ",
             createdAt);
 
-        var mutation = product.Update(
+        product.UpdateDetails(
             categoryId,
             "  Updated product  ",
             12m,
-            2,
             "  Updated description  ");
+        var mutation = product.AdjustStockTo(2);
 
         Assert.Equal("Updated product", product.Name);
         Assert.Equal("Updated description", product.Description);
@@ -49,11 +49,10 @@ public sealed class CatalogInvariantTests
             DateTime.UtcNow);
 
         var exception = Assert.Throws<DomainRuleViolationException>(() =>
-            product.Update(
+            product.UpdateDetails(
                 Guid.NewGuid(),
                 "Changed",
                 0,
-                1,
                 "Changed description"));
 
         Assert.Equal("product_price_invalid", exception.Code);

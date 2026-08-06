@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
@@ -6,8 +5,8 @@ using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Data.Repositories;
+using ECommerceBackend.Infrastructure.Storage;
 using ECommerceBackend.Tests.Support;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -135,7 +134,9 @@ public sealed class OperationsReliabilityTests
             var service = new UploadReconciliationService(
                 new ProductRepository(context),
                 context,
-                new TestWebHostEnvironment(root),
+                new LocalProductImageStorage(
+                    new TestWebHostEnvironment(root),
+                    NullLogger<LocalProductImageStorage>.Instance),
                 CreateAuditWriter(context, actorUserId),
                 Options.Create(new UploadOptions
                 {
@@ -330,18 +331,12 @@ public sealed class OperationsReliabilityTests
 
     private static AuditWriter CreateAuditWriter(AppDbContext context, Guid actorUserId)
     {
-        var httpContext = new DefaultHttpContext
-        {
-            TraceIdentifier = "test-correlation-id"
-        };
-        httpContext.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.10");
-        httpContext.User = new ClaimsPrincipal(new ClaimsIdentity(
-        [
-            new Claim(ClaimTypes.NameIdentifier, actorUserId.ToString())
-        ], "Test"));
         return new AuditWriter(
             new AuditRepository(context),
-            new HttpContextAccessor { HttpContext = httpContext },
+            new TestRequestContext(
+                actorUserId,
+                "test-correlation-id",
+                "203.0.113.10"),
             new FixedTimeProvider(Now));
     }
 

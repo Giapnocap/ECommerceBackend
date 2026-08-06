@@ -16,6 +16,7 @@ namespace ECommerceBackend.API.Extensions
         [
             BusinessTelemetry.MeterName,
             DatabaseTelemetryInterceptor.MeterName,
+            "ECommerceBackend.Auth",
             "ECommerceBackend.Catalog",
             "ECommerceBackend.Operations",
             "ECommerceBackend.OrderExpiration",

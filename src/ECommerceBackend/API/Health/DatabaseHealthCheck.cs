@@ -21,6 +21,7 @@ namespace ECommerceBackend.API.Health
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var startedAt = Stopwatch.GetTimestamp();
             try
             {
@@ -37,6 +38,10 @@ namespace ECommerceBackend.API.Health
                             Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
                             2)
                     });
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

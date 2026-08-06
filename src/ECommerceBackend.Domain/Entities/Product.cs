@@ -43,38 +43,35 @@ namespace ECommerceBackend.Domain.Entities
                 Id = id,
                 CreatedAt = createdAt
             };
-            _ = product.Update(
+            product.UpdateDetails(
                 categoryId,
                 name,
                 price,
-                stockQuantity,
                 description);
+            _ = product.AdjustStockTo(stockQuantity);
             return product;
         }
 
-        public InventoryMutation Update(
+        public void UpdateDetails(
             Guid categoryId,
             string name,
             decimal price,
-            int stockQuantity,
             string description)
         {
             var details = ValidateDetails(
                 categoryId,
                 name,
                 price,
-                stockQuantity,
                 description);
-            var inventoryMutation = InventoryPolicy.AdjustTo(
-                this,
-                stockQuantity);
 
             CategoryId = categoryId;
             Name = details.Name;
             Price = price;
             Description = details.Description;
-            return inventoryMutation;
         }
+
+        public InventoryMutation AdjustStockTo(int targetQuantity)
+            => InventoryPolicy.AdjustTo(this, targetQuantity);
 
         public bool MarkDeleted()
         {
@@ -89,7 +86,6 @@ namespace ECommerceBackend.Domain.Entities
             Guid categoryId,
             string name,
             decimal price,
-            int stockQuantity,
             string description)
         {
             if (categoryId == Guid.Empty)
@@ -123,13 +119,6 @@ namespace ECommerceBackend.Domain.Entities
                 throw new DomainRuleViolationException(
                     "product_price_invalid",
                     "Giá sản phẩm phải lớn hơn 0.");
-            }
-
-            if (stockQuantity < 0)
-            {
-                throw new DomainRuleViolationException(
-                    "inventory_balance_invalid",
-                    "Tồn kho không được là số âm.");
             }
 
             var normalizedDescription = description?.Trim() ?? string.Empty;

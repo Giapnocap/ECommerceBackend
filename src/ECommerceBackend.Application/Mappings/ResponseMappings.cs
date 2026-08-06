@@ -53,6 +53,7 @@ public static class ResponseMappings
         => new()
         {
             Id = product.Id,
+            Version = Convert.ToBase64String(product.RowVersion),
             Name = product.Name,
             Price = product.Price,
             StockQuantity = product.StockQuantity,
@@ -111,6 +112,8 @@ public static class ResponseMappings
             PromotionCode = order.PromotionCodeSnapshot,
             Status = order.Status.ToString(),
             ShippingAddress = order.ShippingAddress,
+            RecipientName = order.RecipientName,
+            RecipientPhone = order.RecipientPhone,
             Note = order.Note,
             ExpiresAt = order.ExpiresAt,
             CancelledAt = order.CancelledAt,

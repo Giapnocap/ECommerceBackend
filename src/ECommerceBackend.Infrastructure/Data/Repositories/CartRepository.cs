@@ -17,6 +17,7 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             Guid userId,
             CancellationToken cancellationToken = default)
             => _context.Carts
+                .AsNoTracking()
                 .Include(cart => cart.CartItems)
                     .ThenInclude(item => item.Product)
                         .ThenInclude(product => product!.Images)
@@ -63,8 +64,5 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
 
         public void RemoveItem(CartItem item)
             => _context.CartItems.Remove(item);
-
-        public void Detach(Cart cart)
-            => _context.Entry(cart).State = EntityState.Detached;
     }
 }

@@ -42,14 +42,38 @@ namespace ECommerceBackend.API.Extensions
             return services;
         }
 
-        public static IServiceCollection AddECommerceHealthChecks(this IServiceCollection services)
+        public static IServiceCollection AddECommerceHealthChecks(
+            this IServiceCollection services,
+            IConfiguration configuration)
         {
+            var options = configuration
+                .GetSection(HealthMonitoringOptions.SectionName)
+                .Get<HealthMonitoringOptions>() ?? new HealthMonitoringOptions();
+            var dependencyTimeout = TimeSpan.FromSeconds(
+                options.DependencyTimeoutSeconds);
+
             services.AddHealthChecks()
-                .AddCheck("self", () => HealthCheckResult.Healthy("Application is running."), tags: ["live"])
-                .AddCheck<DatabaseHealthCheck>("database", tags: ["ready"])
-                .AddCheck<OutboxHealthCheck>("outbox", tags: ["ready"])
-                .AddCheck<OrderExpirationHealthCheck>("order-expiration", tags: ["ready"])
-                .AddCheck<DataRetentionHealthCheck>("data-retention", tags: ["ready"]);
+                .AddCheck("self", () => HealthCheckResult.Healthy("Ứng dụng đang hoạt động."), tags: ["live"])
+                .AddCheck<DatabaseHealthCheck>(
+                    "database",
+                    tags: ["ready"],
+                    timeout: dependencyTimeout)
+                .AddCheck<ProductImageStorageHealthCheck>(
+                    "product-image-storage",
+                    tags: ["ready"],
+                    timeout: dependencyTimeout)
+                .AddCheck<OutboxHealthCheck>(
+                    "outbox",
+                    tags: ["ready"],
+                    timeout: dependencyTimeout)
+                .AddCheck<OrderExpirationHealthCheck>(
+                    "order-expiration",
+                    tags: ["ready"],
+                    timeout: dependencyTimeout)
+                .AddCheck<DataRetentionHealthCheck>(
+                    "data-retention",
+                    tags: ["ready"],
+                    timeout: dependencyTimeout);
 
             return services;
         }

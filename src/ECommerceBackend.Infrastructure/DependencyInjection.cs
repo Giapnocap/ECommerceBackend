@@ -10,6 +10,7 @@ using ECommerceBackend.Infrastructure.Observability;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Security;
+using ECommerceBackend.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,6 +28,7 @@ namespace ECommerceBackend.Infrastructure
 
             AddRepositories(services);
             AddSecurityAdapters(services);
+            AddStorageAdapters(services);
             AddPaymentAndNotificationAdapters(services);
             AddHostedWorkers(services);
 
@@ -79,9 +81,18 @@ namespace ECommerceBackend.Infrastructure
         private static void AddSecurityAdapters(IServiceCollection services)
         {
             services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
+            services.AddSingleton<IAccessTokenGenerator, JwtAccessTokenGenerator>();
             services.AddSingleton<
                 ISensitivePayloadProtector,
                 DataProtectionSensitivePayloadProtector>();
+        }
+
+        private static void AddStorageAdapters(IServiceCollection services)
+        {
+            services.AddSingleton<IProductImageStorage, LocalProductImageStorage>();
+            services.AddSingleton<IProductImageStorageHealthProbe>(provider =>
+                (IProductImageStorageHealthProbe)provider
+                    .GetRequiredService<IProductImageStorage>());
         }
 
         private static void AddPaymentAndNotificationAdapters(IServiceCollection services)

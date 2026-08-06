@@ -1,8 +1,8 @@
 # Database ERD
 
 The database keeps current operational state and immutable histories in the same SQL Server
-database. Order details preserve product name and price snapshots; inventory and payment histories
-remain auditable after catalog data changes.
+database. Orders preserve recipient contact, while order details preserve product name and price
+snapshots; inventory and payment histories remain auditable after profile or catalog data changes.
 
 ```mermaid
 erDiagram
@@ -81,6 +81,9 @@ erDiagram
         nvarchar IdempotencyKey
         nvarchar PromotionCodeSnapshot
         int ShippingMethod
+        nvarchar RecipientName
+        nvarchar RecipientPhone
+        nvarchar ShippingAddress
         nvarchar Currency
         int Status
         decimal TotalAmount

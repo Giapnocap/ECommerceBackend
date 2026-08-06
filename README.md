@@ -48,10 +48,12 @@ src/
   ECommerceBackend/
     API/              Controllers, middleware, composition root và Swagger
   ECommerceBackend.Application/
-    DTOs/             Request/response contracts
-    Validation/       FluentValidation rules theo feature
-    Interfaces/       Service, repository và transaction contracts
-    Services/         Use cases và application facades
+    Features/         Capability-owned DTO, validator, service, use case và repository contract
+      Auth, Users, Catalog, Carts, Orders, Payments,
+      Promotions, Inventory, Reports, Operations, Notifications/
+    Common/           Paging, options và application primitives dùng chung
+    Interfaces/       Chỉ chứa transaction, consistency, request context và persistence dùng chung
+    Mappings/         Response mapping dùng qua nhiều feature
   ECommerceBackend.Domain/
     Entities/         Entities và aggregate state
     Enums/            Status và state transitions
@@ -80,6 +82,10 @@ Solution gồm sáu project: API host `src/ECommerceBackend/ECommerceBackend.csp
 độc lập.
 
 `src/ECommerceBackend/Program.cs` là composition root. Controller không chứa transaction logic; Application điều phối use case và transaction qua repository cùng `IUnitOfWork`; Domain bảo vệ invariant; Infrastructure triển khai EF Core persistence, locking và external adapters.
+
+Source trong Application được nhóm theo capability để một luồng nghiệp vụ nằm gần các DTO,
+validator, facade, use case và repository contract liên quan. Namespace hiện tại được giữ ổn định;
+việc tổ chức lại thư mục không làm thay đổi API hoặc dependency direction giữa các project.
 
 Đăng ký dependency thuộc về
 `ECommerceBackend.Application/DependencyInjection.cs` và
@@ -125,7 +131,7 @@ Các endpoint quản trị sử dụng permission policies. Riêng operations re
 | Tính đúng dữ liệu | SQL Server integration test cho transaction, lock, idempotency và concurrency |
 | Migration | Kiểm tra model drift, script nâng cấp/rollback, backup và restore drill |
 | Coverage | CI chặn khi line coverage dưới 80% hoặc branch coverage dưới 60% |
-| Hiệu năng | Budget tự động cho catalog, session validation và checkout trên SQL Server |
+| Hiệu năng | Budget SQL Server cho catalog, dữ liệu nhiều ảnh, lịch sử đơn, session và checkout 50 dòng |
 | Release | ZIP có manifest, SHA-256, migration artifact và smoke test health endpoint |
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
@@ -167,6 +173,12 @@ dotnet run --project src/ECommerceBackend/ECommerceBackend.csproj
 - API: `http://localhost:5171`
 - Swagger: `http://localhost:5171/swagger`
 - Health: `http://localhost:5171/health/ready`
+
+`/health/live` chỉ xác nhận tiến trình API còn hoạt động. `/health/ready` kiểm tra kết nối
+database, khả năng ghi kho ảnh sản phẩm và trạng thái các tiến trình outbox, hết hạn đơn, lưu giữ
+dữ liệu. Mỗi dependency check có timeout mặc định 5 giây qua
+`HealthChecks:DependencyTimeoutSeconds`; giá trị hợp lệ từ 1 đến 30 giây. Chi tiết từng check chỉ
+được trả tại `/health/details` cho tài khoản `Admin`.
 
 ### Tạo Admin Đầu Tiên
 
@@ -249,8 +261,8 @@ riêng có tên chứa `Integration`; không dùng connection string của datab
 Chạy `scripts/BuildMigrationArtifacts.ps1` trước khi test để tạo thư mục artifact dùng cho
 kiểm tra nâng cấp, rollback và nâng cấp lại migration.
 
-Performance tests dùng SQL Server thật, tạo database tạm và đo catalog, session validation,
-checkout sau bước warm-up:
+Performance tests dùng SQL Server thật, tạo database tạm và đo catalog thường/từ khóa/nhiều ảnh,
+lịch sử đơn hàng, session validation và checkout 50 dòng sau bước warm-up:
 
 ```powershell
 .\scripts\RunPerformanceTests.ps1 `
@@ -276,6 +288,10 @@ phục hồi từ bản backup đã được kiểm chứng.
 Migration fulfillment mới chặn rollback sau khi đã có shipment, return request hoặc trạng thái
 `ReturnRequested`/`ReturnApproved`/`Refunded`. Khi đã phát sinh dữ liệu, phục hồi bản backup trước
 migration thay vì xóa lịch sử vận đơn và trả hàng.
+
+Migration snapshot người nhận cũng chặn rollback khi bảng `Orders` đã có dữ liệu, vì việc xóa
+`RecipientName` và `RecipientPhone` sẽ làm mất lịch sử giao hàng. Trong trường hợp này phải phục
+hồi bản backup trước migration thay vì dùng `rollback-last.sql`.
 
 CI thực hiện restore có vulnerability audit, format check, Release build, kiểm tra model/migration,
 coverage gate và SQL Server integration tests. Baseline và quyết định scale được ghi tại
@@ -312,7 +328,7 @@ Workflow `Backend Release` có thể chạy thủ công để kiểm tra trướ
 - Checkout khóa cart và product theo thứ tự ổn định trong một transaction.
 - Idempotency ngăn tạo trùng order khi client retry.
 - Row version, unique constraints và SQL locks bảo vệ race condition.
-- Order detail lưu snapshot tên và giá để giữ lịch sử chính xác.
+- Order lưu snapshot người nhận; order detail lưu snapshot tên và giá để giữ lịch sử chính xác.
 - Payment webhook xác thực chữ ký, event ID và payload trước khi thay đổi trạng thái.
 - Outbox ghi cùng transaction với business data, xử lý retry/dead-letter ở background và giữ
   nguyên `Message-ID` qua các lần gửi lại.

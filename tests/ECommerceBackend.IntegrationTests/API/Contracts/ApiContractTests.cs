@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -37,12 +39,15 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 
         var health = await client.GetAsync("/health/live");
         var products = await client.GetAsync("/api/products?page=1&pageSize=10");
+        var productSummaries = await client.GetAsync(
+            "/api/products/summaries?page=1&pageSize=10");
         var categories = await client.GetAsync("/api/categories");
         var paymentMethods = await client.GetAsync("/api/payments/methods");
         var openApi = await client.GetAsync("/swagger/v1/swagger.json");
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
         Assert.Equal(HttpStatusCode.OK, products.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, productSummaries.StatusCode);
         Assert.Equal(HttpStatusCode.OK, categories.StatusCode);
         Assert.Equal(HttpStatusCode.OK, paymentMethods.StatusCode);
         Assert.Equal(HttpStatusCode.OK, openApi.StatusCode);
@@ -70,6 +75,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 
         var paths = openApi.RootElement.GetProperty("paths");
         Assert.True(paths.TryGetProperty("/api/v1/products", out _));
+        Assert.True(paths.TryGetProperty("/api/v1/products/summaries", out _));
         Assert.False(paths.TryGetProperty("/api/products", out _));
     }
 
@@ -144,6 +150,45 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 
         var publicProducts = paths.GetProperty("/api/v1/products").GetProperty("get");
         Assert.False(publicProducts.TryGetProperty("security", out _));
+        var publicProductSummaries = paths
+            .GetProperty("/api/v1/products/summaries")
+            .GetProperty("get");
+        Assert.False(publicProductSummaries.TryGetProperty("security", out _));
+
+        var customerOrderSummaries = paths
+            .GetProperty("/api/v1/orders/my/summaries")
+            .GetProperty("get");
+        Assert.True(customerOrderSummaries.TryGetProperty("security", out _));
+        var staffOrderSummaries = paths
+            .GetProperty("/api/v1/orders/summaries")
+            .GetProperty("get");
+        Assert.True(staffOrderSummaries.TryGetProperty("security", out _));
+
+        var schemas = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas");
+        var productSummaryProperties = schemas
+            .GetProperty(nameof(ProductSummaryResponse))
+            .GetProperty("properties");
+        Assert.True(productSummaryProperties.TryGetProperty("mainImageUrl", out _));
+        Assert.False(productSummaryProperties.TryGetProperty("description", out _));
+        Assert.False(productSummaryProperties.TryGetProperty("images", out _));
+        var orderSummaryProperties = schemas
+            .GetProperty(nameof(OrderSummaryResponse))
+            .GetProperty("properties");
+        Assert.True(orderSummaryProperties.TryGetProperty("totalItemQuantity", out _));
+        Assert.False(orderSummaryProperties.TryGetProperty("orderDetails", out _));
+        Assert.False(orderSummaryProperties.TryGetProperty("statusHistory", out _));
+
+        var stockAdjustment = paths
+            .GetProperty("/api/v1/products/{id}/stock")
+            .GetProperty("put");
+        Assert.True(stockAdjustment.TryGetProperty("security", out _));
+        AssertRequiredParameter(stockAdjustment, "id", "path");
+        AssertRequiredParameter(stockAdjustment, "If-Match", "header");
+        Assert.True(stockAdjustment
+            .GetProperty("responses")
+            .TryGetProperty("428", out _));
 
         var webhook = paths
             .GetProperty("/api/v1/payments/webhooks/{providerCode}")
@@ -162,6 +207,10 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         var responses = webhook.GetProperty("responses");
         foreach (var statusCode in new[] { "200", "400", "401", "409", "413", "429", "500" })
             Assert.True(responses.TryGetProperty(statusCode, out _), $"Missing webhook response {statusCode}.");
+        Assert.True(responses
+            .GetProperty("429")
+            .GetProperty("headers")
+            .TryGetProperty("Retry-After", out _));
     }
 
     [Fact]
@@ -199,6 +248,97 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task AuthRateLimit_UsesConfiguredPermitAndStableProblemDetails()
+    {
+        using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, configuration) =>
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["RateLimiting:Auth:PermitLimit"] = "1",
+                    ["RateLimiting:Auth:WindowSeconds"] = "60"
+                })));
+        using var client = factory.CreateClient();
+        var request = new LoginRequest
+        {
+            UserName = string.Empty,
+            Password = string.Empty
+        };
+
+        using var first = await client.PostAsJsonAsync("/api/auth/login", request);
+        using var second = await client.PostAsJsonAsync("/api/auth/login", request);
+        using var problem = await ReadJsonAsync(second);
+
+        Assert.Equal(HttpStatusCode.BadRequest, first.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, second.StatusCode);
+        Assert.Equal("rate_limit_exceeded", problem.RootElement.GetProperty("code").GetString());
+        Assert.NotNull(second.Headers.RetryAfter);
+        Assert.True(second.Headers.RetryAfter!.Delta.HasValue);
+        Assert.InRange(
+            second.Headers.RetryAfter.Delta.Value.TotalSeconds,
+            1,
+            60);
+    }
+
+    [Fact]
+    public async Task ProtectedRequest_EmitsBoundedSessionMetricsWithoutTokenData()
+    {
+        var measurements = new ConcurrentQueue<SessionMetricMeasurement>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, currentListener) =>
+        {
+            if (instrument.Meter.Name == "ECommerceBackend.Auth"
+                && instrument.Name is "auth.session.validations"
+                    or "auth.session.validation.duration")
+            {
+                currentListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) =>
+            measurements.Enqueue(new SessionMetricMeasurement(
+                instrument.Name,
+                tags.ToArray())));
+        listener.SetMeasurementEventCallback<double>((instrument, _, tags, _) =>
+            measurements.Enqueue(new SessionMetricMeasurement(
+                instrument.Name,
+                tags.ToArray())));
+        listener.Start();
+
+        using var client = await _factory.CreateInitializedClientAsync();
+        var session = await CreateRoleSessionAsync(client, RoleNames.Customer);
+        SetBearerToken(client, session.AccessToken);
+
+        using var response = await client.GetAsync("/api/users/me");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(measurements, measurement =>
+            measurement.Name == "auth.session.validations"
+            && HasOutcome(measurement.Tags, "success"));
+        Assert.Contains(measurements, measurement =>
+            measurement.Name == "auth.session.validation.duration"
+            && HasOutcome(measurement.Tags, "success"));
+
+        using var logout = await client.PostAsJsonAsync(
+            "/api/auth/logout",
+            new LogoutRequest { RefreshToken = session.RefreshToken });
+        using var staleSessionResponse = await client.GetAsync("/api/users/me");
+
+        Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, staleSessionResponse.StatusCode);
+        Assert.Contains(measurements, measurement =>
+            measurement.Name == "auth.session.validations"
+            && HasOutcome(measurement.Tags, "inactive"));
+        Assert.Contains(measurements, measurement =>
+            measurement.Name == "auth.session.validation.duration"
+            && HasOutcome(measurement.Tags, "inactive"));
+        var recordedText = string.Join(
+            '|',
+            measurements.SelectMany(measurement => measurement.Tags)
+                .Select(tag => $"{tag.Key}={tag.Value}"));
+        Assert.DoesNotContain(session.AccessToken, recordedText, StringComparison.Ordinal);
+        Assert.DoesNotContain(session.RefreshToken, recordedText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task CustomerSessionAndCommerceEndpoints_PreserveHttpContracts()
     {
         using var client = await _factory.CreateInitializedClientAsync();
@@ -218,6 +358,12 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/users/me")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/cart")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/orders/my")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            (await client.GetAsync("/api/orders/my/summaries")).StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Forbidden,
+            (await client.GetAsync("/api/orders/summaries")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports/sales-summary")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/health/details")).StatusCode);
 
@@ -274,6 +420,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         {
             "/api/users?page=1&pageSize=10",
             "/api/orders?page=1&pageSize=10",
+            "/api/orders/summaries?page=1&pageSize=10",
             "/api/promotions?page=1&pageSize=10",
             "/api/inventory/low-stock?page=1&pageSize=10",
             "/api/reports/sales-summary",
@@ -287,12 +434,87 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task AdminStockAdjustment_RequiresEtagAndWritesInventoryLedger()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Admin)).AccessToken);
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        byte[] version = [1, 2, 3, 4, 5, 6, 7, 8];
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            context.Categories.Add(new Category
+            {
+                Id = categoryId,
+                Name = "API inventory"
+            });
+            context.Products.Add(new Product
+            {
+                Id = productId,
+                CategoryId = categoryId,
+                Name = "API inventory product",
+                Price = 100m,
+                StockQuantity = 5,
+                Description = "API inventory product",
+                CreatedAt = DateTime.UtcNow,
+                RowVersion = version
+            });
+            await context.SaveChangesAsync();
+        }
+
+        using var missingPrecondition = await client.PutAsJsonAsync(
+            $"/api/products/{productId}/stock",
+            new AdjustProductStockRequest
+            {
+                TargetQuantity = 7,
+                Reason = "Kiểm kê API"
+            });
+        Assert.Equal((HttpStatusCode)428, missingPrecondition.StatusCode);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/products/{productId}/stock")
+        {
+            Content = JsonContent.Create(new AdjustProductStockRequest
+            {
+                TargetQuantity = 7,
+                Reason = "  Kiểm kê API  "
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            $"\"{Convert.ToBase64String(version)}\"");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var verificationScope = _factory.Services.CreateScope();
+        var verificationContext = verificationScope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+        Assert.Equal(
+            7,
+            await verificationContext.Products
+                .Where(product => product.Id == productId)
+                .Select(product => product.StockQuantity)
+                .SingleAsync());
+        var transaction = await verificationContext.InventoryTransactions
+            .SingleAsync(item => item.ProductId == productId);
+        Assert.Equal(InventoryTransactionType.ManualAdjustment, transaction.Type);
+        Assert.Equal(2, transaction.QuantityChange);
+        Assert.Equal("Kiểm kê API", transaction.Reason);
+    }
+
+    [Fact]
     public async Task StaffSession_UsesPermissionsWithoutReceivingAdminAccess()
     {
         using var client = await _factory.CreateInitializedClientAsync();
         SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Staff)).AccessToken);
 
         await AssertStatusAsync(client, "/api/orders?page=1&pageSize=10", HttpStatusCode.OK);
+        await AssertStatusAsync(
+            client,
+            "/api/orders/summaries?page=1&pageSize=10",
+            HttpStatusCode.OK);
         await AssertStatusAsync(client, "/api/inventory/low-stock?page=1&pageSize=10", HttpStatusCode.OK);
         await AssertStatusAsync(client, "/api/users?page=1&pageSize=10", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/promotions?page=1&pageSize=10", HttpStatusCode.Forbidden);
@@ -372,6 +594,12 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     private static void SetBearerToken(HttpClient client, string token)
         => client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+    private static bool HasOutcome(
+        IReadOnlyList<KeyValuePair<string, object?>> tags,
+        string expected)
+        => tags.Any(tag => tag.Key == "auth.session.outcome"
+            && string.Equals(tag.Value?.ToString(), expected, StringComparison.Ordinal));
+
     private static async Task AssertStatusAsync(
         HttpClient client,
         string path,
@@ -401,6 +629,10 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.True(parameter.GetProperty("required").GetBoolean());
         Assert.False(string.IsNullOrWhiteSpace(parameter.GetProperty("description").GetString()));
     }
+
+    private sealed record SessionMetricMeasurement(
+        string Name,
+        IReadOnlyList<KeyValuePair<string, object?>> Tags);
 }
 
 [CollectionDefinition(Name, DisableParallelization = true)]

@@ -105,6 +105,20 @@ public sealed class DatabaseConfigurationTests
             Assert.Single(returnOrder.Properties).Name);
     }
 
+    [Fact]
+    public void OrderRecipientSnapshot_HasBoundedNullabilityContract()
+    {
+        using var context = TestAppDbContext.Create();
+        var order = context.Model.FindEntityType(typeof(Order))!;
+        var recipientName = order.FindProperty(nameof(Order.RecipientName))!;
+        var recipientPhone = order.FindProperty(nameof(Order.RecipientPhone))!;
+
+        Assert.False(recipientName.IsNullable);
+        Assert.Equal(100, recipientName.GetMaxLength());
+        Assert.True(recipientPhone.IsNullable);
+        Assert.Equal(20, recipientPhone.GetMaxLength());
+    }
+
     private static void AssertIndex(
         AppDbContext context,
         Type entityType,

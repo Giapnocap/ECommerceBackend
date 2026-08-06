@@ -79,6 +79,36 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void ProductionEnabledGenericHmacWebhook_WithStrongSecret_FailsValidation()
+    {
+        var values = EnabledGenericHmacWebhookValues();
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Production,
+            values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<PaymentWebhookOptions>>().Value);
+    }
+
+    [Fact]
+    public void DevelopmentEnabledGenericHmacWebhook_WithStrongSecret_IsAccepted()
+    {
+        var values = EnabledGenericHmacWebhookValues();
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Development,
+            values);
+
+        var options = provider
+            .GetRequiredService<IOptions<PaymentWebhookOptions>>()
+            .Value;
+
+        Assert.True(options.Enabled);
+        Assert.Equal("generic-hmac", options.ProviderCode);
+    }
+
+    [Fact]
     public void ProductionOutbox_WithoutSmtp_FailsValidation()
     {
         var values = new Dictionary<string, string?>
@@ -156,6 +186,21 @@ public sealed class JwtConfigurationValidationTests
 
         Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
+    }
+
+    [Fact]
+    public void HealthCheckDependencyTimeout_MustBeWithinSupportedRange()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["HealthChecks:DependencyTimeoutSeconds"] = "31"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<HealthMonitoringOptions>>().Value);
     }
 
     [Fact]
@@ -257,6 +302,26 @@ public sealed class JwtConfigurationValidationTests
                 .Value);
     }
 
+    [Theory]
+    [InlineData("RateLimiting:Auth:PermitLimit", "0")]
+    [InlineData("RateLimiting:Checkout:WindowSeconds", "3601")]
+    public void RateLimiting_WithInvalidPolicy_FailsValidation(
+        string key,
+        string value)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            [key] = value
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<RateLimitingOptions>>()
+                .Value);
+    }
+
     [Fact]
     public void ProductionPasswordResetUrl_MustUsePublicHttps()
     {
@@ -318,6 +383,16 @@ public sealed class JwtConfigurationValidationTests
 
         return services.BuildServiceProvider();
     }
+
+    private static Dictionary<string, string?> EnabledGenericHmacWebhookValues()
+        => new()
+        {
+            ["PaymentWebhooks:GenericHmac:Enabled"] = "true",
+            ["PaymentWebhooks:GenericHmac:ProviderCode"] = "generic-hmac",
+            ["PaymentWebhooks:GenericHmac:Secret"] = new string(
+                's',
+                PaymentWebhookOptions.MinimumSecretBytes)
+        };
 
     private sealed class TestWebHostEnvironment : IWebHostEnvironment
     {

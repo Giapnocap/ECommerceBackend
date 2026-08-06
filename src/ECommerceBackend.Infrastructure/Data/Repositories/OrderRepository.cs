@@ -1,4 +1,5 @@
 using ECommerceBackend.Application.Common;
+using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
@@ -33,6 +34,19 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             return new PageSlice<Order>(items, totalCount);
         }
 
+        public Task<PageSlice<OrderSummaryResponse>> GetSummariesByUserAsync(
+            Guid userId,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+            => GetSummaryPageAsync(
+                _context.Orders
+                    .AsNoTracking()
+                    .Where(order => order.UserId == userId),
+                skip,
+                take,
+                cancellationToken);
+
         public Task<Order?> GetByIdAsync(
             Guid orderId,
             Guid? ownerUserId,
@@ -66,6 +80,26 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 .Take(take)
                 .ToListAsync(cancellationToken);
             return new PageSlice<Order>(items, totalCount);
+        }
+
+        public Task<PageSlice<OrderSummaryResponse>> GetSummariesAsync(
+            OrderStatus? status,
+            Guid? userId,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+        {
+            var query = _context.Orders.AsNoTracking();
+            if (status.HasValue)
+                query = query.Where(order => order.Status == status.Value);
+            if (userId.HasValue)
+                query = query.Where(order => order.UserId == userId.Value);
+
+            return GetSummaryPageAsync(
+                query,
+                skip,
+                take,
+                cancellationToken);
         }
 
         public Task<Order?> FindByIdempotencyKeyAsync(
@@ -117,6 +151,62 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
 
         public void AddStatusHistory(OrderStatusHistory history)
             => _context.OrderStatusHistories.Add(history);
+
+        private static async Task<PageSlice<OrderSummaryResponse>> GetSummaryPageAsync(
+            IQueryable<Order> query,
+            int skip,
+            int take,
+            CancellationToken cancellationToken)
+        {
+            var orderedQuery = query
+                .OrderByDescending(order => order.OrderDate)
+                .ThenByDescending(order => order.Id);
+            var totalCount = await orderedQuery.CountAsync(cancellationToken);
+            var rows = await orderedQuery
+                .Skip(skip)
+                .Take(take)
+                .Select(order => new
+                {
+                    order.Id,
+                    order.UserId,
+                    order.OrderNumber,
+                    order.OrderDate,
+                    order.TotalAmount,
+                    order.Currency,
+                    order.ShippingMethod,
+                    order.Status,
+                    order.RecipientName,
+                    TotalItemQuantity = order.OrderDetails
+                        .Sum(detail => (int?)detail.Quantity) ?? 0,
+                    PaymentMethod = order.Payment == null
+                        ? (PaymentMethod?)null
+                        : order.Payment.Method,
+                    PaymentStatus = order.Payment == null
+                        ? (PaymentStatus?)null
+                        : order.Payment.Status,
+                    order.ExpiresAt
+                })
+                .ToListAsync(cancellationToken);
+            var items = rows
+                .Select(row => new OrderSummaryResponse
+                {
+                    Id = row.Id,
+                    UserId = row.UserId,
+                    OrderNumber = row.OrderNumber,
+                    OrderDate = row.OrderDate,
+                    TotalAmount = row.TotalAmount,
+                    Currency = row.Currency,
+                    ShippingMethod = row.ShippingMethod.ToString(),
+                    Status = row.Status.ToString(),
+                    RecipientName = row.RecipientName,
+                    TotalItemQuantity = row.TotalItemQuantity,
+                    PaymentMethod = row.PaymentMethod?.ToString(),
+                    PaymentStatus = row.PaymentStatus?.ToString(),
+                    ExpiresAt = row.ExpiresAt
+                })
+                .ToList();
+            return new PageSlice<OrderSummaryResponse>(items, totalCount);
+        }
 
         private IQueryable<Order> BuildReadQuery()
             => _context.Orders

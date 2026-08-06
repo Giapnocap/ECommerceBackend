@@ -1,8 +1,10 @@
 using System.Reflection;
 using Asp.Versioning;
+using ECommerceBackend.API.Context;
 using ECommerceBackend.API.Errors;
 using ECommerceBackend.API.Swagger;
 using ECommerceBackend.Application.Common;
+using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Validation;
 using FluentValidation;
 using FluentValidation.AspNetCore;
@@ -18,6 +20,8 @@ namespace ECommerceBackend.API.Extensions
     {
         public static IServiceCollection AddECommerceControllers(this IServiceCollection services)
         {
+            services.AddHttpContextAccessor();
+            services.AddScoped<IRequestContext, HttpRequestContext>();
             services.AddControllers();
             services.Replace(ServiceDescriptor.Singleton<
                 ProblemDetailsFactory,

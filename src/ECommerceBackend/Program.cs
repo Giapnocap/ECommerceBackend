@@ -49,7 +49,7 @@ try
         .AddECommerceJwtAuthentication(builder.Configuration, builder.Environment)
         .AddECommerceAuthorization()
         .AddECommerceRateLimiting()
-        .AddECommerceHealthChecks();
+        .AddECommerceHealthChecks(builder.Configuration);
 
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddECommerceSwagger();

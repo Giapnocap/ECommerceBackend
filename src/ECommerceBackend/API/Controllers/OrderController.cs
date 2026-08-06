@@ -71,6 +71,23 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>Lấy danh sách tóm tắt đơn hàng của tôi bằng truy vấn gọn</summary>
+        [HttpGet("my/summaries")]
+        [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
+        [ProducesResponseType(typeof(PagedResult<OrderSummaryResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetMyOrderSummaries(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 10,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _orderService.GetMyOrderSummariesAsync(
+                CurrentUserId,
+                page,
+                pageSize,
+                cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>Lấy chi tiết đơn hàng theo Id</summary>
         [HttpGet("{id:guid}")]
         [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
@@ -89,6 +106,20 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
         {
             var result = await _orderService.GetAllOrdersAsync(queryParams, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>[Staff/Admin] Lấy danh sách tóm tắt đơn hàng bằng truy vấn gọn</summary>
+        [HttpGet("summaries")]
+        [Authorize(Policy = PermissionNames.ProcessOrders)]
+        [ProducesResponseType(typeof(PagedResult<OrderSummaryResponse>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetOrderSummaries(
+            [FromQuery] OrderQueryParams queryParams,
+            CancellationToken cancellationToken)
+        {
+            var result = await _orderService.GetOrderSummariesAsync(
+                queryParams,
+                cancellationToken);
             return Ok(result);
         }
 

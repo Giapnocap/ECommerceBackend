@@ -98,6 +98,7 @@ public sealed class RbacAuthorizationTests
             $"{nameof(AuthController)}.{nameof(AuthController.ForgotPassword)}",
             $"{nameof(AuthController)}.{nameof(AuthController.ResetPassword)}",
             $"{nameof(ProductController)}.{nameof(ProductController.GetAll)}",
+            $"{nameof(ProductController)}.{nameof(ProductController.GetSummaries)}",
             $"{nameof(ProductController)}.{nameof(ProductController.GetById)}",
             $"{nameof(CategoryController)}.{nameof(CategoryController.GetAll)}",
             $"{nameof(CategoryController)}.{nameof(CategoryController.GetById)}",

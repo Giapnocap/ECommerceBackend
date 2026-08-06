@@ -79,7 +79,7 @@ public sealed class MigrationArtifactSqlServerTests
 
     [Fact]
     [Trait("Category", "SqlServerIntegration")]
-    public async Task GeneratedRollback_RejectsDestructiveFulfillmentData()
+    public async Task GeneratedRollback_RejectsDestructiveOrderSnapshotData()
     {
         SqlServerIntegrationTestGate.Require();
 
@@ -136,11 +136,11 @@ public sealed class MigrationArtifactSqlServerTests
                 )
                 VALUES
                 (
-                    @UserId, N'rollback.fulfillment',
-                    N'ROLLBACK.FULFILLMENT',
-                    N'rollback.fulfillment@example.com',
-                    N'ROLLBACK.FULFILLMENT@EXAMPLE.COM',
-                    N'not-used', N'Rollback Fulfillment',
+                    @UserId, N'rollback.snapshot',
+                    N'ROLLBACK.SNAPSHOT',
+                    N'rollback.snapshot@example.com',
+                    N'ROLLBACK.SNAPSHOT@EXAMPLE.COM',
+                    N'not-used', N'Rollback Snapshot',
                     NULL, 0, @Now, NULL, 0
                 );
 
@@ -150,26 +150,17 @@ public sealed class MigrationArtifactSqlServerTests
                     IdempotencyRequestHash, OrderDate,
                     SubtotalAmount, DiscountAmount, ShippingFee,
                     TaxAmount, TotalAmount, Status,
+                    RecipientName, RecipientPhone,
                     ShippingAddress, Note
                 )
                 VALUES
                 (
-                    @OrderId, @UserId, N'ORD-ROLLBACK-FULFILLMENT',
-                    N'rollback-fulfillment',
+                    @OrderId, @UserId, N'ORD-ROLLBACK-SNAPSHOT',
+                    N'rollback-snapshot',
                     REPLICATE(N'A', 64), @Now,
                     100, 0, 0, 0, 100, 1,
+                    N'Rollback Snapshot', N'0900000000',
                     N'Rollback address', NULL
-                );
-
-                INSERT dbo.Shipments
-                (
-                    Id, OrderId, Carrier, TrackingNumber,
-                    CreatedByUserId, ShippedAt, DeliveredAt
-                )
-                VALUES
-                (
-                    NEWID(), @OrderId, N'Rollback Carrier',
-                    N'ROLLBACK-TRACKING', @UserId, @Now, NULL
                 );
                 """);
 
@@ -178,7 +169,7 @@ public sealed class MigrationArtifactSqlServerTests
                     connectionString,
                     rollbackScript));
 
-            Assert.Equal(51040, exception.Number);
+            Assert.Equal(51041, exception.Number);
             Assert.True(
                 await HasMigrationAsync(
                     connectionString,

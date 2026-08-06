@@ -10,6 +10,56 @@ namespace ECommerceBackend.Tests;
 public sealed class ArchitectureBoundaryTests
 {
     [Fact]
+    public void ApplicationSources_AreGroupedByBusinessCapability()
+    {
+        var applicationDirectory = Path.Combine(
+            FindRepositoryRoot(),
+            "src",
+            "ECommerceBackend.Application");
+        var featuresDirectory = Path.Combine(applicationDirectory, "Features");
+        var expectedFeatures = new[]
+        {
+            "Auth",
+            "Carts",
+            "Catalog",
+            "Inventory",
+            "Notifications",
+            "Operations",
+            "Orders",
+            "Payments",
+            "Promotions",
+            "Reports",
+            "Users"
+        };
+        var actualFeatures = Directory
+            .EnumerateDirectories(featuresDirectory)
+            .Select(Path.GetFileName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(expectedFeatures, actualFeatures);
+        Assert.All(
+            actualFeatures,
+            feature => Assert.NotEmpty(Directory.EnumerateFiles(
+                Path.Combine(featuresDirectory, feature!),
+                "*.cs",
+                SearchOption.TopDirectoryOnly)));
+
+        var retiredTechnicalDirectories = new[]
+        {
+            Path.Combine(applicationDirectory, "DTOs"),
+            Path.Combine(applicationDirectory, "Services"),
+            Path.Combine(applicationDirectory, "Validation"),
+            Path.Combine(applicationDirectory, "Interfaces", "Repositories")
+        };
+        Assert.All(
+            retiredTechnicalDirectories,
+            directory => Assert.False(
+                Directory.Exists(directory),
+                $"Feature-owned source returned to retired directory '{directory}'."));
+    }
+
+    [Fact]
     public void PublicFacades_DoNotOwnPersistenceOrInfrastructureDependencies()
     {
         var facadeTypes = new[]
@@ -58,7 +108,7 @@ public sealed class ArchitectureBoundaryTests
         AssertPublicMethodCount<AuthLogoutUseCase>(1);
         AssertPublicMethodCount<AuthLogoutAllUseCase>(1);
         AssertPublicMethodCount<PasswordResetUseCase>(2);
-        AssertPublicMethodCount<OrderQueryUseCase>(3);
+        AssertPublicMethodCount<OrderQueryUseCase>(5);
         AssertPublicMethodCount<OrderCheckoutUseCase>(1);
         AssertPublicMethodCount<OrderPricingUseCase>(1);
         AssertPublicMethodCount<OrderStatusUpdateUseCase>(1);
@@ -184,6 +234,51 @@ public sealed class ArchitectureBoundaryTests
                 StringComparison.Ordinal)
                 || source.Text.Contains("DbUpdateException", StringComparison.Ordinal)
                 || source.Text.Contains("DbUpdateConcurrencyException", StringComparison.Ordinal))
+            .Select(source => $"{source.File}:{source.Line}")
+            .ToArray();
+
+        Assert.Empty(forbiddenReferences);
+    }
+
+    [Fact]
+    public void ApplicationLayer_DoesNotReferenceWebOrSecurityImplementations()
+    {
+        var applicationDirectory = Path.Combine(
+            FindRepositoryRoot(),
+            "src",
+            "ECommerceBackend.Application");
+        var forbiddenTokens = new[]
+        {
+            "Microsoft.AspNetCore",
+            "IFormFile",
+            "IHttpContextAccessor",
+            "IWebHostEnvironment",
+            "System.IdentityModel",
+            "Microsoft.IdentityModel",
+            "BCrypt.Net"
+        };
+        var sourceFiles = Directory
+            .EnumerateFiles(applicationDirectory, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !file.Contains(
+                    $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase)
+                && !file.Contains(
+                    $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
+                    StringComparison.OrdinalIgnoreCase))
+            .Append(Path.Combine(
+                applicationDirectory,
+                "ECommerceBackend.Application.csproj"));
+        var forbiddenReferences = sourceFiles
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => new
+                {
+                    File = file,
+                    Line = index + 1,
+                    Text = line
+                }))
+            .Where(source => forbiddenTokens.Any(token => source.Text.Contains(
+                token,
+                StringComparison.Ordinal)))
             .Select(source => $"{source.File}:{source.Line}")
             .ToArray();
 

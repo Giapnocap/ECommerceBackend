@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Notifications;
@@ -9,6 +10,23 @@ namespace ECommerceBackend.API.Health
 {
     public sealed class OutboxHealthCheck : IHealthCheck
     {
+        private static readonly Meter Meter = new("ECommerceBackend.Outbox");
+        private static readonly Histogram<long> PendingBacklog =
+            Meter.CreateHistogram<long>(
+                "outbox.backlog.pending",
+                "message",
+                "Number of pending outbox messages observed by the readiness check.");
+        private static readonly Histogram<long> DeadLetterBacklog =
+            Meter.CreateHistogram<long>(
+                "outbox.backlog.dead_lettered",
+                "message",
+                "Number of dead-lettered outbox messages observed by the readiness check.");
+        private static readonly Histogram<double> OldestPendingAge =
+            Meter.CreateHistogram<double>(
+                "outbox.backlog.oldest_age",
+                "s",
+                "Age of the oldest pending outbox message observed by the readiness check.");
+
         private readonly AppDbContext _context;
         private readonly OutboxOptions _options;
         private readonly ILogger<OutboxHealthCheck> _logger;
@@ -43,10 +61,12 @@ namespace ECommerceBackend.API.Health
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!_options.Enabled && _options.RequireProcessing)
             {
                 return HealthCheckResult.Unhealthy(
-                    "Xử lý hàng đợi thông báo là bắt buộc nhưng worker đang tắt.",
+                    "Xử lý hàng đợi thông báo là bắt buộc nhưng tiến trình nền đang tắt.",
                     data: new Dictionary<string, object>
                     {
                         ["enabled"] = false,
@@ -77,6 +97,10 @@ namespace ECommerceBackend.API.Health
                 var oldestPendingAgeMinutes = oldestPendingAt.HasValue
                     ? Math.Max(0, (UtcNow - oldestPendingAt.Value).TotalMinutes)
                     : 0;
+                PendingBacklog.Record(pendingCount);
+                DeadLetterBacklog.Record(deadLetterCount);
+                OldestPendingAge.Record(oldestPendingAgeMinutes * 60);
+
                 var data = new Dictionary<string, object>
                 {
                     ["pendingCount"] = pendingCount,
@@ -95,7 +119,7 @@ namespace ECommerceBackend.API.Health
                         || UtcNow - worker.LastSuccessfulCycleAt.Value > heartbeatAgeLimit))
                 {
                     return HealthCheckResult.Unhealthy(
-                        "Worker gửi thông báo chưa có heartbeat hợp lệ.",
+                        "Tiến trình gửi thông báo chưa có tín hiệu hoạt động hợp lệ.",
                         data: data);
                 }
 
@@ -115,6 +139,10 @@ namespace ECommerceBackend.API.Health
                 }
 
                 return HealthCheckResult.Healthy("Hàng đợi thông báo đang hoạt động bình thường.", data);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {

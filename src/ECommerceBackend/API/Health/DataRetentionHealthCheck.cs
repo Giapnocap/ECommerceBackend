@@ -25,14 +25,16 @@ namespace ECommerceBackend.API.Health
             HealthCheckContext context,
             CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!_options.AutomaticProcessingEnabled && _options.RequireAutomaticProcessing)
             {
                 return Task.FromResult(HealthCheckResult.Unhealthy(
-                    "Xử lý lưu giữ dữ liệu tự động là bắt buộc nhưng worker đang tắt."));
+                    "Xử lý lưu giữ dữ liệu tự động là bắt buộc nhưng tiến trình nền đang tắt."));
             }
 
             if (!_options.AutomaticProcessingEnabled)
-                return Task.FromResult(HealthCheckResult.Healthy("Worker lưu giữ dữ liệu đang tắt."));
+                return Task.FromResult(HealthCheckResult.Healthy("Tiến trình lưu giữ dữ liệu đang tắt."));
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
             var worker = _workerStatus.GetSnapshot();
@@ -71,19 +73,19 @@ namespace ECommerceBackend.API.Health
             if (heartbeatMissing && _options.RequireAutomaticProcessing)
             {
                 return Task.FromResult(HealthCheckResult.Unhealthy(
-                    "Worker lưu giữ dữ liệu chưa có heartbeat hợp lệ.",
+                    "Tiến trình lưu giữ dữ liệu chưa có tín hiệu hoạt động hợp lệ.",
                     data: data));
             }
 
             if (heartbeatMissing)
             {
                 return Task.FromResult(HealthCheckResult.Degraded(
-                    "Worker lưu giữ dữ liệu chưa có heartbeat hợp lệ.",
+                    "Tiến trình lưu giữ dữ liệu chưa có tín hiệu hoạt động hợp lệ.",
                     data: data));
             }
 
             return Task.FromResult(HealthCheckResult.Healthy(
-                "Worker lưu giữ dữ liệu đang hoạt động bình thường.",
+                "Tiến trình lưu giữ dữ liệu đang hoạt động bình thường.",
                 data));
         }
     }

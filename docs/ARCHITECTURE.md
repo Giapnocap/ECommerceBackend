@@ -31,8 +31,10 @@ system.
 
 Application code uses repositories, `IUnitOfWork`, `IDataConsistencyService` and
 `IAppTransaction`. EF Core query composition, SQL Server transaction objects, lock hints and
-provider exception types are implemented only in Infrastructure. An architecture regression test
-rejects EF Core references under `Application`.
+provider exception types are implemented only in Infrastructure. Web request context, JWT
+generation, password hashing and local file storage are also consumed through Application ports
+and implemented by API or Infrastructure adapters. Architecture regression tests reject EF Core,
+ASP.NET Core and concrete security-library references under `Application`.
 
 The compiler enforces `Application -> Domain` and
 `Infrastructure -> Application + Domain`; the API host references both to compose the process.
@@ -67,7 +69,10 @@ Database checks, unique indexes and row versions remain defense-in-depth beneath
   token-family rotation, reuse detection, logout and logout-all.
 - Users: profile, password changes, paged administration, role assignment and last-admin protection.
 - Catalog: category hierarchy, products, images, search, filtering and paging.
-- Cart: one cart per user, unique product lines and current-price availability checks.
+- Cart: one cart per user, unique product lines, at most 50 distinct products and current-price
+  availability checks. Legacy oversized carts remain readable and removable but cannot be quoted
+  or checked out until reduced to the supported limit. Cart reads are side-effect free: a missing
+  legacy cart returns an empty response, while registration or the first mutation persists it.
 - Orders: idempotent checkout, order snapshots, state transitions, shipment, cancellation and return workflow.
 - Pricing: server-side quote, shipping/tax policy, promotion limits and immutable redemption records.
 - Payments: centralized state machine, immutable status history, COD adapter and signed/idempotent webhook processing.
@@ -82,6 +87,12 @@ dead-letter/audit/retention operations. Facades do not own `DbContext` or transa
 Session, shipment, order cancellation and return commands each have a dedicated use case.
 Checkout remains one transaction-owning use case and delegates cart loading, aggregate creation
 and persistence staging to focused collaborators.
+
+Application source ownership is organized under `Features/<Capability>`. Each capability keeps its
+DTOs, validators, service contracts, use cases and repository contracts together, while shared
+transaction, consistency and request-context ports remain under `Interfaces`. Existing namespaces
+stay stable so this physical reorganization does not change public contracts or dependency
+direction.
 
 Repositories are feature-specific rather than generic. Their contracts expose business-oriented
 queries and persistence operations without leaking `DbSet` or `IQueryable`. Application services
@@ -106,10 +117,11 @@ project because they verify the assembled system rather than one class in isolat
 Idempotency-Key lookup
   -> lock cart
   -> repeat idempotency lookup
+  -> reject carts above the 50-line transaction boundary
   -> lock products in stable ID order
   -> lock promotion and recheck global/customer limits
   -> validate active products, price, stock and server-side quote
-  -> create Pending Order + OrderDetails snapshots + Payment + StatusHistory
+  -> create Pending Order + recipient/OrderDetails snapshots + Payment + StatusHistory
   -> snapshot promotion, shipping method and all monetary components
   -> increment promotion usage + append PromotionRedemption
   -> set a bounded inventory hold expiration
@@ -224,6 +236,11 @@ HMAC adapter verifies `HMAC_SHA256(secret, eventId + "." + rawBody)` from
 `X-Payment-Signature`; `X-Payment-Event-Id` is unique per provider. Reusing an event ID with
 different content returns `409`. A replay returns the result stored for the original event,
 even if the payment has since moved to another state.
+
+The generic HMAC adapter is a Development/Testing contract sample. Options validation fails
+application startup when `PaymentWebhooks:GenericHmac:Enabled=true` in Production. A production
+gateway requires a provider-specific adapter and complete checkout, reconciliation and refund
+lifecycle rather than enabling this sample.
 
 Webhook processing retains the SHA-256 payload hash by default, not the raw body. Set
 `PaymentWebhooks:GenericHmac:RetainRawPayload=true` only for a time-bounded investigation after
@@ -372,12 +389,30 @@ successful, cancelled and failed database queries so optimization decisions incl
 traffic instead of measuring only the happy path. Full-text search and response caching remain
 measurement-gated because their operational cost and invalidation rules are not yet justified.
 
+The existing product and order list endpoints retain their version 1 response contracts. Clients
+that only render list rows can use `/api/v1/products/summaries`,
+`/api/v1/orders/my/summaries` and `/api/v1/orders/summaries`. These endpoints project only list
+fields in SQL and do not materialize product image collections, order details, payment history or
+status history. Detail endpoints remain the source for complete aggregate views.
+
 Exception, MVC validation, authentication, authorization and rate-limit failures share the
 `application/problem+json` contract. Standard `ProblemDetails` fields coexist with the stable
 compatibility fields `message`, `code`, `traceId`, `details` and `errors`.
+Fixed-window limits are bound from the startup-validated `RateLimiting` section; changing a limit
+requires an application restart and does not change the current in-process deployment boundary.
+Rejected fixed-window leases expose their remaining delay as a delta-seconds `Retry-After` header
+alongside the standard `rate_limit_exceeded` ProblemDetails body.
 Client-facing titles and messages are Vietnamese while `code` remains a stable English identifier.
 Version 1 is available under `/api/v1`; the original `/api` routes assume version 1 and remain
 covered by contract tests for backward compatibility.
+
+`/health/live` contains only the in-process self check. `/health/ready` verifies SQL Server,
+product-image storage write access, outbox processing, pending-order expiration and data-retention
+worker state. The local-storage probe creates, flushes and removes a uniquely named temporary file;
+it does not leave an upload record or database row. Dependency checks share the startup-validated
+`HealthChecks:DependencyTimeoutSeconds` limit and propagate timeout/request cancellation through
+their I/O calls. Public health endpoints return only aggregate status; per-check descriptions and
+data are restricted to Admin through `/health/details`.
 
 Client-aborted requests are recorded as cancellation instead of an internal server error and do
 not attempt to write JSON to a closed connection. Exceptions raised after response headers start
@@ -385,7 +420,9 @@ are rethrown because replacing a partially written response would corrupt the HT
 
 ## Deliberate Boundaries
 
-- Local image storage is retained behind `IUploadService` for the current deployment scope.
+- Local image storage is retained behind the fully asynchronous `IProductImageStorage` port for
+  the current deployment scope; `IUploadService` continues to own image validation and
+  product-image rules.
 - Static serving is limited to generated product images under `/uploads/products`; only JPG, PNG
   and WEBP content types are exposed and responses disable MIME sniffing.
 - SQL command timeout is configured through `Database:CommandTimeoutSeconds`. EF Core retry is not

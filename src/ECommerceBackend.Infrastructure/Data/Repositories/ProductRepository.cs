@@ -21,39 +21,11 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             int take,
             CancellationToken cancellationToken = default)
         {
-            var query = _context.Products
-                .AsNoTracking()
-                .Where(product => !product.IsDeleted
-                    && product.Category != null
-                    && !product.Category.IsDeleted)
+            var query = BuildFilteredQuery(queryParams)
                 .Include(product => product.Category)
                 .Include(product => product.Images)
-                .AsSplitQuery()
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(queryParams.Keyword))
-            {
-                var keyword = queryParams.Keyword.Trim();
-                query = query.Where(product => product.Name.Contains(keyword)
-                    || product.Description.Contains(keyword));
-            }
-
-            if (queryParams.CategoryId.HasValue)
-                query = query.Where(product => product.CategoryId == queryParams.CategoryId.Value);
-            if (queryParams.MinPrice.HasValue)
-                query = query.Where(product => product.Price >= queryParams.MinPrice.Value);
-            if (queryParams.MaxPrice.HasValue)
-                query = query.Where(product => product.Price <= queryParams.MaxPrice.Value);
-
-            query = (queryParams.SortBy?.ToLowerInvariant(), queryParams.SortOrder?.ToLowerInvariant()) switch
-            {
-                ("price", "desc") => query.OrderByDescending(product => product.Price).ThenBy(product => product.Id),
-                ("price", _) => query.OrderBy(product => product.Price).ThenBy(product => product.Id),
-                ("name", "desc") => query.OrderByDescending(product => product.Name).ThenBy(product => product.Id),
-                ("name", _) => query.OrderBy(product => product.Name).ThenBy(product => product.Id),
-                ("createdat", "asc") => query.OrderBy(product => product.CreatedAt).ThenBy(product => product.Id),
-                _ => query.OrderByDescending(product => product.CreatedAt).ThenByDescending(product => product.Id)
-            };
+                .AsSplitQuery();
+            query = ApplySort(query, queryParams);
 
             var totalCount = await query.CountAsync(cancellationToken);
             var items = await query
@@ -61,6 +33,38 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 .Take(take)
                 .ToListAsync(cancellationToken);
             return new PageSlice<Product>(items, totalCount);
+        }
+
+        public async Task<PageSlice<ProductSummaryResponse>> GetSummaryPageAsync(
+            ProductQueryParams queryParams,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+        {
+            var query = ApplySort(
+                BuildFilteredQuery(queryParams),
+                queryParams);
+            var totalCount = await query.CountAsync(cancellationToken);
+            var items = await query
+                .Skip(skip)
+                .Take(take)
+                .Select(product => new ProductSummaryResponse
+                {
+                    Id = product.Id,
+                    Name = product.Name,
+                    Price = product.Price,
+                    StockQuantity = product.StockQuantity,
+                    CategoryId = product.CategoryId,
+                    CategoryName = product.Category!.Name,
+                    CreatedAt = product.CreatedAt,
+                    MainImageUrl = product.Images
+                        .OrderByDescending(image => image.IsMain)
+                        .ThenBy(image => image.Id)
+                        .Select(image => image.ImageUrl)
+                        .FirstOrDefault()
+                })
+                .ToListAsync(cancellationToken);
+            return new PageSlice<ProductSummaryResponse>(items, totalCount);
         }
 
         public Task<Product?> GetActiveByIdAsync(
@@ -138,5 +142,44 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 .AsNoTracking()
                 .Select(image => image.ImageUrl)
                 .ToListAsync(cancellationToken);
+
+        private IQueryable<Product> BuildFilteredQuery(
+            ProductQueryParams queryParams)
+        {
+            var query = _context.Products
+                .AsNoTracking()
+                .Where(product => !product.IsDeleted
+                    && product.Category != null
+                    && !product.Category.IsDeleted);
+
+            if (!string.IsNullOrWhiteSpace(queryParams.Keyword))
+            {
+                var keyword = queryParams.Keyword.Trim();
+                query = query.Where(product => product.Name.Contains(keyword)
+                    || product.Description.Contains(keyword));
+            }
+
+            if (queryParams.CategoryId.HasValue)
+                query = query.Where(product => product.CategoryId == queryParams.CategoryId.Value);
+            if (queryParams.MinPrice.HasValue)
+                query = query.Where(product => product.Price >= queryParams.MinPrice.Value);
+            if (queryParams.MaxPrice.HasValue)
+                query = query.Where(product => product.Price <= queryParams.MaxPrice.Value);
+
+            return query;
+        }
+
+        private static IQueryable<Product> ApplySort(
+            IQueryable<Product> query,
+            ProductQueryParams queryParams)
+            => (queryParams.SortBy?.ToLowerInvariant(), queryParams.SortOrder?.ToLowerInvariant()) switch
+            {
+                ("price", "desc") => query.OrderByDescending(product => product.Price).ThenBy(product => product.Id),
+                ("price", _) => query.OrderBy(product => product.Price).ThenBy(product => product.Id),
+                ("name", "desc") => query.OrderByDescending(product => product.Name).ThenBy(product => product.Id),
+                ("name", _) => query.OrderBy(product => product.Name).ThenBy(product => product.Id),
+                ("createdat", "asc") => query.OrderBy(product => product.CreatedAt).ThenBy(product => product.Id),
+                _ => query.OrderByDescending(product => product.CreatedAt).ThenByDescending(product => product.Id)
+            };
     }
 }

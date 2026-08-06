@@ -1,7 +1,8 @@
 @BaseUrl = http://localhost:5171
 @ApiBase = {{BaseUrl}}/api/v1
 @AdminPassword = replace-with-local-admin-password
-@StaffPassword = Staff@ECommerce2026!
+@StaffPassword = replace-with-local-staff-password
+@CustomerPassword = replace-with-local-customer-password
 
 # Update these values from responses when your HTTP client does not support named-response variables.
 @AdminToken =
@@ -11,6 +12,7 @@
 @CustomerRefreshToken =
 @CategoryId =
 @ProductId =
+@ProductVersion =
 @ProductImageId =
 @CartItemId =
 @OrderId =
@@ -113,6 +115,10 @@ Authorization: Bearer {{AdminToken}}
 GET {{ApiBase}}/products?keyword=Demo&sortBy=price&sortOrder=asc&page=1&pageSize=12
 Accept: application/json
 
+### List product summaries with filter/sort/page
+GET {{ApiBase}}/products/summaries?keyword=Demo&sortBy=price&sortOrder=asc&page=1&pageSize=12
+Accept: application/json
+
 ### Get product by id
 GET {{ApiBase}}/products/{{ProductId}}
 Accept: application/json
@@ -125,9 +131,20 @@ Authorization: Bearer {{AdminToken}}
 {
   "name": "Demo Product Updated",
   "price": 609000.00,
-  "stockQuantity": 12,
+  "stockQuantity": 10,
   "description": "Updated demo product for the HTTP request collection.",
   "categoryId": "{{CategoryId}}"
+}
+
+### Adjust product stock - Admin
+PUT {{ApiBase}}/products/{{ProductId}}/stock
+Content-Type: application/json
+Authorization: Bearer {{AdminToken}}
+If-Match: "{{ProductVersion}}"
+
+{
+  "targetQuantity": 12,
+  "reason": "Manual inventory count"
 }
 
 ### Upload product image - Admin
@@ -152,7 +169,7 @@ Content-Type: application/json
 {
   "userName": "demo_customer",
   "email": "demo_customer@example.com",
-  "password": "Customer@123",
+  "password": "{{CustomerPassword}}",
   "fullName": "Demo Customer",
   "phone": "0901234567"
 }
@@ -164,7 +181,7 @@ Content-Type: application/json
 
 {
   "userName": "demo_customer",
-  "password": "Customer@123"
+  "password": "{{CustomerPassword}}"
 }
 
 ### Customer profile
@@ -265,6 +282,8 @@ Idempotency-Key: {{IdempotencyKey}}
 
 {
   "shippingAddress": "123 Demo Street, District 1, Ho Chi Minh City",
+  "recipientName": "Demo Customer",
+  "recipientPhone": "0901234567",
   "note": "Demo checkout from ECommerceBackend.http",
   "paymentMethod": 0,
   "shippingMethod": 0,
@@ -277,6 +296,11 @@ GET {{ApiBase}}/orders/my?page=1&pageSize=10
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 
+### My order summaries
+GET {{ApiBase}}/orders/my/summaries?page=1&pageSize=10
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
 ### Get order by id
 GET {{ApiBase}}/orders/{{OrderId}}
 Accept: application/json
@@ -284,6 +308,11 @@ Authorization: Bearer {{CustomerToken}}
 
 ### List all orders - Admin/Staff
 GET {{ApiBase}}/orders?page=1&pageSize=10
+Accept: application/json
+Authorization: Bearer {{StaffToken}}
+
+### List order summaries - Admin/Staff
+GET {{ApiBase}}/orders/summaries?page=1&pageSize=10
 Accept: application/json
 Authorization: Bearer {{StaffToken}}
 
@@ -390,7 +419,7 @@ Authorization: Bearer {{AdminToken}}
   "maxBatchSize": 100
 }
 
-### Signed payment webhook (enable/configure GenericHmac first)
+### Signed payment webhook sample (Development/Testing only)
 # Accepted status values: paid, failed, cancelled, refunded.
 # Signature input: {{PaymentEventId}} + "." + the exact raw JSON body below.
 POST {{ApiBase}}/payments/webhooks/{{PaymentProvider}}

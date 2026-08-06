@@ -16,6 +16,20 @@ namespace ECommerceBackend.API.Swagger
                     "Khóa duy nhất để thử lại yêu cầu đặt hàng một cách an toàn.");
             }
 
+            if (IsAction<ProductController>(context, nameof(ProductController.AdjustStock)))
+            {
+                ConfigureParameter(
+                    operation,
+                    "id",
+                    ParameterLocation.Path,
+                    "Mã sản phẩm cần điều chỉnh tồn kho.",
+                    required: true);
+                ConfigureRequiredHeader(
+                    operation,
+                    "If-Match",
+                    "ETag mạnh nhận từ API sản phẩm, dùng để ngăn ghi đè tồn kho đã thay đổi.");
+            }
+
             if (!IsAction<PaymentController>(context, nameof(PaymentController.HandleWebhook)))
                 return;
 

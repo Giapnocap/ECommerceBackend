@@ -144,6 +144,12 @@ public sealed class ValidationContractTests
                 CategoryId = Guid.Empty,
                 Description = new string('a', 2001)
             }));
+        yield return Case("inventory adjustment", () => new AdjustProductStockRequestValidator().Validate(
+            new AdjustProductStockRequest
+            {
+                TargetQuantity = -1,
+                Reason = new string('a', 501)
+            }));
     }
 
     private static object[] Case(string name, Func<ValidationResult> validate)

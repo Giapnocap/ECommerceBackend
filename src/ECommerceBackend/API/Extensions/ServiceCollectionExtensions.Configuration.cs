@@ -84,6 +84,11 @@ namespace ECommerceBackend.API.Extensions
                 .Validate(options => IsValidCorsOptions(options, environment), "Cors config is invalid.")
                 .ValidateOnStart();
 
+            services.AddOptions<RateLimitingOptions>()
+                .Bind(configuration.GetSection(RateLimitingOptions.SectionName))
+                .Validate(IsValidRateLimitingOptions, "Rate limiting config is invalid.")
+                .ValidateOnStart();
+
             services.AddOptions<AdminBootstrapOptions>()
                 .Bind(configuration.GetSection(AdminBootstrapOptions.SectionName))
                 .Validate(IsValidAdminBootstrapOptions, "Admin bootstrap config is invalid.")
@@ -91,7 +96,11 @@ namespace ECommerceBackend.API.Extensions
 
             services.AddOptions<PaymentWebhookOptions>()
                 .Bind(configuration.GetSection(PaymentWebhookOptions.SectionName))
-                .Validate(IsValidPaymentWebhookOptions, "Payment webhook config is invalid.")
+                .Validate(
+                    options => IsValidPaymentWebhookOptions(
+                        options,
+                        environment),
+                    "Generic HMAC payment webhook config is invalid or enabled in Production.")
                 .ValidateOnStart();
 
             services.AddOptions<OutboxOptions>()
@@ -102,6 +111,11 @@ namespace ECommerceBackend.API.Extensions
             services.AddOptions<DatabaseOptions>()
                 .Bind(configuration.GetSection(DatabaseOptions.SectionName))
                 .Validate(IsValidDatabaseOptions, "Database config is invalid.")
+                .ValidateOnStart();
+
+            services.AddOptions<HealthMonitoringOptions>()
+                .Bind(configuration.GetSection(HealthMonitoringOptions.SectionName))
+                .Validate(IsValidHealthMonitoringOptions, "Health check config is invalid.")
                 .ValidateOnStart();
 
             services.AddOptions<DataRetentionOptions>()
@@ -219,6 +233,19 @@ namespace ECommerceBackend.API.Extensions
                 && (environment.IsDevelopment() || origins.All(origin => !IsLocalhostOrigin(origin)));
         }
 
+        private static bool IsValidRateLimitingOptions(RateLimitingOptions options)
+            => IsValidRateLimitPolicy(options.Auth)
+                && IsValidRateLimitPolicy(options.Refresh)
+                && IsValidRateLimitPolicy(options.Upload)
+                && IsValidRateLimitPolicy(options.Webhook)
+                && IsValidRateLimitPolicy(options.Checkout);
+
+        private static bool IsValidRateLimitPolicy(
+            FixedWindowRateLimitPolicyOptions? options)
+            => options is not null
+                && options.PermitLimit is >= 1 and <= 10_000
+                && options.WindowSeconds is >= 1 and <= 3_600;
+
         private static string[] ResolveCorsOrigins(
             IConfiguration configuration,
             IWebHostEnvironment environment)
@@ -291,8 +318,13 @@ namespace ECommerceBackend.API.Extensions
                 && !LooksLikePlaceholder(options.Password);
         }
 
-        private static bool IsValidPaymentWebhookOptions(PaymentWebhookOptions options)
+        private static bool IsValidPaymentWebhookOptions(
+            PaymentWebhookOptions options,
+            IWebHostEnvironment environment)
         {
+            if (environment.IsProduction() && options.Enabled)
+                return false;
+
             if (string.IsNullOrWhiteSpace(options.ProviderCode)
                 || options.ProviderCode.Length > 100
                 || options.ProviderCode.Any(character => !char.IsLetterOrDigit(character)
@@ -324,6 +356,10 @@ namespace ECommerceBackend.API.Extensions
 
         private static bool IsValidDatabaseOptions(DatabaseOptions options)
             => options.CommandTimeoutSeconds is >= 5 and <= 300;
+
+        private static bool IsValidHealthMonitoringOptions(
+            HealthMonitoringOptions options)
+            => options.DependencyTimeoutSeconds is >= 1 and <= 30;
 
         private static bool IsValidDataRetentionOptions(DataRetentionOptions options)
             => (!options.RequireAutomaticProcessing || options.AutomaticProcessingEnabled)

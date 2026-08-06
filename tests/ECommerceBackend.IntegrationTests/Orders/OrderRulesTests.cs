@@ -97,6 +97,46 @@ public class OrderRulesTests
     }
 
     [Fact]
+    public void PlaceOrderValidator_RejectsInvalidRecipientContact()
+    {
+        var validator = new PlaceOrderRequestValidator();
+
+        var result = validator.Validate(new PlaceOrderRequest
+        {
+            ShippingAddress = "Valid address",
+            RecipientName = new string('a', 101),
+            RecipientPhone = "123"
+        });
+
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, error =>
+            error.PropertyName == nameof(PlaceOrderRequest.RecipientName));
+        Assert.Contains(result.Errors, error =>
+            error.PropertyName == nameof(PlaceOrderRequest.RecipientPhone));
+    }
+
+    [Fact]
+    public void OrderRecipientSnapshot_NormalizesAndProtectsContact()
+    {
+        var order = new Order();
+
+        order.SetRecipient("  Nguyễn Văn A  ", " 0901234567 ");
+
+        Assert.Equal("Nguyễn Văn A", order.RecipientName);
+        Assert.Equal("0901234567", order.RecipientPhone);
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            order.SetRecipient("Người nhận khác", "0907654321"));
+        Assert.Equal("order_recipient_snapshot_immutable", exception.Code);
+        Assert.Equal("Nguyễn Văn A", order.RecipientName);
+        Assert.Equal("0901234567", order.RecipientPhone);
+
+        var invalidOrder = new Order();
+        var invalidPhone = Assert.Throws<DomainRuleViolationException>(() =>
+            invalidOrder.SetRecipient("Người nhận", "invalid"));
+        Assert.Equal("order_recipient_phone_invalid", invalidPhone.Code);
+    }
+
+    [Fact]
     public void PlaceOrderValidator_RejectsUndefinedPaymentMethod()
     {
         var validator = new PlaceOrderRequestValidator();
@@ -153,11 +193,14 @@ public class OrderRulesTests
                 }
             ]
         };
+        order.SetRecipient("Snapshot recipient", "0901234567");
 
         var response = order.ToResponse();
 
         Assert.Equal("Purchased product name", Assert.Single(response.OrderDetails).ProductName);
         Assert.Equal(nameof(PaymentStatus.Pending), response.Payment?.Status);
+        Assert.Equal("Snapshot recipient", response.RecipientName);
+        Assert.Equal("0901234567", response.RecipientPhone);
     }
 
     [Theory]

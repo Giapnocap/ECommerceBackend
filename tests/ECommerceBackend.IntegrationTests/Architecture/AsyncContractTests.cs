@@ -47,6 +47,23 @@ public sealed class AsyncContractTests
             $"Async controller actions missing CancellationToken: {string.Join(", ", violations)}");
     }
 
+    [Fact]
+    public void ProductImageStorageOperations_AreAsyncAndCancellable()
+    {
+        var violations = typeof(IProductImageStorage)
+            .GetMethods()
+            .Where(method => !method.Name.EndsWith("Async", StringComparison.Ordinal)
+                || !IsTaskReturning(method)
+                || !AcceptsCancellationToken(method))
+            .Select(method => method.Name)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            violations.Length == 0,
+            $"Product image storage operations must be async and cancellable: {string.Join(", ", violations)}");
+    }
+
     private static bool IsTaskReturning(MethodInfo method)
         => typeof(Task).IsAssignableFrom(method.ReturnType);
 

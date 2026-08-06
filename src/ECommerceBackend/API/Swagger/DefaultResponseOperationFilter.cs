@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
+using Microsoft.Net.Http.Headers;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace ECommerceBackend.API.Swagger
@@ -51,7 +52,19 @@ namespace ECommerceBackend.API.Swagger
                 AddErrorResponse(operation, "413", "Dữ liệu gửi lên vượt quá giới hạn cấu hình.", errorSchema);
 
             if (HasAttribute<EnableRateLimitingAttribute>(context))
+            {
                 AddErrorResponse(operation, "429", "Quá nhiều yêu cầu - đã vượt giới hạn truy cập.", errorSchema);
+                operation.Responses["429"].Headers[HeaderNames.RetryAfter] = new OpenApiHeader
+                {
+                    Description = "Số giây tối thiểu cần chờ trước khi gửi lại yêu cầu.",
+                    Schema = new OpenApiSchema
+                    {
+                        Type = "integer",
+                        Format = "int32",
+                        Minimum = 1
+                    }
+                };
+            }
         }
 
         private static void AddErrorResponse(
@@ -89,7 +102,7 @@ namespace ECommerceBackend.API.Swagger
             {
                 "CartController" => !string.Equals(methodName, "GetMyCart", StringComparison.OrdinalIgnoreCase),
                 "OrderController" => methodName is "PlaceOrder" or "UpdateStatus",
-                "ProductController" => methodName is "Update" or "Delete" or "UploadImage" or "DeleteImage",
+                "ProductController" => methodName is "Update" or "AdjustStock" or "Delete" or "UploadImage" or "DeleteImage",
                 "CategoryController" => methodName is "Create" or "Update" or "Delete",
                 "UserController" => methodName is "AssignRole" or "ChangePassword",
                 "AuthController" => methodName is "Register" or "Refresh" or "ResetPassword",

@@ -1,6 +1,6 @@
+using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Tests.Support;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerceBackend.Tests;
@@ -68,22 +68,43 @@ public sealed class UploadServiceTests
         }
     }
 
-    internal static IFormFile CreatePng(string fileName)
+    internal static IUploadFile CreatePng(string fileName)
     {
         byte[] content =
         [
             0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
             0x00, 0x00, 0x00, 0x00
         ];
-        return new FormFile(new MemoryStream(content), 0, content.Length, "file", fileName)
-        {
-            Headers = new HeaderDictionary(),
-            ContentType = "image/png"
-        };
+        return new InMemoryUploadFile(
+            fileName,
+            "image/png",
+            content);
     }
 
     private static string ToPhysicalPath(string root, string imageUrl)
         => Path.Combine(
             root,
             imageUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
+    private sealed class InMemoryUploadFile : IUploadFile
+    {
+        private readonly byte[] _content;
+
+        public InMemoryUploadFile(
+            string fileName,
+            string contentType,
+            byte[] content)
+        {
+            FileName = fileName;
+            ContentType = contentType;
+            _content = content;
+        }
+
+        public string FileName { get; }
+        public string ContentType { get; }
+        public long Length => _content.LongLength;
+
+        public Stream OpenReadStream()
+            => new MemoryStream(_content, writable: false);
+    }
 }

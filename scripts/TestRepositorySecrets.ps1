@@ -4,7 +4,6 @@ param()
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $allowedFixturePaths = @(
-    'src/ECommerceBackend/ECommerceBackend.http',
     'scripts/TestRepositorySecrets.ps1'
 )
 $allowedPrefixes = @(
@@ -18,8 +17,10 @@ $patterns = [ordered]@{
     AwsAccessKey = '\bAKIA[0-9A-Z]{16}\b'
     SlackToken = '\bxox[baprs]-[A-Za-z0-9-]{20,}\b'
     StripeLiveKey = '\bsk_live_[A-Za-z0-9]{20,}\b'
-    JsonCredential = '"(?:Password|Secret|ApiKey|AccessToken|PrivateKey|Key)"\s*:\s*"(?<value>[^"]+)"'
-    NamedCredential = '(?im)^\s*(?:[A-Z0-9_]*(?:PASSWORD|SECRET|API_KEY|ACCESS_TOKEN|PRIVATE_KEY|JWT_KEY)[A-Z0-9_]*)\s*:\s*["'']?(?<value>[^"''#\r\n]+)'
+    JwtToken = '\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b'
+    JsonCredential = '(?i)"(?:Password|Secret|ApiKey|AccessToken|PrivateKey|Key)"[ \t]*:[ \t]*"(?<value>[^"]+)"'
+    HttpCredential = '(?im)^[ \t]*@[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|JWT[_-]?KEY)[A-Z0-9_]*[ \t]*=[ \t]*["'']?(?<value>[^"''#\r\n]+)'
+    NamedCredential = '(?im)^[ \t]*(?:[A-Z0-9_]*(?:PASSWORD|SECRET|API_KEY|ACCESS_TOKEN|PRIVATE_KEY|JWT_KEY)[A-Z0-9_]*)[ \t]*:[ \t]*["'']?(?<value>[^"''#\r\n]+)'
     ConnectionPassword = '(?i)(?:Password|Pwd)\s*=\s*(?<value>[^;"\s]+)'
 }
 
@@ -64,10 +65,12 @@ foreach ($relativePath in $trackedFiles) {
                 $match.Value
             }
 
-            $isPlaceholder = [string]::IsNullOrWhiteSpace($value) `
-                -or $value -match '^(?:YOUR_|replace-with|change-me|test-|example|placeholder|generate-a-|set-a-)' `
-                -or $value -match '^<.+>$' `
-                -or $value -match '\$\{\{[^}]+\}\}'
+            $normalizedValue = $value.Trim()
+            $isPlaceholder = [string]::IsNullOrWhiteSpace($normalizedValue) `
+                -or $normalizedValue -match '^(?:YOUR_|replace-with|change-me|test-|example|placeholder|generate-a-|set-a-)' `
+                -or $normalizedValue -match '^<.+>$' `
+                -or $normalizedValue -match '^\{\{[A-Za-z0-9_.-]+\}\}$' `
+                -or $normalizedValue -match '\$\{\{[^}]+\}\}'
             if ($isPlaceholder) {
                 continue
             }

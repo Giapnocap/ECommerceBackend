@@ -11,11 +11,10 @@ public sealed class CartInvariantTests
         var cart = Cart.Create(Guid.NewGuid(), Guid.NewGuid());
         var product = CreateProduct(price: 10m, stock: 5);
         var item = cart.AddItem(Guid.NewGuid(), product, 2);
-        _ = product.Update(
+        product.UpdateDetails(
             product.CategoryId,
             product.Name,
             12m,
-            5,
             product.Description);
 
         item.IncreaseQuantity(2, product);
@@ -63,6 +62,28 @@ public sealed class CartInvariantTests
         Assert.Equal("cart_item_not_owned", foreignItem.Code);
         Assert.Single(cart.CartItems);
         Assert.Empty(otherCart.CartItems);
+    }
+
+    [Fact]
+    public void Cart_RejectsNewLineBeyondLimitWithoutMutation()
+    {
+        var cart = Cart.Create(Guid.NewGuid(), Guid.NewGuid());
+        for (var index = 0; index < Cart.MaximumLineItems; index++)
+        {
+            cart.AddItem(
+                Guid.NewGuid(),
+                CreateProduct(price: 10m, stock: 1),
+                1);
+        }
+
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            cart.AddItem(
+                Guid.NewGuid(),
+                CreateProduct(price: 10m, stock: 1),
+                1));
+
+        Assert.Equal("cart_line_item_limit_exceeded", exception.Code);
+        Assert.Equal(Cart.MaximumLineItems, cart.CartItems.Count);
     }
 
     [Fact]

@@ -15,6 +15,20 @@
         },
         "type": "object"
       },
+      "AdjustProductStockRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "nullable": true,
+            "type": "string"
+          },
+          "targetQuantity": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "ApiErrorResponse": {
         "additionalProperties": {},
         "description": "D\u1EEF li\u1EC7u l\u1ED7i chu\u1EA9n tr\u1EA3 v\u1EC1 t\u1EEB ki\u1EC3m tra d\u1EEF li\u1EC7u, quy t\u1EAFc nghi\u1EC7p v\u1EE5 v\u00E0 l\u1EDBp x\u1EED l\u00FD ngo\u1EA1i l\u1EC7.",
@@ -942,6 +956,14 @@
             "nullable": true,
             "type": "string"
           },
+          "recipientName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "recipientPhone": {
+            "nullable": true,
+            "type": "string"
+          },
           "returnRequest": {
             "$ref": "#/components/schemas/ReturnRequestResponse"
           },
@@ -1071,6 +1093,103 @@
           "toStatus": {
             "nullable": true,
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OrderSummaryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "nullable": true,
+            "type": "string"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "orderDate": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "orderNumber": {
+            "nullable": true,
+            "type": "string"
+          },
+          "paymentMethod": {
+            "nullable": true,
+            "type": "string"
+          },
+          "paymentStatus": {
+            "nullable": true,
+            "type": "string"
+          },
+          "recipientName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "shippingMethod": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "nullable": true,
+            "type": "string"
+          },
+          "totalAmount": {
+            "format": "double",
+            "type": "number"
+          },
+          "totalItemQuantity": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "userId": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "OrderSummaryResponsePagedResult": {
+        "additionalProperties": false,
+        "properties": {
+          "hasNextPage": {
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "hasPreviousPage": {
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderSummaryResponse"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "readOnly": true,
+            "type": "integer"
           }
         },
         "type": "object"
@@ -1224,12 +1343,47 @@
             "nullable": true,
             "type": "string"
           },
+          "recipientName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "recipientPhone": {
+            "nullable": true,
+            "type": "string"
+          },
           "shippingAddress": {
             "nullable": true,
             "type": "string"
           },
           "shippingMethod": {
             "$ref": "#/components/schemas/ShippingMethod"
+          }
+        },
+        "type": "object"
+      },
+      "ProblemDetails": {
+        "additionalProperties": {},
+        "properties": {
+          "detail": {
+            "nullable": true,
+            "type": "string"
+          },
+          "instance": {
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "format": "int32",
+            "nullable": true,
+            "type": "integer"
+          },
+          "title": {
+            "nullable": true,
+            "type": "string"
+          },
+          "type": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -1297,6 +1451,10 @@
           "stockQuantity": {
             "format": "int32",
             "type": "integer"
+          },
+          "version": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "type": "object"
@@ -1315,6 +1473,82 @@
           "items": {
             "items": {
               "$ref": "#/components/schemas/ProductResponse"
+            },
+            "nullable": true,
+            "type": "array"
+          },
+          "page": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "pageSize": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalCount": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "totalPages": {
+            "format": "int32",
+            "readOnly": true,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ProductSummaryResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "categoryId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "categoryName": {
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "mainImageUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "name": {
+            "nullable": true,
+            "type": "string"
+          },
+          "price": {
+            "format": "double",
+            "type": "number"
+          },
+          "stockQuantity": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ProductSummaryResponsePagedResult": {
+        "additionalProperties": false,
+        "properties": {
+          "hasNextPage": {
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "hasPreviousPage": {
+            "readOnly": true,
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ProductSummaryResponse"
             },
             "nullable": true,
             "type": "array"
@@ -2093,7 +2327,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -2162,7 +2406,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -2316,7 +2570,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -2400,7 +2664,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -2479,7 +2753,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -2558,7 +2842,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -4239,7 +4533,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -4348,6 +4652,91 @@
         ]
       }
     },
+    "/api/v1/orders/my/summaries": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "schema": {
+              "default": 10,
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderSummaryResponsePagedResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "L\u1EA5y danh s\u00E1ch t\u00F3m t\u1EAFt \u0111\u01A1n h\u00E0ng c\u1EE7a t\u00F4i b\u1EB1ng truy v\u1EA5n g\u1ECDn",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
     "/api/v1/orders/quote": {
       "post": {
         "requestBody": {
@@ -4418,7 +4807,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -4437,6 +4836,104 @@
           }
         ],
         "summary": "T\u00EDnh l\u1EA1i gi\u00E1 gi\u1ECF h\u00E0ng theo khuy\u1EBFn m\u00E3i v\u00E0 ph\u01B0\u01A1ng th\u1EE9c giao h\u00E0ng",
+        "tags": [
+          "Order"
+        ]
+      }
+    },
+    "/api/v1/orders/summaries": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "Status",
+            "schema": {
+              "$ref": "#/components/schemas/OrderStatus"
+            }
+          },
+          {
+            "in": "query",
+            "name": "UserId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Page",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderSummaryResponsePagedResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Staff/Admin] L\u1EA5y danh s\u00E1ch t\u00F3m t\u1EAFt \u0111\u01A1n h\u00E0ng b\u1EB1ng truy v\u1EA5n g\u1ECDn",
         "tags": [
           "Order"
         ]
@@ -5543,7 +6040,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -5742,6 +6249,109 @@
           }
         ],
         "summary": "[Admin] T\u1EA1o s\u1EA3n ph\u1EA9m m\u1EDBi",
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/api/v1/products/summaries": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "Keyword",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "CategoryId",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "MinPrice",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "MaxPrice",
+            "schema": {
+              "format": "double",
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "SortBy",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "SortOrder",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "Page",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "PageSize",
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductSummaryResponsePagedResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
+          }
+        },
+        "summary": "L\u1EA5y danh s\u00E1ch t\u00F3m t\u1EAFt s\u1EA3n ph\u1EA9m b\u1EB1ng truy v\u1EA5n g\u1ECDn",
         "tags": [
           "Product"
         ]
@@ -6135,7 +6745,17 @@
                 }
               }
             },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp."
+            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
+            "headers": {
+              "Retry-After": {
+                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
+                "schema": {
+                  "format": "int32",
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -6259,6 +6879,141 @@
           }
         ],
         "summary": "[Admin] X\u00F3a \u1EA3nh s\u1EA3n ph\u1EA9m",
+        "tags": [
+          "Product"
+        ]
+      }
+    },
+    "/api/v1/products/{id}/stock": {
+      "put": {
+        "parameters": [
+          {
+            "description": "M\u00E3 s\u1EA3n ph\u1EA9m c\u1EA7n \u0111i\u1EC1u ch\u1EC9nh t\u1ED3n kho.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ETag m\u1EA1nh nh\u1EADn t\u1EEB API s\u1EA3n ph\u1EA9m, d\u00F9ng \u0111\u1EC3 ng\u0103n ghi \u0111\u00E8 t\u1ED3n kho \u0111\u00E3 thay \u0111\u1ED5i.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/*\u002Bjson": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustProductStockRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustProductStockRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdjustProductStockRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
+          },
+          "401": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
+          },
+          "403": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
+          },
+          "404": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
+          },
+          "409": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "D\u1EEF li\u1EC7u xung \u0111\u1ED9t do t\u00E0i nguy\u00EAn \u0111\u00E3 \u0111\u01B0\u1EE3c m\u1ED9t thao t\u00E1c kh\u00E1c thay \u0111\u1ED5i."
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ],
+        "summary": "[Admin] \u0110i\u1EC1u ch\u1EC9nh t\u1ED3n kho s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
         ]

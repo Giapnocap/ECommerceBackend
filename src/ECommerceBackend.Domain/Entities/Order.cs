@@ -23,6 +23,8 @@ namespace ECommerceBackend.Domain.Entities
         public decimal TotalAmount { get; private set; }
         public OrderStatus Status { get; private set; } = OrderStatusTransitions.Initial;
         public string ShippingAddress { get; set; } = string.Empty;
+        public string RecipientName { get; private set; } = string.Empty;
+        public string? RecipientPhone { get; private set; }
         public string? Note { get; set; }
         public DateTime? ExpiresAt { get; private set; }
         public DateTime? CancelledAt { get; private set; }
@@ -39,6 +41,36 @@ namespace ECommerceBackend.Domain.Entities
         public PromotionRedemption? PromotionRedemption { get; set; }
         public Shipment? Shipment { get; set; }
         public ReturnRequest? ReturnRequest { get; set; }
+
+        public void SetRecipient(string name, string? phone)
+        {
+            if (!string.IsNullOrEmpty(RecipientName))
+            {
+                throw new DomainRuleViolationException(
+                    "order_recipient_snapshot_immutable",
+                    "Thông tin người nhận của đơn hàng không thể thay đổi sau khi đã lưu.");
+            }
+
+            if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 100)
+            {
+                throw new DomainRuleViolationException(
+                    "order_recipient_name_invalid",
+                    "Tên người nhận phải có từ 1 đến 100 ký tự.");
+            }
+
+            var normalizedPhone = string.IsNullOrWhiteSpace(phone)
+                ? null
+                : phone.Trim();
+            if (normalizedPhone != null && !IsValidPhone(normalizedPhone))
+            {
+                throw new DomainRuleViolationException(
+                    "order_recipient_phone_invalid",
+                    "Số điện thoại người nhận không hợp lệ.");
+            }
+
+            RecipientName = name.Trim();
+            RecipientPhone = normalizedPhone;
+        }
 
         public void SetPricing(
             decimal subtotal,
@@ -190,5 +222,20 @@ namespace ECommerceBackend.Domain.Entities
                 OrderStatus.Refunded => "Đã hoàn tiền",
                 _ => status.ToString()
             };
+
+        private static bool IsValidPhone(string phone)
+        {
+            var digitStart = phone.StartsWith("+84", StringComparison.Ordinal)
+                ? 3
+                : phone.StartsWith('0')
+                    ? 1
+                    : -1;
+            if (digitStart < 0 || phone.Length - digitStart != 9)
+                return false;
+
+            return phone.AsSpan(digitStart).IndexOfAnyExceptInRange(
+                '0',
+                '9') < 0;
+        }
     }
 }

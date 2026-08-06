@@ -4,6 +4,8 @@ namespace ECommerceBackend.Domain.Entities
 {
     public class Cart
     {
+        public const int MaximumLineItems = 50;
+
         public Guid Id { get; set; }
         public Guid UserId { get; internal set; }
 
@@ -40,6 +42,8 @@ namespace ECommerceBackend.Domain.Entities
                     "Sản phẩm đã tồn tại trong giỏ hàng.");
             }
 
+            EnsureLineItemCountWithinLimit(CartItems.Count + 1);
+
             var item = CartItem.Create(
                 itemId,
                 Id,
@@ -65,6 +69,17 @@ namespace ECommerceBackend.Domain.Entities
             var removedItems = CartItems.ToArray();
             CartItems.Clear();
             return removedItems;
+        }
+
+        public static void EnsureLineItemCountWithinLimit(int lineItemCount)
+        {
+            if (lineItemCount <= MaximumLineItems)
+                return;
+
+            throw new DomainRuleViolationException(
+                "cart_line_item_limit_exceeded",
+                $"Giỏ hàng chỉ được chứa tối đa {MaximumLineItems} sản phẩm khác nhau. "
+                + "Vui lòng xóa bớt sản phẩm trước khi tiếp tục.");
         }
     }
 }

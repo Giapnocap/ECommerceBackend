@@ -6,6 +6,7 @@ using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Data.Repositories;
 using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Infrastructure.Security;
+using ECommerceBackend.Infrastructure.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -44,7 +45,9 @@ internal static class TestServiceFactory
             new ProductRepository(context),
             context,
             Consistency(context),
-            environment,
+            new LocalProductImageStorage(
+                environment,
+                NullLogger<LocalProductImageStorage>.Instance),
             Options.Create(new UploadOptions()),
             NullLogger<UploadService>.Instance);
 
@@ -74,7 +77,9 @@ internal static class TestServiceFactory
         var userRepository = new UserRepository(context);
         var cartRepository = new CartRepository(context);
         var authSessionRepository = new AuthSessionRepository(context);
-        var tokenIssuer = new AuthTokenIssuer(jwtOptions);
+        var tokenIssuer = new AuthTokenIssuer(
+            jwtOptions,
+            new JwtAccessTokenGenerator(jwtOptions));
         var outbox = new OutboxWriter(
             new OutboxRepository(context),
             clock,
@@ -134,6 +139,7 @@ internal static class TestServiceFactory
             new AuthSessionRepository(context),
             context,
             Consistency(context),
+            new BCryptPasswordHasher(),
             timeProvider ?? TimeProvider.System);
 
     public static OrderService CreateOrderService(
@@ -144,6 +150,7 @@ internal static class TestServiceFactory
         ReturnPolicyOptions? returnPolicyOptions = null)
     {
         var orderRepository = new OrderRepository(context);
+        var userRepository = new UserRepository(context);
         var paymentRepository = new PaymentRepository(context);
         var cartRepository = new CartRepository(context);
         var inventoryRepository = new InventoryRepository(context);
@@ -176,6 +183,7 @@ internal static class TestServiceFactory
             inventoryRepository);
         var checkout = new OrderCheckoutUseCase(
             orderRepository,
+            userRepository,
             context,
             consistency,
             outbox,

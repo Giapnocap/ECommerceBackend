@@ -10,6 +10,24 @@ namespace ECommerceBackend.Tests;
 public sealed class CartServiceTests
 {
     [Fact]
+    public async Task GetCartAsync_WhenCartDoesNotExist_ReturnsEmptyCartWithoutPersisting()
+    {
+        await using var context = TestAppDbContext.Create();
+        var userId = Guid.NewGuid();
+        var service = TestServiceFactory.CreateCartService(context);
+
+        var first = await service.GetCartAsync(userId);
+        var second = await service.GetCartAsync(userId);
+
+        Assert.Equal(Guid.Empty, first.Id);
+        Assert.Empty(first.Items);
+        Assert.Equal(Guid.Empty, second.Id);
+        Assert.Empty(second.Items);
+        Assert.False(await context.Carts.AnyAsync(cart => cart.UserId == userId));
+        Assert.Empty(context.ChangeTracker.Entries<Cart>());
+    }
+
+    [Fact]
     public async Task CartLifecycle_AddsMergesUpdatesRemovesAndClearsItems()
     {
         await using var context = TestAppDbContext.Create();
@@ -20,6 +38,7 @@ public sealed class CartServiceTests
 
         var empty = await service.GetCartAsync(userId);
         Assert.Empty(empty.Items);
+        Assert.False(await context.Carts.AnyAsync(cart => cart.UserId == userId));
 
         var added = await service.AddItemAsync(userId, new AddToCartRequest
         {
@@ -62,6 +81,7 @@ public sealed class CartServiceTests
         await service.ClearCartAsync(userId);
         Assert.Empty((await service.GetCartAsync(userId)).Items);
         Assert.NotEqual(Guid.Empty, added.Id);
+        Assert.Equal(1, await context.Carts.CountAsync(cart => cart.UserId == userId));
     }
 
     [Fact]
@@ -144,6 +164,77 @@ public sealed class CartServiceTests
 
         Assert.Equal("cart_quantity_invalid", updateException.Code);
         Assert.Equal(1, (await context.CartItems.AsNoTracking().SingleAsync()).Quantity);
+    }
+
+    [Fact]
+    public async Task AddItemAsync_AtLineLimit_MergesExistingButRejectsNewProduct()
+    {
+        await using var context = TestAppDbContext.Create();
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            UserName = $"cart_limit_{Guid.NewGuid():N}"[..20],
+            NormalizedUserName = Guid.NewGuid().ToString("N").ToUpperInvariant(),
+            Email = $"{Guid.NewGuid():N}@example.com",
+            NormalizedEmail = $"{Guid.NewGuid():N}@EXAMPLE.COM",
+            FullName = "Cart Limit Customer",
+            PasswordHash = "test-hash"
+        };
+        var category = new Category
+        {
+            Id = Guid.NewGuid(),
+            Name = $"Category {Guid.NewGuid():N}",
+            NormalizedName = Guid.NewGuid().ToString("N").ToUpperInvariant()
+        };
+        var cart = Cart.Create(Guid.NewGuid(), user.Id);
+        var products = Enumerable.Range(0, Cart.MaximumLineItems + 1)
+            .Select(index => Product.Create(
+                Guid.NewGuid(),
+                category.Id,
+                $"Product {index}",
+                25m,
+                5,
+                "Cart limit test",
+                DateTime.UtcNow))
+            .ToArray();
+        var items = products
+            .Take(Cart.MaximumLineItems)
+            .Select(product => new CartItem
+            {
+                Id = Guid.NewGuid(),
+                CartId = cart.Id,
+                ProductId = product.Id,
+                Quantity = 1,
+                UnitPrice = product.Price
+            })
+            .ToArray();
+        context.AddRange(user, category, cart);
+        context.Products.AddRange(products);
+        context.CartItems.AddRange(items);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = TestServiceFactory.CreateCartService(context);
+
+        var merged = await service.AddItemAsync(user.Id, new AddToCartRequest
+        {
+            ProductId = products[0].Id,
+            Quantity = 1
+        });
+        var exception = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.AddItemAsync(user.Id, new AddToCartRequest
+            {
+                ProductId = products[^1].Id,
+                Quantity = 1
+            }));
+
+        Assert.Equal(
+            2,
+            merged.Items.Single(item => item.ProductId == products[0].Id).Quantity);
+        Assert.Equal("cart_line_item_limit_exceeded", exception.Code);
+        Assert.Equal(Cart.MaximumLineItems, await context.CartItems.CountAsync());
+        Assert.DoesNotContain(
+            await context.CartItems.AsNoTracking().ToListAsync(),
+            item => item.ProductId == products[^1].Id);
     }
 
     private static async Task<Product> SeedProductAsync(

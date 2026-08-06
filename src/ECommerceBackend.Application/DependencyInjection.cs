@@ -10,7 +10,6 @@ namespace ECommerceBackend.Application
             this IServiceCollection services)
         {
             services.AddSingleton(TimeProvider.System);
-            services.AddHttpContextAccessor();
 
             AddIdentityFeature(services);
             AddCatalogFeature(services);

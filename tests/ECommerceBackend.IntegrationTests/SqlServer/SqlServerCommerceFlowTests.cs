@@ -974,7 +974,7 @@ public sealed class SqlServerCommerceFlowTests
                 var clock = new FixedTimeProvider(now);
                 var audit = new AuditWriter(
                     new AuditRepository(context),
-                    new HttpContextAccessor(),
+                    new TestRequestContext(),
                     clock);
                 var consistency = new EfDataConsistencyService(context);
                 var service = new OperationsService(
@@ -1056,7 +1056,7 @@ public sealed class SqlServerCommerceFlowTests
                 var consistency = new EfDataConsistencyService(context);
                 var audit = new AuditWriter(
                     new AuditRepository(context),
-                    new HttpContextAccessor(),
+                    new TestRequestContext(),
                     clock);
                 var service = new OperationsService(
                     new DeadLetterUseCase(
@@ -1959,8 +1959,8 @@ public sealed class SqlServerCommerceFlowTests
         try
         {
             Guid userId;
-            Guid categoryId;
             Guid productId;
+            byte[] productVersion;
             await using (var setupContext = new AppDbContext(options))
             {
                 await setupContext.Database.MigrateAsync();
@@ -1989,7 +1989,6 @@ public sealed class SqlServerCommerceFlowTests
                     CreatedAt = now.UtcDateTime
                 };
                 userId = user.Id;
-                categoryId = category.Id;
                 productId = product.Id;
 
                 setupContext.AddRange(
@@ -2006,6 +2005,7 @@ public sealed class SqlServerCommerceFlowTests
                         UnitPrice = product.Price
                     });
                 await setupContext.SaveChangesAsync();
+                productVersion = product.RowVersion.ToArray();
             }
 
             async Task<Exception?> CheckoutAsync()
@@ -2034,16 +2034,14 @@ public sealed class SqlServerCommerceFlowTests
                     context,
                     new FixedTimeProvider(now));
                 return await Record.ExceptionAsync(() =>
-                    service.UpdateAsync(
+                    service.AdjustStockAsync(
                         productId,
-                        new UpdateProductRequest
+                        new AdjustProductStockRequest
                         {
-                            CategoryId = categoryId,
-                            Name = "Inventory race product",
-                            Price = 500_000m,
-                            StockQuantity = adjustedStock,
-                            Description = "Inventory race product"
+                            TargetQuantity = adjustedStock,
+                            Reason = "Concurrent inventory count"
                         },
+                        productVersion,
                         userId));
             }
 
@@ -2051,7 +2049,11 @@ public sealed class SqlServerCommerceFlowTests
                 CheckoutAsync(),
                 AdjustStockAsync());
 
-            Assert.All(outcomes, Assert.Null);
+            Assert.Null(outcomes[0]);
+            Assert.True(outcomes[1] is null or ConflictException);
+            if (outcomes[1] is ConflictException conflict)
+                Assert.Equal("inventory_version_conflict", conflict.Code);
+            var adjustmentSucceeded = outcomes[1] is null;
 
             await using var verificationContext =
                 new AppDbContext(options);
@@ -2063,23 +2065,23 @@ public sealed class SqlServerCommerceFlowTests
                 .Where(transaction => transaction.ProductId == productId)
                 .ToListAsync();
 
-            Assert.Equal(2, ledger.Count);
+            Assert.Equal(adjustmentSucceeded ? 2 : 1, ledger.Count);
             Assert.Single(
                 ledger,
                 transaction => transaction.Type
                     == InventoryTransactionType.OrderPlaced);
-            Assert.Single(
-                ledger,
-                transaction => transaction.Type
-                    == InventoryTransactionType.ManualAdjustment);
+            Assert.Equal(
+                adjustmentSucceeded ? 1 : 0,
+                ledger.Count(transaction => transaction.Type
+                    == InventoryTransactionType.ManualAdjustment));
             Assert.Equal(
                 finalStock,
                 initialStock
                     + ledger.Sum(transaction =>
                         transaction.QuantityChange));
-            Assert.Contains(
-                finalStock,
-                new[] { adjustedStock - 1, adjustedStock });
+            Assert.Equal(
+                adjustmentSucceeded ? adjustedStock - 1 : initialStock - 1,
+                finalStock);
             Assert.Single(await verificationContext.Orders.ToListAsync());
             Assert.Empty(await verificationContext.CartItems.ToListAsync());
         }
@@ -2425,6 +2427,82 @@ public sealed class SqlServerCommerceFlowTests
         {
             await using var cleanupContext =
                 new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
+    public async Task OrderRecipientMigration_BackfillsExistingOrderFromUserProfile()
+    {
+        SqlServerIntegrationTestGate.Require();
+        var databaseName = $"ECommerceBackendIntegration_{Guid.NewGuid():N}";
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(BuildConnectionString(databaseName))
+            .Options;
+
+        try
+        {
+            await using var context = new AppDbContext(options);
+            var migrator = context.GetService<IMigrator>();
+            await migrator.MigrateAsync(
+                "20260728040145_AddFulfillmentAndReturnWorkflow");
+            var userId = Guid.NewGuid();
+            var orderId = Guid.NewGuid();
+            var occurredAt = new DateTime(2026, 8, 6, 0, 0, 0, DateTimeKind.Utc);
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT dbo.Users
+                (
+                    Id, UserName, NormalizedUserName, Email,
+                    NormalizedEmail, PasswordHash, FullName,
+                    Phone, IsDeleted, CreatedAt, PasswordChangedAt,
+                    TokenVersion
+                )
+                VALUES
+                (
+                    {userId}, N'recipient.migration',
+                    N'RECIPIENT.MIGRATION',
+                    N'recipient.migration@example.com',
+                    N'RECIPIENT.MIGRATION@EXAMPLE.COM',
+                    N'not-used', N'  Migration Recipient  ',
+                    N'0901234567', 0, {occurredAt}, NULL, 0
+                );
+
+                INSERT dbo.Orders
+                (
+                    Id, UserId, OrderNumber, IdempotencyKey,
+                    IdempotencyRequestHash, OrderDate,
+                    SubtotalAmount, DiscountAmount, ShippingFee,
+                    TaxAmount, TotalAmount, Status,
+                    ShippingAddress, Note
+                )
+                VALUES
+                (
+                    {orderId}, {userId}, N'ORD-RECIPIENT-MIGRATION',
+                    N'recipient-migration',
+                    REPLICATE(N'A', 64), {occurredAt},
+                    100, 0, 0, 0, 100, 0,
+                    N'Migration address', NULL
+                );
+                """);
+
+            await migrator.MigrateAsync();
+            var snapshot = await context.Orders
+                .AsNoTracking()
+                .Where(order => order.Id == orderId)
+                .Select(order => new
+                {
+                    order.RecipientName,
+                    order.RecipientPhone
+                })
+                .SingleAsync();
+
+            Assert.Equal("Migration Recipient", snapshot.RecipientName);
+            Assert.Equal("0901234567", snapshot.RecipientPhone);
+        }
+        finally
+        {
+            await using var cleanupContext = new AppDbContext(options);
             await cleanupContext.Database.EnsureDeletedAsync();
         }
     }

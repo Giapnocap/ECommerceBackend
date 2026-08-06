@@ -27,9 +27,21 @@ namespace ECommerceBackend.Tests;
 public sealed class SqlServerPerformanceTests
 {
     private const int CatalogProductCount = 20_000;
+    private const int ImageHeavyProductCount = 100;
+    private const int ImagesPerProduct = 20;
+    private const int OrderHistoryCount = 5_000;
+    private const int OrderSeedBatchSize = 500;
+    private const int CheckoutLineCount = Cart.MaximumLineItems;
     private const int CatalogRequestCount = 40;
+    private const int RepresentativeShapeRequestCount = 20;
     private const int SessionRequestCount = 200;
     private const int CheckoutRequestCount = 12;
+    private const string KeywordCatalogPath =
+        "/api/products/summaries?keyword=Product%2019&page=1&pageSize=50";
+    private const string ImageHeavyCatalogPath =
+        "/api/products/summaries?page=1&pageSize=100";
+    private const string OrderHistoryPath =
+        "/api/orders/my/summaries?page=1&pageSize=50";
 
     [Fact]
     [Trait("Category", "SqlServerPerformance")]
@@ -47,6 +59,11 @@ public sealed class SqlServerPerformanceTests
         {
             using var client = await factory.CreateInitializedClientAsync(timeout.Token);
             await SeedCatalogAsync(connectionString, CatalogProductCount, timeout.Token);
+            await SeedCatalogImagesAsync(
+                factory.Services,
+                ImageHeavyProductCount,
+                ImagesPerProduct,
+                timeout.Token);
 
             var catalogPlan = await GetCatalogQueryPlanAsync(connectionString, timeout.Token);
             Assert.Contains(
@@ -54,57 +71,65 @@ public sealed class SqlServerPerformanceTests
                 catalogPlan,
                 StringComparison.Ordinal);
 
-            async Task<HttpStatusCode> BrowseCatalogAsync(
-                int _,
-                CancellationToken cancellationToken)
-            {
-                using var response = await client.GetAsync(
-                    "/api/products?page=1&pageSize=12",
-                    cancellationToken);
-                return response.StatusCode;
-            }
+            var catalog = await MeasureGetAsync(
+                client,
+                "/api/products?page=1&pageSize=12",
+                accessToken: null,
+                warmupCount: 8,
+                requestCount: CatalogRequestCount,
+                concurrency: 8,
+                timeout.Token);
 
-            var catalogWarmup = await MeasureAsync(
-                requestCount: 8,
-                concurrency: 8,
-                BrowseCatalogAsync,
+            var keywordCatalog = await MeasureGetAsync(
+                client,
+                KeywordCatalogPath,
+                accessToken: null,
+                warmupCount: 4,
+                requestCount: RepresentativeShapeRequestCount,
+                concurrency: 4,
                 timeout.Token);
-            Assert.All(
-                catalogWarmup.StatusCodes,
-                status => Assert.Equal(HttpStatusCode.OK, status));
-            var catalog = await MeasureAsync(
-                CatalogRequestCount,
-                concurrency: 8,
-                BrowseCatalogAsync,
+
+            await AssertImageHeavyCatalogShapeAsync(client, timeout.Token);
+            var imageHeavyCatalog = await MeasureGetAsync(
+                client,
+                ImageHeavyCatalogPath,
+                accessToken: null,
+                warmupCount: 4,
+                requestCount: RepresentativeShapeRequestCount,
+                concurrency: 4,
                 timeout.Token);
-            Assert.All(catalog.StatusCodes, status => Assert.Equal(HttpStatusCode.OK, status));
+
+            var orderHistoryCustomer = await RegisterAsync(
+                factory.Services,
+                "history",
+                timeout.Token);
+            await SeedOrderHistoryAsync(
+                factory.Services,
+                orderHistoryCustomer.UserId,
+                OrderHistoryCount,
+                timeout.Token);
+            await AssertOrderHistoryShapeAsync(
+                client,
+                orderHistoryCustomer,
+                timeout.Token);
+            var orderHistory = await MeasureGetAsync(
+                client,
+                OrderHistoryPath,
+                orderHistoryCustomer.AccessToken,
+                warmupCount: 4,
+                requestCount: RepresentativeShapeRequestCount,
+                concurrency: 4,
+                timeout.Token);
 
             var customer = await RegisterAsync(factory.Services, "session", timeout.Token);
-            async Task<HttpStatusCode> ValidateSessionAsync(
-                int _,
-                CancellationToken cancellationToken)
-            {
-                using var request = new HttpRequestMessage(HttpMethod.Get, "/api/users/me");
-                request.Headers.Authorization =
-                    new AuthenticationHeaderValue("Bearer", customer.AccessToken);
-                using var response = await client.SendAsync(request, cancellationToken);
-                return response.StatusCode;
-            }
-
-            var sessionWarmup = await MeasureAsync(
-                requestCount: 16,
+            var session = await MeasureGetAsync(
+                client,
+                "/api/users/me",
+                customer.AccessToken,
+                warmupCount: 16,
+                requestCount: SessionRequestCount,
                 concurrency: 16,
-                ValidateSessionAsync,
                 timeout.Token);
-            Assert.All(
-                sessionWarmup.StatusCodes,
-                status => Assert.Equal(HttpStatusCode.OK, status));
-            var session = await MeasureAsync(
-                SessionRequestCount,
-                concurrency: 16,
-                ValidateSessionAsync,
-                timeout.Token);
-            Assert.All(session.StatusCodes, status => Assert.Equal(HttpStatusCode.OK, status));
 
             var checkoutCustomers = new List<AuthResponse>(CheckoutRequestCount + 1);
             for (var index = 0; index <= CheckoutRequestCount; index++)
@@ -116,6 +141,7 @@ public sealed class SqlServerPerformanceTests
             await SeedCheckoutCartsAsync(
                 factory.Services,
                 checkoutCustomers,
+                CheckoutLineCount,
                 timeout.Token);
             var checkoutWarmupStatus = await SendCheckoutAsync(
                 client,
@@ -123,6 +149,11 @@ public sealed class SqlServerPerformanceTests
                 requestIndex: 0,
                 timeout.Token);
             Assert.Equal(HttpStatusCode.Created, checkoutWarmupStatus);
+            await AssertCheckoutLineCountAsync(
+                factory.Services,
+                checkoutCustomers[0].UserId,
+                CheckoutLineCount,
+                timeout.Token);
             var checkout = await MeasureAsync(
                 CheckoutRequestCount,
                 concurrency: CheckoutRequestCount,
@@ -139,8 +170,15 @@ public sealed class SqlServerPerformanceTests
                 new PerformanceReport(
                     DateTimeOffset.UtcNow,
                     CatalogProductCount,
+                    ImageHeavyProductCount,
+                    ImagesPerProduct,
+                    OrderHistoryCount,
+                    CheckoutLineCount,
                     budgets,
                     catalog.ToResult(),
+                    keywordCatalog.ToResult(),
+                    imageHeavyCatalog.ToResult(),
+                    orderHistory.ToResult(),
                     session.ToResult(),
                     checkout.ToResult()),
                 timeout.Token);
@@ -148,6 +186,18 @@ public sealed class SqlServerPerformanceTests
                 catalog.P95Milliseconds <= budgets.CatalogP95Milliseconds,
                 $"Catalog p95 {catalog.P95Milliseconds:F1} ms exceeded " +
                 $"{budgets.CatalogP95Milliseconds:F1} ms.");
+            Assert.True(
+                keywordCatalog.P95Milliseconds <= budgets.KeywordCatalogP95Milliseconds,
+                $"Keyword catalog p95 {keywordCatalog.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.KeywordCatalogP95Milliseconds:F1} ms.");
+            Assert.True(
+                imageHeavyCatalog.P95Milliseconds <= budgets.ImageHeavyCatalogP95Milliseconds,
+                $"Image-heavy catalog p95 {imageHeavyCatalog.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.ImageHeavyCatalogP95Milliseconds:F1} ms.");
+            Assert.True(
+                orderHistory.P95Milliseconds <= budgets.OrderHistoryP95Milliseconds,
+                $"Order history p95 {orderHistory.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.OrderHistoryP95Milliseconds:F1} ms.");
             Assert.True(
                 session.P95Milliseconds <= budgets.SessionP95Milliseconds,
                 $"Session validation p95 {session.P95Milliseconds:F1} ms exceeded " +
@@ -254,6 +304,154 @@ public sealed class SqlServerPerformanceTests
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    private static async Task SeedCatalogImagesAsync(
+        IServiceProvider services,
+        int productCount,
+        int imagesPerProduct,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var productIds = await context.Products
+            .AsNoTracking()
+            .Where(product => !product.IsDeleted)
+            .OrderByDescending(product => product.CreatedAt)
+            .ThenByDescending(product => product.Id)
+            .Take(productCount)
+            .Select(product => product.Id)
+            .ToListAsync(cancellationToken);
+        Assert.Equal(productCount, productIds.Count);
+
+        var images = productIds
+            .SelectMany(productId => Enumerable
+                .Range(1, imagesPerProduct)
+                .Select(imageNumber => new ProductImage
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    ImageUrl = $"/uploads/products/performance-{productId:N}-{imageNumber}.jpg",
+                    IsMain = imageNumber == 1
+                }))
+            .ToArray();
+        context.ProductImages.AddRange(images);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task AssertImageHeavyCatalogShapeAsync(
+        HttpClient client,
+        CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(
+            ImageHeavyCatalogPath,
+            cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<
+            PagedResult<ProductSummaryResponse>>(cancellationToken);
+
+        Assert.NotNull(page);
+        var items = page.Items.ToArray();
+        Assert.Equal(ImageHeavyProductCount, items.Length);
+        Assert.All(
+            items,
+            item => Assert.False(string.IsNullOrWhiteSpace(item.MainImageUrl)));
+    }
+
+    private static async Task SeedOrderHistoryAsync(
+        IServiceProvider services,
+        Guid userId,
+        int orderCount,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var productId = await context.Products
+            .AsNoTracking()
+            .Where(product => !product.IsDeleted)
+            .OrderByDescending(product => product.CreatedAt)
+            .ThenByDescending(product => product.Id)
+            .Select(product => product.Id)
+            .FirstAsync(cancellationToken);
+        var measuredAt = DateTime.UtcNow;
+        var requestHash = new string('A', 64);
+
+        for (var batchStart = 0; batchStart < orderCount; batchStart += OrderSeedBatchSize)
+        {
+            var batchSize = Math.Min(OrderSeedBatchSize, orderCount - batchStart);
+            var orders = new List<Order>(batchSize);
+            for (var offset = 0; offset < batchSize; offset++)
+            {
+                var sequenceNumber = batchStart + offset + 1;
+                var orderDate = measuredAt.AddSeconds(-sequenceNumber);
+                var payment = new Payment
+                {
+                    Id = Guid.NewGuid(),
+                    Method = PaymentMethod.CashOnDelivery,
+                    Amount = 130_000m,
+                    CreatedAt = orderDate
+                };
+                payment.ChangeStatus(PaymentStatus.Paid, orderDate);
+
+                var order = new Order
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    OrderNumber = $"PERF-{sequenceNumber:D10}",
+                    IdempotencyKey = $"performance-history-{sequenceNumber}",
+                    IdempotencyRequestHash = requestHash,
+                    ShippingMethod = ShippingMethod.Standard,
+                    Currency = "VND",
+                    OrderDate = orderDate,
+                    ShippingAddress = "Performance Street",
+                    Payment = payment
+                };
+                order.SetRecipient("Performance Customer", phone: null);
+                order.SetPricing(
+                    subtotal: 100_000m,
+                    discount: 0m,
+                    shipping: 30_000m,
+                    tax: 0m);
+                order.SetPendingExpiration(orderDate.AddMinutes(15));
+                order.ChangeStatus(OrderStatus.Confirmed, payment.Status);
+                order.ChangeStatus(OrderStatus.Shipping, payment.Status);
+                order.ChangeStatus(OrderStatus.Delivered, payment.Status);
+                order.OrderDetails.Add(new OrderDetail
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = productId,
+                    ProductNameSnapshot = "Performance History Product",
+                    Quantity = 1,
+                    UnitPrice = 100_000m
+                });
+                orders.Add(order);
+            }
+
+            context.Orders.AddRange(orders);
+            await context.SaveChangesAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+        }
+    }
+
+    private static async Task AssertOrderHistoryShapeAsync(
+        HttpClient client,
+        AuthResponse customer,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, OrderHistoryPath);
+        request.Headers.Authorization =
+            new AuthenticationHeaderValue("Bearer", customer.AccessToken);
+        using var response = await client.SendAsync(request, cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var page = await response.Content.ReadFromJsonAsync<
+            PagedResult<OrderSummaryResponse>>(cancellationToken);
+
+        Assert.NotNull(page);
+        Assert.Equal(OrderHistoryCount, page.TotalCount);
+        var items = page.Items.ToArray();
+        Assert.Equal(50, items.Length);
+        Assert.All(items, item => Assert.Equal(1, item.TotalItemQuantity));
+        Assert.All(items, item => Assert.Equal("Paid", item.PaymentStatus));
+    }
+
     private static async Task<string> GetCatalogQueryPlanAsync(
         string connectionString,
         CancellationToken cancellationToken)
@@ -298,6 +496,7 @@ public sealed class SqlServerPerformanceTests
     private static async Task SeedCheckoutCartsAsync(
         IServiceProvider services,
         IReadOnlyList<AuthResponse> customers,
+        int lineCount,
         CancellationToken cancellationToken)
     {
         await using var scope = services.CreateAsyncScope();
@@ -316,28 +515,49 @@ public sealed class SqlServerPerformanceTests
                 .Where(cart => cart.UserId == customer.UserId)
                 .Select(cart => cart.Id)
                 .SingleAsync(cancellationToken);
-            var product = new Product
+
+            for (var lineIndex = 0; lineIndex < lineCount; lineIndex++)
             {
-                Id = Guid.NewGuid(),
-                CategoryId = category.Id,
-                Name = $"Checkout Product {customer.UserId:N}",
-                Price = 125_000m,
-                StockQuantity = 10,
-                Description = "Performance checkout product",
-                CreatedAt = DateTime.UtcNow
-            };
-            context.Products.Add(product);
-            context.CartItems.Add(new CartItem
-            {
-                Id = Guid.NewGuid(),
-                CartId = cartId,
-                ProductId = product.Id,
-                Quantity = 1,
-                UnitPrice = product.Price
-            });
+                var product = new Product
+                {
+                    Id = Guid.NewGuid(),
+                    CategoryId = category.Id,
+                    Name = $"Checkout Product {customer.UserId:N} {lineIndex}",
+                    Price = 125_000m,
+                    StockQuantity = 10,
+                    Description = "Performance checkout product",
+                    CreatedAt = DateTime.UtcNow
+                };
+                context.Products.Add(product);
+                context.CartItems.Add(new CartItem
+                {
+                    Id = Guid.NewGuid(),
+                    CartId = cartId,
+                    ProductId = product.Id,
+                    Quantity = 1,
+                    UnitPrice = product.Price
+                });
+            }
         }
 
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static async Task AssertCheckoutLineCountAsync(
+        IServiceProvider services,
+        Guid userId,
+        int expectedLineCount,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var lineCount = await context.Orders
+            .AsNoTracking()
+            .Where(order => order.UserId == userId)
+            .Select(order => order.OrderDetails.Count)
+            .SingleAsync(cancellationToken);
+
+        Assert.Equal(expectedLineCount, lineCount);
     }
 
     private static async Task<HttpStatusCode> SendCheckoutAsync(
@@ -359,6 +579,51 @@ public sealed class SqlServerPerformanceTests
         request.Headers.Add("Idempotency-Key", $"performance-{Guid.NewGuid():N}");
         using var response = await client.SendAsync(request, cancellationToken);
         return response.StatusCode;
+    }
+
+    private static async Task<Measurement> MeasureGetAsync(
+        HttpClient client,
+        string path,
+        string? accessToken,
+        int warmupCount,
+        int requestCount,
+        int concurrency,
+        CancellationToken cancellationToken)
+    {
+        async Task<HttpStatusCode> SendAsync(
+            int _,
+            CancellationToken requestCancellationToken)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, path);
+            if (accessToken != null)
+            {
+                request.Headers.Authorization =
+                    new AuthenticationHeaderValue("Bearer", accessToken);
+            }
+
+            using var response = await client.SendAsync(
+                request,
+                requestCancellationToken);
+            return response.StatusCode;
+        }
+
+        var warmup = await MeasureAsync(
+            warmupCount,
+            concurrency,
+            SendAsync,
+            cancellationToken);
+        Assert.All(
+            warmup.StatusCodes,
+            status => Assert.Equal(HttpStatusCode.OK, status));
+        var measurement = await MeasureAsync(
+            requestCount,
+            concurrency,
+            SendAsync,
+            cancellationToken);
+        Assert.All(
+            measurement.StatusCodes,
+            status => Assert.Equal(HttpStatusCode.OK, status));
+        return measurement;
     }
 
     private static async Task<Measurement> MeasureAsync(
@@ -431,8 +696,15 @@ public sealed class SqlServerPerformanceTests
     private sealed record PerformanceReport(
         DateTimeOffset MeasuredAt,
         int CatalogProductCount,
+        int ImageHeavyProductCount,
+        int ImagesPerProduct,
+        int OrderHistoryCount,
+        int CheckoutLineCount,
         PerformanceBudgets Budgets,
         PerformanceResult Catalog,
+        PerformanceResult KeywordCatalog,
+        PerformanceResult ImageHeavyCatalog,
+        PerformanceResult OrderHistory,
         PerformanceResult SessionValidation,
         PerformanceResult Checkout);
 
@@ -443,6 +715,9 @@ public sealed class SqlServerPerformanceTests
 
     private sealed record PerformanceBudgets(
         double CatalogP95Milliseconds,
+        double KeywordCatalogP95Milliseconds,
+        double ImageHeavyCatalogP95Milliseconds,
+        double OrderHistoryP95Milliseconds,
         double SessionP95Milliseconds,
         double CheckoutP95Milliseconds,
         double SessionMinimumThroughput,
@@ -451,6 +726,9 @@ public sealed class SqlServerPerformanceTests
         public static PerformanceBudgets FromEnvironment()
             => new(
                 ReadPositiveDouble("PERFORMANCE_CATALOG_P95_MS", 500),
+                ReadPositiveDouble("PERFORMANCE_KEYWORD_CATALOG_P95_MS", 750),
+                ReadPositiveDouble("PERFORMANCE_IMAGE_HEAVY_CATALOG_P95_MS", 750),
+                ReadPositiveDouble("PERFORMANCE_ORDER_HISTORY_P95_MS", 750),
                 ReadPositiveDouble("PERFORMANCE_SESSION_P95_MS", 500),
                 ReadPositiveDouble("PERFORMANCE_CHECKOUT_P95_MS", 2_000),
                 ReadPositiveDouble("PERFORMANCE_SESSION_MIN_RPS", 20),

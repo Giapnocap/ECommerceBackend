@@ -1,4 +1,5 @@
 using ECommerceBackend.Application;
+using ECommerceBackend.API.Extensions;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Services;
@@ -9,14 +10,55 @@ using ECommerceBackend.Infrastructure.Maintenance;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Payments;
+using ECommerceBackend.Infrastructure.Security;
+using ECommerceBackend.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.Tests;
 
 public sealed class DependencyRegistrationTests
 {
+    [Fact]
+    public async Task ApiHealthChecks_ApplyConfiguredTimeoutToReadinessDependencies()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["HealthChecks:DependencyTimeoutSeconds"] = "7"
+            })
+            .Build();
+        var services = new ServiceCollection();
+
+        services.AddECommerceHealthChecks(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var registrations = provider
+            .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
+            .Value
+            .Registrations;
+        var selfRegistration = Assert.Single(
+            registrations,
+            registration => registration.Name == "self");
+        var selfResult = await selfRegistration
+            .Factory(provider)
+            .CheckHealthAsync(new HealthCheckContext());
+        var readinessRegistrations = registrations
+            .Where(registration => registration.Tags.Contains("ready"))
+            .ToArray();
+
+        Assert.Equal("Ứng dụng đang hoạt động.", selfResult.Description);
+        Assert.Equal(5, readinessRegistrations.Length);
+        Assert.All(
+            readinessRegistrations,
+            registration => Assert.Equal(
+                TimeSpan.FromSeconds(7),
+                registration.Timeout));
+    }
+
     [Fact]
     public void ApplicationModule_RegistersFeatureServicesWithExpectedLifetimes()
     {
@@ -95,6 +137,21 @@ public sealed class DependencyRegistrationTests
         AssertRegistration<IPaymentProviderResolver, PaymentProviderResolver>(
             services,
             ServiceLifetime.Singleton);
+        AssertRegistration<IPasswordHasher, BCryptPasswordHasher>(
+            services,
+            ServiceLifetime.Singleton);
+        AssertRegistration<IAccessTokenGenerator, JwtAccessTokenGenerator>(
+            services,
+            ServiceLifetime.Singleton);
+        AssertRegistration<IProductImageStorage, LocalProductImageStorage>(
+            services,
+            ServiceLifetime.Singleton);
+        var storageHealthProbe = Assert.Single(
+            services,
+            descriptor => descriptor.ServiceType
+                == typeof(IProductImageStorageHealthProbe));
+        Assert.Equal(ServiceLifetime.Singleton, storageHealthProbe.Lifetime);
+        Assert.NotNull(storageHealthProbe.ImplementationFactory);
 
         var paymentProviders = services
             .Where(descriptor => descriptor.ServiceType == typeof(IPaymentProvider))

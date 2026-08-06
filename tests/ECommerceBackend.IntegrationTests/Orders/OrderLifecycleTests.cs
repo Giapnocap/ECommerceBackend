@@ -54,6 +54,8 @@ public sealed class OrderLifecycleTests
                 $"pending-limit-{index}");
 
             Assert.Equal(Now.UtcDateTime.AddMinutes(30), order.ExpiresAt);
+            Assert.Equal(fixture.User.FullName, order.RecipientName);
+            Assert.Null(order.RecipientPhone);
             if (index == 3)
                 thirdOrderId = order.Id;
         }
@@ -71,6 +73,52 @@ public sealed class OrderLifecycleTests
         Assert.Equal("pending_order_limit_reached", exception.Code);
         Assert.Equal(3, await context.Orders.CountAsync(order => order.Status == OrderStatus.Pending));
         Assert.Single(await context.CartItems.ToListAsync());
+    }
+
+    [Fact]
+    public async Task PlaceOrder_SnapshotsExplicitRecipientContact()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedCheckoutAsync(context, stock: 2);
+        fixture.User.Phone = "0901111111";
+        await context.SaveChangesAsync();
+        await AddCartItemAsync(context, fixture.Cart.Id, fixture.Product.Id);
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now));
+        var request = new PlaceOrderRequest
+        {
+            ShippingAddress = "1 Snapshot Street",
+            RecipientName = "  Delivery Recipient  ",
+            RecipientPhone = "  +84901234567  ",
+            PaymentMethod = PaymentMethod.CashOnDelivery
+        };
+
+        var placed = await service.PlaceOrderAsync(
+            fixture.User.Id,
+            request,
+            "recipient-snapshot");
+        fixture.User.UpdateProfile("Changed Profile", "0902222222");
+        await context.SaveChangesAsync();
+        var reloaded = await service.GetByIdAsync(
+            placed.Id,
+            fixture.User.Id,
+            canProcessOrders: false);
+
+        Assert.Equal("Delivery Recipient", reloaded.RecipientName);
+        Assert.Equal("+84901234567", reloaded.RecipientPhone);
+        var conflict = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.PlaceOrderAsync(
+                fixture.User.Id,
+                new PlaceOrderRequest
+                {
+                    ShippingAddress = request.ShippingAddress,
+                    RecipientName = "Another Recipient",
+                    RecipientPhone = request.RecipientPhone,
+                    PaymentMethod = request.PaymentMethod
+                },
+                "recipient-snapshot"));
+        Assert.Equal("conflict", conflict.Code);
     }
 
     [Fact]
@@ -185,6 +233,77 @@ public sealed class OrderLifecycleTests
     }
 
     [Fact]
+    public async Task OversizedLegacyCart_RejectsQuoteAndCheckoutWithoutSideEffects()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedCheckoutAsync(context, stock: 2);
+        await AddCartItemAsync(
+            context,
+            fixture.Cart.Id,
+            fixture.Product.Id);
+        var extraProducts = Enumerable.Range(0, Cart.MaximumLineItems)
+            .Select(index => Product.Create(
+                Guid.NewGuid(),
+                fixture.Product.CategoryId,
+                $"Legacy Cart Product {index}",
+                100m,
+                2,
+                "Oversized legacy cart test",
+                Now.UtcDateTime))
+            .ToArray();
+        context.Products.AddRange(extraProducts);
+        context.CartItems.AddRange(extraProducts.Select(product => new CartItem
+        {
+            Id = Guid.NewGuid(),
+            CartId = fixture.Cart.Id,
+            ProductId = product.Id,
+            Quantity = 1,
+            UnitPrice = product.Price
+        }));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now));
+
+        var quoteException = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.GetQuoteAsync(
+                fixture.User.Id,
+                new OrderQuoteRequest()));
+        var checkoutException = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.PlaceOrderAsync(
+                fixture.User.Id,
+                CreateRequest(),
+                "oversized-legacy-cart"));
+
+        Assert.Equal("cart_line_item_limit_exceeded", quoteException.Code);
+        Assert.Equal("cart_line_item_limit_exceeded", checkoutException.Code);
+        Assert.Equal(
+            Cart.MaximumLineItems + 1,
+            await context.CartItems.AsNoTracking().CountAsync());
+        Assert.Empty(await context.Orders.AsNoTracking().ToListAsync());
+        Assert.Empty(await context.Payments.AsNoTracking().ToListAsync());
+        Assert.Empty(await context.InventoryTransactions.AsNoTracking().ToListAsync());
+
+        var cartService = TestServiceFactory.CreateCartService(context);
+        var oversizedCart = await cartService.GetCartAsync(fixture.User.Id);
+        Assert.Equal(
+            Cart.MaximumLineItems + 1,
+            oversizedCart.Items.Count());
+        await cartService.RemoveItemAsync(
+            fixture.User.Id,
+            oversizedCart.Items.First().Id);
+
+        var recoveredQuote = await service.GetQuoteAsync(
+            fixture.User.Id,
+            new OrderQuoteRequest());
+        Assert.True(recoveredQuote.TotalAmount > 0);
+        Assert.Equal(
+            Cart.MaximumLineItems,
+            await context.CartItems.AsNoTracking().CountAsync());
+    }
+
+    [Fact]
     public async Task GetAllOrdersAsync_FiltersByCustomerAndPaginatesNewestFirst()
     {
         await using var context = TestAppDbContext.Create();
@@ -215,6 +334,67 @@ public sealed class OrderLifecycleTests
         Assert.Equal(3, result.TotalCount);
         Assert.Equal(3, result.TotalPages);
         Assert.Equal(middle.Id, Assert.Single(result.Items).Id);
+    }
+
+    [Fact]
+    public async Task OrderSummaries_ProjectListFieldsWithoutLoadingDetailGraphs()
+    {
+        await using var context = TestAppDbContext.Create();
+        var customer = ListedUser("summary_customer");
+        var otherCustomer = ListedUser("summary_other");
+        var order = ListedOrder(
+            customer.Id,
+            "SUMMARY-001",
+            Now.UtcDateTime);
+        order.SetRecipient("Summary Customer", "0901234567");
+        order.OrderDetails.Add(new OrderDetail
+        {
+            Id = Guid.NewGuid(),
+            OrderId = order.Id,
+            ProductId = Guid.NewGuid(),
+            ProductNameSnapshot = "Summary item",
+            Quantity = 3,
+            UnitPrice = 100m
+        });
+        order.Payment = new Payment
+        {
+            Id = Guid.NewGuid(),
+            OrderId = order.Id,
+            Method = PaymentMethod.CashOnDelivery,
+            Amount = order.TotalAmount,
+            CreatedAt = Now.UtcDateTime
+        };
+        context.Users.AddRange(customer, otherCustomer);
+        context.Orders.AddRange(
+            order,
+            ListedOrder(otherCustomer.Id, "SUMMARY-OTHER", Now.UtcDateTime.AddMinutes(1)));
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now));
+
+        var mine = await service.GetMyOrderSummariesAsync(
+            customer.Id,
+            page: 1,
+            pageSize: 10);
+        var staff = await service.GetOrderSummariesAsync(new OrderQueryParams
+        {
+            UserId = customer.Id,
+            Status = OrderStatus.Pending,
+            Page = 1,
+            PageSize = 10
+        });
+
+        var summary = Assert.Single(mine.Items);
+        Assert.Equal(order.Id, summary.Id);
+        Assert.Equal(3, summary.TotalItemQuantity);
+        Assert.Equal(PaymentMethod.CashOnDelivery.ToString(), summary.PaymentMethod);
+        Assert.Equal(PaymentStatus.Pending.ToString(), summary.PaymentStatus);
+        Assert.Equal(order.Id, Assert.Single(staff.Items).Id);
+        Assert.Null(typeof(OrderSummaryResponse).GetProperty("OrderDetails"));
+        Assert.Null(typeof(OrderSummaryResponse).GetProperty("StatusHistory"));
+        Assert.Empty(context.ChangeTracker.Entries());
     }
 
     private static Order CreateOrderEntity()
