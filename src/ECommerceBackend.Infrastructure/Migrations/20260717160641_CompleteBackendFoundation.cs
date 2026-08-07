@@ -334,7 +334,8 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 SET [PasswordHash] = '!BOOTSTRAP_REQUIRED!',
                     [TokenVersion] = [TokenVersion] + 1
                 WHERE [Id] = '99999999-9999-9999-9999-999999999999'
-                  AND [PasswordHash] = '!BOOTSTRAP_REQUIRED!';
+                  AND HASHBYTES('SHA2_256', CONVERT(varchar(200), [PasswordHash]))
+                      = 0x2C9E5FBFC4F3D30630E891ADDA3E081344A71DF5A424506DF6327037B087110B;
 
                 UPDATE [RefreshTokens]
                 SET [FamilyId] = NEWID()

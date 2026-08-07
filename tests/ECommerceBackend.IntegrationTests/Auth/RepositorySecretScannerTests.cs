@@ -49,6 +49,18 @@ public sealed class RepositorySecretScannerTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Scanner_RejectsCommittedBCryptHash()
+    {
+        var bcryptHash = string.Concat("$2", "b$12$", new string('A', 53));
+        var result = await RunScannerAsync(
+            $"PasswordHash = \"{bcryptHash}\"");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("[BCryptHash]", result.Output, StringComparison.Ordinal);
+        Assert.Contains("client.http:1", result.Output, StringComparison.Ordinal);
+    }
+
     private static async Task<ProcessResult> RunScannerAsync(string httpContent)
     {
         var repositoryRoot = FindRepositoryRoot();

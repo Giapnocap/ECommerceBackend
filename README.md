@@ -1,9 +1,41 @@
 # ECommerce Backend
 
-REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NET Core 8 và SQL Server. Dự án tập trung vào tính nhất quán dữ liệu, phân quyền, xử lý đồng thời và khả năng vận hành của các luồng backend thực tế.
+![.NET 8](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white)
+![ASP.NET Core](https://img.shields.io/badge/ASP.NET_Core-Web_API-512BD4)
+![Entity Framework Core](https://img.shields.io/badge/EF_Core-8.0-512BD4)
+![SQL Server](https://img.shields.io/badge/SQL_Server-2022-CC2927?logo=microsoftsqlserver&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-xUnit-5E2B97)
 
-Phạm vi repository là backend và database. Frontend, container và hạ tầng cloud không thuộc phạm
-vi triển khai để giữ trọng tâm vào API, nghiệp vụ, persistence và độ tin cậy dữ liệu.
+REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NET Core 8 và SQL Server. Dự án tập trung
+vào tính nhất quán dữ liệu, phân quyền, xử lý đồng thời và khả năng vận hành của các luồng backend
+thực tế. Phạm vi repository là backend và database; frontend, container và hạ tầng cloud không thuộc
+phạm vi triển khai.
+
+## Mục Lục
+
+- [Điểm kỹ thuật nổi bật](#điểm-kỹ-thuật-nổi-bật)
+- [Công nghệ](#công-nghệ)
+- [Chức năng chính](#chức-năng-chính)
+- [Kiến trúc](#kiến-trúc)
+- [Phân quyền](#phân-quyền)
+- [Phiên bản API](#phiên-bản-api)
+- [Bằng chứng chất lượng](#bằng-chứng-chất-lượng)
+- [Chạy local](#chạy-local)
+- [Kiểm thử API](#kiểm-thử-api)
+- [Chạy test](#chạy-test)
+- [Đóng gói release](#đóng-gói-release)
+- [Bảo mật cấu hình](#bảo-mật-cấu-hình)
+
+## Điểm Kỹ Thuật Nổi Bật
+
+- Checkout khóa cart và product theo thứ tự ổn định trong một transaction.
+- `Idempotency-Key` ngăn tạo trùng order khi client retry cùng yêu cầu.
+- Row version, unique constraints và SQL locks bảo vệ các luồng có race condition.
+- Order lưu snapshot người nhận; order detail lưu snapshot tên và giá để bảo toàn lịch sử.
+- Payment webhook xác thực HMAC, event ID và payload trước khi thay đổi trạng thái.
+- Transactional outbox ghi cùng transaction với business data, có retry, dead-letter và redrive.
+- Mọi thay đổi tồn kho đều sinh inventory ledger entry kèm số dư sau giao dịch.
+- Correlation ID liên kết `ProblemDetails`, request log và audit event.
 
 ## Công Nghệ
 
@@ -33,14 +65,19 @@ vi triển khai để giữ trọng tâm vào API, nghiệp vụ, persistence v�
 
 ## Kiến Trúc
 
-```text
-API request
-  -> Middleware / Authorization / Validation
-  -> Controller
-  -> Application Service
-  -> Domain Entity / Policy
-  -> Repository / IUnitOfWork / External Adapter
-  -> SQL Server / File Storage
+```mermaid
+flowchart LR
+    Client[HTTP Client] --> Pipeline[Middleware, Auth, Validation]
+    Pipeline --> Controller[API Controllers]
+    Controller --> Application[Application Features]
+    Application --> Domain[Domain Entities and Policies]
+    Application --> Contracts[Repository and Unit of Work Contracts]
+    Infrastructure[Infrastructure] -. implements .-> Contracts
+    Infrastructure --> Database[(SQL Server)]
+    Infrastructure --> Storage[File Storage]
+    Infrastructure --> Notifications[SMTP and External Adapters]
+    API[API Composition Root] -. registers .-> Application
+    API -. registers .-> Infrastructure
 ```
 
 ```text
@@ -95,6 +132,32 @@ việc tổ chức lại thư mục không làm thay đổi API hoặc dependenc
 application service. Repository là các contract theo feature, không sử dụng generic repository và
 không expose `DbSet` hoặc `IQueryable` qua tầng Application.
 
+Luồng checkout quan trọng nhất:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Customer Client
+    participant API as OrderController
+    participant UseCase as OrderCheckoutUseCase
+    participant UoW as IUnitOfWork
+    participant Repositories as Repositories
+    participant DB as SQL Server
+
+    Client->>API: POST /api/v1/orders + Idempotency-Key
+    API->>UseCase: PlaceOrderAsync(userId, request, key)
+    UseCase->>Repositories: Tìm order theo idempotency key
+    UseCase->>UoW: Begin transaction
+    UseCase->>Repositories: Khóa cart, product và promotion
+    Repositories->>DB: Đọc dữ liệu với database locks
+    UseCase->>UseCase: Kiểm tra tồn kho, giá và business rules
+    UseCase->>Repositories: Ghi order, payment, history, ledger và outbox
+    Repositories->>DB: SaveChanges
+    UseCase->>UoW: Commit transaction
+    UseCase-->>API: OrderResponse
+    API-->>Client: 201 Created
+```
+
 Tài liệu thiết kế:
 
 - [Kiến trúc và business invariants](docs/ARCHITECTURE.md)
@@ -133,6 +196,25 @@ Các endpoint quản trị sử dụng permission policies. Riêng operations re
 | Coverage | CI chặn khi line coverage dưới 80% hoặc branch coverage dưới 60% |
 | Hiệu năng | Budget SQL Server cho catalog, dữ liệu nhiều ảnh, lịch sử đơn, session và checkout 50 dòng |
 | Release | ZIP có manifest, SHA-256, migration artifact và smoke test health endpoint |
+
+Baseline backend được xác minh local ngày `07/08/2026`:
+
+| Kiểm tra | Kết quả |
+|---|---:|
+| Release build | Đạt, 0 lỗi và 0 cảnh báo |
+| Unit tests | 224/224 đạt |
+| API/EF Core integration tests | 271/271 đạt |
+| SQL Server integration/recovery tests | 21/21 đạt |
+| SQL Server performance test | 1/1 đạt |
+| Line coverage | 83,36% |
+| Branch coverage | 66,91% |
+| EF Core model/migration drift | Không phát hiện |
+| Secret scan và NuGet vulnerability audit | Đạt |
+| Release checksum và startup smoke test | Đạt |
+
+Các số liệu trên là baseline kiểm thử local, không phải cam kết hiệu năng production. Workflow
+[`Backend CI`](.github/workflows/ci.yml) tự động kiểm tra lại build, format, migration, coverage và
+SQL Server integration tests sau khi repository được đẩy lên GitHub.
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
 [Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng
@@ -230,6 +312,29 @@ Các request theo đúng thứ tự này có trong
 - [ECommerceBackend.http](src/ECommerceBackend/ECommerceBackend.http) chứa request mẫu cho auth, catalog, cart và order.
 - API error sử dụng `application/problem+json`, có `code` và `traceId` ổn định.
 
+Ví dụ đặt hàng sau khi Customer đã đăng nhập và có sản phẩm trong giỏ:
+
+```http
+POST http://localhost:5171/api/v1/orders
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: checkout-customer-001
+Content-Type: application/json
+
+{
+  "shippingAddress": "123 Nguyễn Trãi, Thanh Xuân, Hà Nội",
+  "recipientName": "Nguyễn Văn A",
+  "recipientPhone": "0901234567",
+  "note": "Giao hàng trong giờ hành chính",
+  "paymentMethod": 0,
+  "shippingMethod": 0,
+  "promotionCode": "WELCOME10"
+}
+```
+
+API trả `201 Created` cùng `OrderResponse`. Client thực tế nên gọi `/api/v1/orders/quote` trước và
+gửi `expectedTotalAmount` bằng `totalAmount` vừa nhận để phát hiện việc giá thay đổi giữa lúc báo giá
+và checkout. Gửi lại cùng `Idempotency-Key` và cùng nội dung sẽ nhận lại order đã tạo thay vì ghi trùng.
+
 ## Chạy Test
 
 Unit tests thuần Domain/Application:
@@ -322,18 +427,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\VerifyReleasePacka
 
 Workflow `Backend Release` có thể chạy thủ công để kiểm tra trước, hoặc tự chạy khi push tag dạng
 `v*`; package đã xác minh được lưu dưới dạng GitHub Actions artifact.
-
-## Điểm Kỹ Thuật Nổi Bật
-
-- Checkout khóa cart và product theo thứ tự ổn định trong một transaction.
-- Idempotency ngăn tạo trùng order khi client retry.
-- Row version, unique constraints và SQL locks bảo vệ race condition.
-- Order lưu snapshot người nhận; order detail lưu snapshot tên và giá để giữ lịch sử chính xác.
-- Payment webhook xác thực chữ ký, event ID và payload trước khi thay đổi trạng thái.
-- Outbox ghi cùng transaction với business data, xử lý retry/dead-letter ở background và giữ
-  nguyên `Message-ID` qua các lần gửi lại.
-- Mọi thay đổi tồn kho đều sinh ledger entry có balance sau giao dịch.
-- Correlation ID liên kết ProblemDetails, request log và audit event.
 
 ## Bảo Mật Cấu Hình
 

@@ -6,6 +6,9 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $allowedFixturePaths = @(
     'scripts/TestRepositorySecrets.ps1'
 )
+$allowedBCryptFixturePaths = @(
+    'scripts/SeedDemoData.sql'
+)
 $allowedPrefixes = @(
     'tests/ECommerceBackend.UnitTests/',
     'tests/ECommerceBackend.IntegrationTests/'
@@ -18,6 +21,7 @@ $patterns = [ordered]@{
     SlackToken = '\bxox[baprs]-[A-Za-z0-9-]{20,}\b'
     StripeLiveKey = '\bsk_live_[A-Za-z0-9]{20,}\b'
     JwtToken = '\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b'
+    BCryptHash = '\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}'
     JsonCredential = '(?i)"(?:Password|Secret|ApiKey|AccessToken|PrivateKey|Key)"[ \t]*:[ \t]*"(?<value>[^"]+)"'
     HttpCredential = '(?im)^[ \t]*@[A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API[_-]?KEY|PRIVATE[_-]?KEY|JWT[_-]?KEY)[A-Z0-9_]*[ \t]*=[ \t]*["'']?(?<value>[^"''#\r\n]+)'
     NamedCredential = '(?im)^[ \t]*(?:[A-Z0-9_]*(?:PASSWORD|SECRET|API_KEY|ACCESS_TOKEN|PRIVATE_KEY|JWT_KEY)[A-Z0-9_]*)[ \t]*:[ \t]*["'']?(?<value>[^"''#\r\n]+)'
@@ -57,6 +61,11 @@ foreach ($relativePath in $trackedFiles) {
     }
 
     foreach ($pattern in $patterns.GetEnumerator()) {
+        if ($pattern.Key -eq 'BCryptHash' -and
+            $normalizedPath -in $allowedBCryptFixturePaths) {
+            continue
+        }
+
         foreach ($match in [regex]::Matches($content, $pattern.Value)) {
             $value = if ($match.Groups['value'].Success) {
                 $match.Groups['value'].Value
