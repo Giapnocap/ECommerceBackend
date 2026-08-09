@@ -10,9 +10,9 @@ namespace ECommerceBackend.Infrastructure.Storage
     {
         private const string UploadsDirectory = "Uploads";
         private const string ProductImagesDirectory = "products";
+        private const string ProductImagesRequestPath = "/uploads/products/";
         private static readonly byte[] AvailabilityProbePayload = [0];
 
-        private readonly string _contentRootPath;
         private readonly string _uploadsRootPath;
         private readonly string _productImagesPath;
         private readonly ILogger<LocalProductImageStorage> _logger;
@@ -21,9 +21,8 @@ namespace ECommerceBackend.Infrastructure.Storage
             IWebHostEnvironment environment,
             ILogger<LocalProductImageStorage> logger)
         {
-            _contentRootPath = environment.ContentRootPath;
             _uploadsRootPath = Path.GetFullPath(
-                Path.Combine(_contentRootPath, UploadsDirectory));
+                Path.Combine(environment.ContentRootPath, UploadsDirectory));
             _productImagesPath = Path.Combine(
                 _uploadsRootPath,
                 ProductImagesDirectory);
@@ -53,15 +52,9 @@ namespace ECommerceBackend.Infrastructure.Storage
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var relativePath = imageUrl
-                .TrimStart('/')
-                .Replace('/', Path.DirectorySeparatorChar);
-            var fullPath = Path.GetFullPath(
-                Path.Combine(_contentRootPath, relativePath));
-            var uploadsPrefix = _uploadsRootPath.TrimEnd(Path.DirectorySeparatorChar)
-                + Path.DirectorySeparatorChar;
-
-            if (!fullPath.StartsWith(uploadsPrefix, StringComparison.OrdinalIgnoreCase))
+            if (!imageUrl.StartsWith(
+                    ProductImagesRequestPath,
+                    StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning(
                     "Skipped deleting unsafe upload path {ImageUrl}.",
@@ -69,7 +62,16 @@ namespace ECommerceBackend.Infrastructure.Storage
                 return Task.FromResult(false);
             }
 
-            File.Delete(fullPath);
+            var fileName = imageUrl[ProductImagesRequestPath.Length..];
+            if (!IsSafeFileName(fileName))
+            {
+                _logger.LogWarning(
+                    "Skipped deleting unsafe upload path {ImageUrl}.",
+                    imageUrl);
+                return Task.FromResult(false);
+            }
+
+            File.Delete(ResolveProductImagePath(fileName));
             return Task.FromResult(true);
         }
 
@@ -126,15 +128,21 @@ namespace ECommerceBackend.Infrastructure.Storage
 
         private string ResolveProductImagePath(string fileName)
         {
-            if (!string.Equals(
-                Path.GetFileName(fileName),
-                fileName,
-                StringComparison.Ordinal))
+            if (!IsSafeFileName(fileName))
             {
                 throw new InvalidOperationException("Product image file name is invalid.");
             }
 
             return Path.Combine(_productImagesPath, fileName);
         }
+
+        private static bool IsSafeFileName(string fileName)
+            => !string.IsNullOrWhiteSpace(fileName)
+                && !fileName.Contains('/')
+                && !fileName.Contains('\\')
+                && string.Equals(
+                    Path.GetFileName(fileName),
+                    fileName,
+                    StringComparison.Ordinal);
     }
 }
