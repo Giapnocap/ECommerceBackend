@@ -5,6 +5,7 @@
 ![Entity Framework Core](https://img.shields.io/badge/EF_Core-8.0-512BD4)
 ![SQL Server](https://img.shields.io/badge/SQL_Server-2022-CC2927?logo=microsoftsqlserver&logoColor=white)
 ![Tests](https://img.shields.io/badge/tests-xUnit-5E2B97)
+[![Backend CI](https://github.com/Giapnocap/ECommerceBackend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Giapnocap/ECommerceBackend/actions/workflows/ci.yml)
 
 REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NET Core 8 và SQL Server. Dự án tập trung
 vào tính nhất quán dữ liệu, phân quyền, xử lý đồng thời và khả năng vận hành của các luồng backend
@@ -227,7 +228,7 @@ Các endpoint quản trị sử dụng permission policies. Riêng operations re
 | Hiệu năng | Budget SQL Server cho catalog, dữ liệu nhiều ảnh, lịch sử đơn, session và checkout 50 dòng |
 | Release | ZIP có manifest, SHA-256, migration artifact và smoke test health endpoint |
 
-Baseline backend được xác minh local ngày `07/08/2026`:
+Baseline backend được xác minh local và trên CI đến ngày `09/08/2026`:
 
 | Kiểm tra | Kết quả |
 |---|---:|
@@ -241,11 +242,12 @@ Baseline backend được xác minh local ngày `07/08/2026`:
 | EF Core model/migration drift | Không phát hiện |
 | Secret scan và NuGet vulnerability audit | Đạt |
 | Release checksum và startup smoke test | Đạt |
-| Docker build/Compose smoke | Chưa chạy local; CI sẽ kiểm tra khi push |
+| Docker build/Compose smoke | Đạt local và CI; SQL Server healthy, migration exit 0, live/readiness HTTP 200 |
 
-Các số liệu trên là baseline kiểm thử local, không phải cam kết hiệu năng production. Workflow
-[`Backend CI`](.github/workflows/ci.yml) tự động kiểm tra lại Docker Compose, build, format, migration,
-coverage và SQL Server integration tests sau khi repository được đẩy lên GitHub.
+Các số liệu trên là baseline kiểm thử local/CI, không phải cam kết hiệu năng production. Commit code
+`0ae568f` đã đạt cả ba job trong [GitHub Actions run 31299357392](https://github.com/Giapnocap/ECommerceBackend/actions/runs/31299357392):
+Docker Compose smoke, build/format/migration/coverage/release package và SQL Server integration/recovery.
+Workflow [`Backend CI`](.github/workflows/ci.yml) tiếp tục kiểm tra lại các gate này sau mỗi lần push.
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
 [Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng

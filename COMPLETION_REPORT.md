@@ -1,10 +1,9 @@
 # Báo Cáo Hoàn Thiện Backend
 
-Ngày xác minh local: `07/08/2026`
+Ngày xác minh cuối: `09/08/2026`
 
-Trạng thái: toàn bộ gate có thể chạy trên máy hiện tại đã đạt. Hai gate bên ngoài còn chờ là Docker
-Compose chạy thật và GitHub Actions của commit mới, vì máy không có Docker CLI và thay đổi chưa được
-push. Báo cáo không coi hai gate này là đã đạt.
+Trạng thái: toàn bộ gate trong phạm vi repository đã đạt. Docker Compose đã được build/up thật trên
+máy local; commit code `0ae568f` đã đạt cả ba job của Backend CI trên GitHub Actions.
 
 ## 1. Root Cause Analysis
 
@@ -78,8 +77,19 @@ docker compose config --quiet
 docker compose up --build
 ```
 
-Trạng thái xác minh: cấu hình và test tĩnh đạt; chưa build/up thật trên máy này do không có Docker
-CLI. Workflow CI có job riêng để build, chờ `/health/ready`, thu log và dọn volume.
+Trạng thái xác minh local ngày `09/08/2026`:
+
+```text
+docker compose up --build --detach -> thành công
+sqlserver                         -> running, healthy
+migrate                           -> exited, exit code 0
+GET /health/live                  -> HTTP 200, Healthy
+GET /health/ready                 -> HTTP 200, Healthy
+```
+
+Kết quả này xác nhận image API/migration build được, SQL Server khởi động, migration one-shot hoàn
+thành và API truy cập được dependency thật. Workflow CI vẫn có job độc lập để lặp lại Docker smoke,
+thu log và dọn volume trên Ubuntu runner.
 
 ## 4. Exception Changes
 
@@ -230,15 +240,13 @@ Workflow gồm ba nhóm độc lập:
 Các action đã được nâng lên major hiện hành: `actions/checkout@v7`, `actions/setup-dotnet@v6` và
 `actions/upload-artifact@v7`, loại bỏ dependency Node.js 20 đã bị cảnh báo trên run cũ.
 
-Trạng thái remote cuối cùng hiện nhìn thấy vẫn là **Failure** ở commit cũ `60c7aa8`; đó không phải
-kết quả của working tree đã sửa. Vì thay đổi chưa được commit/push, GitHub chưa tạo run mới và chưa
-thể xác nhận **CI GREEN**. Cần push commit mới rồi yêu cầu cả ba job đạt trước khi gắn tag/release.
+Commit code `0ae568fbe14d77d403a65de44914d97aa6796d29` đã đạt **CI GREEN** tại
+[GitHub Actions run 31299357392](https://github.com/Giapnocap/ECommerceBackend/actions/runs/31299357392).
+Cả ba job `docker-compose-smoke`, `build-and-unit-tests` và `sql-server-integration-tests` đều hoàn
+thành với kết quả `success`.
 
 ## 9. Remaining Limitations
 
-- Chưa chạy `docker compose build/up` thật trên máy hiện tại vì Docker CLI/Docker Desktop không có.
-- CI của thay đổi mới chưa chạy vì repository local chưa được push; Definition of Done bên ngoài còn
-  thiếu Docker green và toàn bộ required checks green.
 - Thanh toán thực tế chưa tích hợp payment provider; luồng hiện tại tập trung COD và signed webhook
   Development/Testing.
 - Ảnh sản phẩm nằm trên local/volume, chưa phù hợp nhiều API replica nếu không dùng shared/object
@@ -293,6 +301,7 @@ Chủ project cần tự giải thích được ít nhất các câu hỏi sau:
 
 ## Kết Luận
 
-Code, migration, regression, coverage, SQL Server và release gate đã hoàn tất ở local. Repository chỉ
-đạt Definition of Done cuối cùng sau khi Docker Compose smoke và cả ba GitHub Actions job của commit
-mới đều xanh. Không nên mô tả dự án là production-ready tuyệt đối trước hai xác nhận đó.
+Code, migration, regression, coverage, SQL Server, release, Docker Compose local và cả ba GitHub
+Actions job đã đạt Definition of Done của repository. Dự án đủ bằng chứng kỹ thuật để dùng làm
+portfolio backend, nhưng không được mô tả là production-ready tuyệt đối vì các giới hạn payment
+provider, object storage, scale-out, managed secrets và hạ tầng cloud vẫn còn được ghi rõ ở trên.
