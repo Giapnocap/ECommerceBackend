@@ -32,15 +32,16 @@ namespace ECommerceBackend.API.Extensions
             IConfiguration configuration,
             IWebHostEnvironment environment)
         {
-            var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
-                ?? new JwtOptions();
-
-            if (!HasUsableJwtOptions(jwtOptions))
-                throw new InvalidOperationException("Jwt config is invalid.");
-
             services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
                 {
+                    var jwtOptions = configuration
+                        .GetSection(JwtOptions.SectionName)
+                        .Get<JwtOptions>() ?? new JwtOptions();
+
+                    if (!HasUsableJwtOptions(jwtOptions))
+                        throw new InvalidOperationException("Jwt config is invalid.");
+
                     options.RequireHttpsMetadata = !environment.IsDevelopment();
                     options.TokenValidationParameters = new TokenValidationParameters
                     {

@@ -58,6 +58,9 @@ public sealed class DeploymentSecurityTests
     [Fact]
     public void ProductionSecurity_AcceptsExplicitTlsHostAndPersistentKeyPath()
     {
+        var keysPath = Path.Combine(
+            Path.GetTempPath(),
+            "ECommerceBackend.Tests.Keys");
         using var provider = CreateProvider(
             Environments.Production,
             new Dictionary<string, string?>
@@ -65,7 +68,7 @@ public sealed class DeploymentSecurityTests
                 ["ConnectionStrings:Default"] = "Server=sql.example.com;Database=shop;User Id=app;Password=secret;Encrypt=True;TrustServerCertificate=False;",
                 ["AllowedHosts"] = "api.example.com",
                 ["DataProtection:ApplicationName"] = "ECommerceBackend.Tests",
-                ["DataProtection:KeysPath"] = @"C:\keys"
+                ["DataProtection:KeysPath"] = keysPath
             });
 
         var production = provider
@@ -77,7 +80,7 @@ public sealed class DeploymentSecurityTests
 
         Assert.True(production.IsProduction);
         Assert.Equal("api.example.com", production.AllowedHosts);
-        Assert.Equal(@"C:\keys", dataProtection.KeysPath);
+        Assert.Equal(keysPath, dataProtection.KeysPath);
     }
 
     [Fact]

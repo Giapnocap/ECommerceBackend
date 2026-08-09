@@ -82,9 +82,17 @@ public sealed class UploadServiceTests
     }
 
     private static string ToPhysicalPath(string root, string imageUrl)
-        => Path.Combine(
+    {
+        const string requestPath = "/uploads/products/";
+        if (!imageUrl.StartsWith(requestPath, StringComparison.Ordinal))
+            throw new InvalidOperationException($"Unexpected product image URL '{imageUrl}'.");
+
+        return Path.Combine(
             root,
-            imageUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+            "Uploads",
+            "products",
+            imageUrl[requestPath.Length..]);
+    }
 
     private sealed class InMemoryUploadFile : IUploadFile
     {
