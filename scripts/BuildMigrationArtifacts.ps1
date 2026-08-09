@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $migrationsProjectPath = Join-Path $repositoryRoot 'src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj'
-$startupProjectPath = Join-Path $repositoryRoot 'src/ECommerceBackend/ECommerceBackend.csproj'
+$startupProjectPath = Join-Path $repositoryRoot 'src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj'
 $resolvedOutputDirectory = if ([System.IO.Path]::IsPathRooted($OutputDirectory)) {
     [System.IO.Path]::GetFullPath($OutputDirectory)
 }

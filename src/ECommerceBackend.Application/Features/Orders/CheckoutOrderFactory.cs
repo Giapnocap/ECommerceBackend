@@ -28,22 +28,20 @@ namespace ECommerceBackend.Application.Services
             OrderPricingCalculation pricing,
             DateTime occurredAt)
         {
-            var order = new Order
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                OrderNumber = CreateOrderNumber(occurredAt),
-                IdempotencyKey = idempotencyKey,
-                IdempotencyRequestHash = requestHash,
-                PromotionId = pricing.Promotion?.Id,
-                PromotionCodeSnapshot = pricing.Promotion?.Code,
-                ShippingMethod = request.ShippingMethod,
-                Currency = pricing.Currency,
-                OrderDate = occurredAt,
-                ShippingAddress = request.ShippingAddress.Trim(),
-                Note = CheckoutRequestIdentity.NormalizeOptional(
-                    request.Note)
-            };
+            var order = DomainRuleGuard.AsBusiness(() =>
+                Order.Create(
+                    Guid.NewGuid(),
+                    userId,
+                    CreateOrderNumber(occurredAt),
+                    idempotencyKey,
+                    requestHash,
+                    pricing.Promotion?.Id,
+                    pricing.Promotion?.Code,
+                    request.ShippingMethod,
+                    pricing.Currency,
+                    occurredAt,
+                    request.ShippingAddress,
+                    request.Note));
             DomainRuleGuard.AsBusiness(() =>
                 order.SetRecipient(
                     recipient.Name,
@@ -68,17 +66,15 @@ namespace ECommerceBackend.Application.Services
                         order.Id,
                         order.OrderNumber,
                         order.TotalAmount)));
-            var payment = new Payment
-            {
-                Id = Guid.NewGuid(),
-                OrderId = order.Id,
-                Method = request.PaymentMethod,
-                Amount = order.TotalAmount,
-                Provider = initialized.Provider,
-                ProviderTransactionId =
+            var payment = DomainRuleGuard.AsBusiness(() =>
+                Payment.Create(
+                    Guid.NewGuid(),
+                    order.Id,
+                    request.PaymentMethod,
+                    order.TotalAmount,
+                    initialized.Provider,
                     initialized.ProviderTransactionId,
-                CreatedAt = occurredAt
-            };
+                    occurredAt));
             if (initialized.Status != payment.Status)
             {
                 DomainRuleGuard.AsBusiness(() =>

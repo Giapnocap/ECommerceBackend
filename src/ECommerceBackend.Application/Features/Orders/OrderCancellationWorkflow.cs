@@ -52,19 +52,16 @@ namespace ECommerceBackend.Application.Services
                     InventoryPolicy.Release(product, detail.Quantity));
 
                 _inventoryRepository.AddTransaction(
-                    new InventoryTransaction
-                    {
-                        Id = Guid.NewGuid(),
-                        ProductId = product.Id,
-                        OrderId = order.Id,
-                        CreatedByUserId = actorUserId,
-                        Type = transactionType,
-                        QuantityChange = inventoryMutation.QuantityChange,
-                        BalanceAfter = inventoryMutation.BalanceAfter,
-                        Reason =
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryTransaction.Create(
+                            Guid.NewGuid(),
+                            product.Id,
+                            order.Id,
+                            actorUserId,
+                            transactionType,
+                            inventoryMutation,
                             $"Hoàn kho do hủy đơn {order.OrderNumber}",
-                        CreatedAt = occurredAt
-                    });
+                            occurredAt)));
             }
         }
 

@@ -28,13 +28,13 @@ $patterns = [ordered]@{
     ConnectionPassword = '(?i)(?:Password|Pwd)\s*=\s*(?<value>[^;"\s]+)'
 }
 
-$trackedFiles = @(& git -C $repositoryRoot ls-files)
+$repositoryFiles = @(& git -C $repositoryRoot ls-files --cached --others --exclude-standard)
 if ($LASTEXITCODE -ne 0) {
-    throw 'Could not enumerate tracked repository files.'
+    throw 'Could not enumerate repository files.'
 }
 
 $findings = [System.Collections.Generic.List[string]]::new()
-foreach ($relativePath in $trackedFiles) {
+foreach ($relativePath in $repositoryFiles) {
     $normalizedPath = $relativePath.Replace('\', '/')
     $hasAllowedPrefix = $false
     foreach ($prefix in $allowedPrefixes) {
@@ -78,6 +78,7 @@ foreach ($relativePath in $trackedFiles) {
             $isPlaceholder = [string]::IsNullOrWhiteSpace($normalizedValue) `
                 -or $normalizedValue -match '^(?:YOUR_|replace-with|change-me|test-|example|placeholder|generate-a-|set-a-)' `
                 -or $normalizedValue -match '^<.+>$' `
+                -or $normalizedValue -match '^\$\{[A-Za-z_][A-Za-z0-9_]*(?::[-+?][^}]*)?\}$' `
                 -or $normalizedValue -match '^\{\{[A-Za-z0-9_.-]+\}\}$' `
                 -or $normalizedValue -match '\$\{\{[^}]+\}\}'
             if ($isPlaceholder) {
@@ -91,7 +92,7 @@ foreach ($relativePath in $trackedFiles) {
 }
 
 if ($findings.Count -gt 0) {
-    throw "Potential secrets were found in tracked files:`n$($findings -join "`n")"
+    throw "Potential secrets were found in repository files:`n$($findings -join "`n")"
 }
 
-Write-Host "No high-confidence secrets were found in tracked repository files."
+Write-Host "No high-confidence secrets were found in repository files."

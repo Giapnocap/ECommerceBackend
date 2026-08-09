@@ -32,15 +32,14 @@ namespace ECommerceBackend.Application.Services
 
             return new RefreshTokenIssue(
                 rawToken,
-                new RefreshToken
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    FamilyId = familyId,
-                    TokenHash = HashRefreshToken(rawToken),
-                    CreatedAt = occurredAt,
-                    ExpiresAt = expiresAt
-                });
+                DomainRuleGuard.AsBusiness(() =>
+                    RefreshToken.Create(
+                        Guid.NewGuid(),
+                        userId,
+                        familyId,
+                        HashRefreshToken(rawToken),
+                        occurredAt,
+                        expiresAt)));
         }
 
         public AuthResponse BuildResponse(

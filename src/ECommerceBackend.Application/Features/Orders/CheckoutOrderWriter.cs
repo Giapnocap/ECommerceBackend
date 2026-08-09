@@ -65,28 +65,25 @@ namespace ECommerceBackend.Application.Services
                 var mutation = DomainRuleGuard.AsBusiness(() =>
                     InventoryPolicy.Reserve(product, item.Quantity));
                 _orderRepository.AddDetail(
-                    new OrderDetail
-                    {
-                        Id = Guid.NewGuid(),
-                        OrderId = order.Id,
-                        ProductId = item.ProductId,
-                        ProductNameSnapshot = product.Name,
-                        Quantity = item.Quantity,
-                        UnitPrice = product.Price
-                    });
+                    DomainRuleGuard.AsBusiness(() =>
+                        OrderDetail.Create(
+                            Guid.NewGuid(),
+                            order.Id,
+                            item.ProductId,
+                            product.Name,
+                            item.Quantity,
+                            product.Price)));
                 _inventoryRepository.AddTransaction(
-                    new InventoryTransaction
-                    {
-                        Id = Guid.NewGuid(),
-                        ProductId = product.Id,
-                        OrderId = order.Id,
-                        CreatedByUserId = userId,
-                        Type = InventoryTransactionType.OrderPlaced,
-                        QuantityChange = mutation.QuantityChange,
-                        BalanceAfter = mutation.BalanceAfter,
-                        Reason = $"Đặt đơn {order.OrderNumber}",
-                        CreatedAt = occurredAt
-                    });
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryTransaction.Create(
+                            Guid.NewGuid(),
+                            product.Id,
+                            order.Id,
+                            userId,
+                            InventoryTransactionType.OrderPlaced,
+                            mutation,
+                            $"Đặt đơn {order.OrderNumber}",
+                            occurredAt)));
                 DomainRuleGuard.AsBusiness(() =>
                     cart.RemoveItem(item));
                 _cartRepository.RemoveItem(item);

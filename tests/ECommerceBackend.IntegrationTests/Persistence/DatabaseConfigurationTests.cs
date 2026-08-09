@@ -11,6 +11,19 @@ namespace ECommerceBackend.Tests;
 public sealed class DatabaseConfigurationTests
 {
     [Fact]
+    public void DesignTimeFactory_CreatesSqlServerContextWithoutApiHost()
+    {
+        using var context = new AppDbContextDesignTimeFactory()
+            .CreateDbContext([]);
+
+        Assert.Equal(
+            "Microsoft.EntityFrameworkCore.SqlServer",
+            context.Database.ProviderName);
+        Assert.False(string.IsNullOrWhiteSpace(
+            context.Database.GetConnectionString()));
+    }
+
+    [Fact]
     public void DatabaseRegistration_UsesConfiguredCommandTimeout()
     {
         var configuration = new ConfigurationBuilder()

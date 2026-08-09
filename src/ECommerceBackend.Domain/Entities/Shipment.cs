@@ -4,6 +4,10 @@ namespace ECommerceBackend.Domain.Entities
 {
     public sealed class Shipment
     {
+        internal Shipment()
+        {
+        }
+
         public Guid Id { get; private set; }
         public Guid OrderId { get; private set; }
         public string Carrier { get; private set; } = string.Empty;
@@ -11,7 +15,7 @@ namespace ECommerceBackend.Domain.Entities
         public Guid? CreatedByUserId { get; private set; }
         public DateTime ShippedAt { get; private set; }
         public DateTime? DeliveredAt { get; private set; }
-        public byte[] RowVersion { get; set; } = [];
+        public byte[] RowVersion { get; internal set; } = [];
 
         public Order? Order { get; set; }
         public User? CreatedByUser { get; set; }

@@ -44,6 +44,7 @@ namespace ECommerceBackend.API.Errors
                 StatusCodes.Status409Conflict => "Xung đột dữ liệu",
                 StatusCodes.Status413PayloadTooLarge => "Dữ liệu gửi lên quá lớn",
                 StatusCodes.Status415UnsupportedMediaType => "Định dạng dữ liệu không được hỗ trợ",
+                StatusCodes.Status422UnprocessableEntity => "Không thể xử lý nghiệp vụ",
                 StatusCodes.Status429TooManyRequests => "Quá nhiều yêu cầu",
                 StatusCodes.Status500InternalServerError => "Lỗi máy chủ",
                 _ => "Lỗi xử lý yêu cầu"

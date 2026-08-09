@@ -1,8 +1,12 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Tests.Support;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ECommerceBackend.Tests;
 
@@ -79,49 +83,26 @@ public sealed class MigrationArtifactSqlServerTests
 
     [Fact]
     [Trait("Category", "SqlServerIntegration")]
-    public async Task GeneratedRollback_RejectsDestructiveOrderSnapshotData()
+    public async Task OrderRecipientRollback_RejectsDestructiveSnapshotData()
     {
         SqlServerIntegrationTestGate.Require();
-
-        var artifactsDirectory =
-            Environment.GetEnvironmentVariable(
-                ArtifactsDirectoryVariable);
-        Assert.False(
-            string.IsNullOrWhiteSpace(artifactsDirectory),
-            $"{ArtifactsDirectoryVariable} must point to generated migration artifacts.");
-
-        var manifest = await ReadAndVerifyManifestAsync(
-            Path.Combine(
-                artifactsDirectory,
-                "migration-manifest.json"));
-        var forwardScript = await File.ReadAllTextAsync(
-            GetArtifactPath(
-                artifactsDirectory,
-                manifest,
-                "migrate-up.sql"));
-        var rollbackScript = await File.ReadAllTextAsync(
-            GetArtifactPath(
-                artifactsDirectory,
-                manifest,
-                "rollback-last.sql"));
         var databaseName =
             $"ECommerceBackendMigrationArtifact_{Guid.NewGuid():N}";
         var connectionString =
             SqlServerIntegrationTestGate
                 .CreateTestDatabaseConnectionString(databaseName);
-        var databaseCreated = false;
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
 
         try
         {
-            await CreateDatabaseAsync(
-                connectionString,
-                databaseName);
-            databaseCreated = true;
-            await ExecuteScriptAsync(
-                connectionString,
-                forwardScript);
-            await ExecuteScriptAsync(
-                connectionString,
+            await using var context = new AppDbContext(options);
+            var migrator = context.GetService<IMigrator>();
+            await migrator.MigrateAsync();
+            await migrator.MigrateAsync(
+                "20260806114811_AddOrderRecipientSnapshot");
+            await context.Database.ExecuteSqlRawAsync(
                 """
                 DECLARE @UserId uniqueidentifier = NEWID();
                 DECLARE @OrderId uniqueidentifier = NEWID();
@@ -165,24 +146,19 @@ public sealed class MigrationArtifactSqlServerTests
                 """);
 
             var exception = await Assert.ThrowsAsync<SqlException>(
-                () => ExecuteScriptAsync(
-                    connectionString,
-                    rollbackScript));
+                () => migrator.MigrateAsync(
+                    "20260728040145_AddFulfillmentAndReturnWorkflow"));
 
             Assert.Equal(51041, exception.Number);
             Assert.True(
                 await HasMigrationAsync(
                     connectionString,
-                    manifest.LatestMigration));
+                    "20260806114811_AddOrderRecipientSnapshot"));
         }
         finally
         {
-            if (databaseCreated)
-            {
-                await DeleteDatabaseAsync(
-                    connectionString,
-                    databaseName);
-            }
+            await using var cleanupContext = new AppDbContext(options);
+            await cleanupContext.Database.EnsureDeletedAsync();
         }
     }
 

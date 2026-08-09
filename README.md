@@ -8,8 +8,8 @@
 
 REST API cho hệ thống thương mại điện tử, xây dựng bằng ASP.NET Core 8 và SQL Server. Dự án tập trung
 vào tính nhất quán dữ liệu, phân quyền, xử lý đồng thời và khả năng vận hành của các luồng backend
-thực tế. Phạm vi repository là backend và database; frontend, container và hạ tầng cloud không thuộc
-phạm vi triển khai.
+thực tế. Repository tập trung vào backend và database, đồng thời có Docker Compose cho môi trường
+local; frontend và hạ tầng cloud không thuộc phạm vi triển khai.
 
 ## Mục Lục
 
@@ -20,7 +20,8 @@ phạm vi triển khai.
 - [Phân quyền](#phân-quyền)
 - [Phiên bản API](#phiên-bản-api)
 - [Bằng chứng chất lượng](#bằng-chứng-chất-lượng)
-- [Chạy local](#chạy-local)
+- [Quick Start với Docker](#quick-start-với-docker)
+- [Chạy local không Docker](#chạy-local-không-docker)
 - [Kiểm thử API](#kiểm-thử-api)
 - [Chạy test](#chạy-test)
 - [Đóng gói release](#đóng-gói-release)
@@ -45,6 +46,7 @@ phạm vi triển khai.
 - FluentValidation và mapping response tường minh
 - Serilog, ProblemDetails, correlation ID
 - Swagger/OpenAPI
+- Docker multi-stage build và Docker Compose cho môi trường local
 - xUnit unit tests, API/EF Core integration tests và SQL Server integration tests
 
 ## Chức Năng Chính
@@ -132,7 +134,12 @@ việc tổ chức lại thư mục không làm thay đổi API hoặc dependenc
 application service. Repository là các contract theo feature, không sử dụng generic repository và
 không expose `DbSet` hoặc `IQueryable` qua tầng Application.
 
-Luồng checkout quan trọng nhất:
+### Checkout
+
+```text
+Request -> Validation -> Idempotency -> Transaction -> Lock -> Re-check
+        -> Business rules -> Persist order/payment/inventory/outbox -> Commit
+```
 
 ```mermaid
 sequenceDiagram
@@ -158,6 +165,28 @@ sequenceDiagram
     API-->>Client: 201 Created
 ```
 
+### Refresh Token
+
+```text
+Refresh token -> SHA-256 hash -> Transaction -> Lock user/token -> Validate
+              -> Detect reuse -> Revoke family khi cần -> Rotate -> Commit
+```
+
+Raw refresh token chỉ trả cho client; database lưu hash. Mỗi lần refresh hợp lệ thu hồi token cũ,
+tạo token thay thế trong cùng family và giữ nhiều phiên thiết bị độc lập. Reuse một token đã rotate
+sẽ thu hồi các token còn hoạt động trong family đó.
+
+### Transactional Outbox
+
+```text
+Business transaction -> Outbox row -> Commit -> BackgroundService
+                     -> Claim lease -> Dispatch -> Retry/backoff -> Dead-letter/redrive
+```
+
+Outbox row được ghi cùng transaction với dữ liệu nghiệp vụ. Worker không dùng hàng đợi in-memory;
+lease trong database cho phép khởi động lại và nhiều worker cạnh tranh an toàn. Delivery qua SMTP
+là at-least-once nên consumer nhận `Message-ID` xác định để hỗ trợ chống trùng.
+
 Tài liệu thiết kế:
 
 - [Kiến trúc và business invariants](docs/ARCHITECTURE.md)
@@ -165,6 +194,7 @@ Tài liệu thiết kế:
 - [Sequence các luồng quan trọng](docs/SEQUENCES.md)
 - [Hiệu năng và quyết định scale](docs/PERFORMANCE.md)
 - [Giới hạn hệ thống](docs/LIMITATIONS.md)
+- [Báo cáo hoàn thiện và kiểm chứng](COMPLETION_REPORT.md)
 
 ## Phân Quyền
 
@@ -202,31 +232,68 @@ Baseline backend được xác minh local ngày `07/08/2026`:
 | Kiểm tra | Kết quả |
 |---|---:|
 | Release build | Đạt, 0 lỗi và 0 cảnh báo |
-| Unit tests | 224/224 đạt |
-| API/EF Core integration tests | 271/271 đạt |
-| SQL Server integration/recovery tests | 21/21 đạt |
+| Unit tests | 227/227 đạt |
+| API/EF Core integration tests | 278/278 đạt |
+| SQL Server integration/recovery tests | 24/24 đạt |
 | SQL Server performance test | 1/1 đạt |
-| Line coverage | 83,36% |
-| Branch coverage | 66,91% |
+| Line coverage | 83,31% |
+| Branch coverage | 67,04% |
 | EF Core model/migration drift | Không phát hiện |
 | Secret scan và NuGet vulnerability audit | Đạt |
 | Release checksum và startup smoke test | Đạt |
+| Docker build/Compose smoke | Chưa chạy local; CI sẽ kiểm tra khi push |
 
 Các số liệu trên là baseline kiểm thử local, không phải cam kết hiệu năng production. Workflow
-[`Backend CI`](.github/workflows/ci.yml) tự động kiểm tra lại build, format, migration, coverage và
-SQL Server integration tests sau khi repository được đẩy lên GitHub.
+[`Backend CI`](.github/workflows/ci.yml) tự động kiểm tra lại Docker Compose, build, format, migration,
+coverage và SQL Server integration tests sau khi repository được đẩy lên GitHub.
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
 [Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng
 [Giới hạn hệ thống](docs/LIMITATIONS.md); các con số không được trình bày như năng lực production.
 
-## Chạy Local
+## Quick Start Với Docker
+
+Yêu cầu: Docker Desktop hoặc Docker Engine có Docker Compose v2.
+
+Tạo file cấu hình local, sau đó thay hai giá trị `MSSQL_SA_PASSWORD` và `JWT_KEY` bằng secret chỉ
+dùng trên máy cá nhân:
+
+```powershell
+git clone https://github.com/Giapnocap/ECommerceBackend.git
+Set-Location ECommerceBackend
+Copy-Item .env.example .env
+docker compose up --build
+```
+
+```bash
+git clone https://github.com/Giapnocap/ECommerceBackend.git
+cd ECommerceBackend
+cp .env.example .env
+docker compose up --build
+```
+
+Compose khởi động SQL Server 2022, chờ health check, chạy migration bằng container one-shot rồi mới
+khởi động API. Migration không chạy âm thầm trong `Program.cs` và strategy này chỉ dành cho local.
+
+- API: `http://localhost:5171`
+- Swagger: `http://localhost:5171/swagger`
+- Readiness: `http://localhost:5171/health/ready`
+
+Dữ liệu SQL Server, ảnh sản phẩm, data-protection keys và log nằm trong named volumes. Dừng môi
+trường bằng `docker compose down`. Lệnh `docker compose down -v` xóa cả dữ liệu local trong volumes.
+
+Để tạo Admin local lần đầu, điền nhóm `ADMIN_BOOTSTRAP_*` trong `.env`, đặt
+`ADMIN_BOOTSTRAP_ENABLED=true` và khởi động API. Sau khi tài khoản được tạo, đặt lại `false` rồi chạy
+`docker compose up -d --force-recreate api`. Không commit file `.env`.
+
+## Chạy Local Không Docker
 
 Yêu cầu:
 
 - .NET SDK 8.x
 - SQL Server
 - Visual Studio 2022 hoặc .NET CLI
+- EF Core CLI 8.0.20 nếu cần chạy migration
 
 Repository có `global.json` để chọn SDK .NET 8 mới nhất đang cài trên máy.
 
@@ -246,9 +313,12 @@ Khởi tạo và chạy:
 
 ```powershell
 dotnet restore ECommerceBackend.sln
-dotnet ef database update `
+if (-not (Test-Path .\.tools\dotnet-ef.exe)) {
+  dotnet tool install dotnet-ef --tool-path .\.tools --version 8.0.20
+}
+.\.tools\dotnet-ef.exe database update `
   --project src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj `
-  --startup-project src/ECommerceBackend/ECommerceBackend.csproj
+  --startup-project src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj
 dotnet run --project src/ECommerceBackend/ECommerceBackend.csproj
 ```
 
@@ -353,7 +423,12 @@ dotnet test tests/ECommerceBackend.IntegrationTests/ECommerceBackend.Integration
 SQL Server integration tests dùng database riêng:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildMigrationArtifacts.ps1 -OutputDirectory .\MigrationArtifacts
+if (-not (Test-Path .\.tools\dotnet-ef.exe)) {
+  dotnet tool install dotnet-ef --tool-path .\.tools --version 8.0.20
+}
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\BuildMigrationArtifacts.ps1 `
+  -OutputDirectory .\MigrationArtifacts `
+  -DotNetEfPath .\.tools\dotnet-ef.exe
 $env:RUN_SQL_INTEGRATION_TESTS = "1"
 $env:ECOMMERCE_TEST_SQL_CONNECTION = "Server=.;Database=ECommerceBackendIntegration;Trusted_Connection=True;TrustServerCertificate=True;Encrypt=False;"
 $env:ECOMMERCE_MIGRATION_ARTIFACTS_DIRECTORY = (Resolve-Path .\MigrationArtifacts)

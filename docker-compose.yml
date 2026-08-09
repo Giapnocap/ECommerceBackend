@@ -1,0 +1,73 @@
+name: ecommerce-backend
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}"
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${SQLSERVER_PORT:-1433}:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then
+            /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -b -o /dev/null;
+          else
+            /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -b -o /dev/null;
+          fi
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: src/ECommerceBackend/Dockerfile
+      target: migrations
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=ECommerceDB;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=False;TrustServerCertificate=True;"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: src/ECommerceBackend/Dockerfile
+      target: runtime
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Default: "Server=sqlserver,1433;Database=ECommerceDB;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=False;TrustServerCertificate=True;"
+      Jwt__Key: "${JWT_KEY:?Set JWT_KEY in .env}"
+      DataProtection__KeysPath: /app/DataProtectionKeys
+      Cors__AllowedOrigins__0: "${CORS_ALLOWED_ORIGIN:-http://localhost:3000}"
+      AdminBootstrap__Enabled: "${ADMIN_BOOTSTRAP_ENABLED:-false}"
+      AdminBootstrap__UserName: "${ADMIN_BOOTSTRAP_USERNAME:-}"
+      AdminBootstrap__Email: "${ADMIN_BOOTSTRAP_EMAIL:-}"
+      AdminBootstrap__FullName: "${ADMIN_BOOTSTRAP_FULL_NAME:-}"
+      AdminBootstrap__Password: "${ADMIN_BOOTSTRAP_PASSWORD:-}"
+    ports:
+      - "${HOST_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-5171}:8080"
+    volumes:
+      - product-images:/app/Uploads
+      - data-protection-keys:/app/DataProtectionKeys
+      - api-logs:/app/logs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  sqlserver-data:
+  product-images:
+  data-protection-keys:
+  api-logs:

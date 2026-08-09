@@ -5,7 +5,11 @@ namespace ECommerceBackend.Domain.Entities
 {
     public class Product
     {
-        public Guid Id { get; set; }
+        internal Product()
+        {
+        }
+
+        public Guid Id { get; internal set; }
         public Guid CategoryId { get; internal set; }
         public string Name { get; internal set; } = string.Empty;
         public decimal Price { get; internal set; }
@@ -13,7 +17,7 @@ namespace ECommerceBackend.Domain.Entities
         public string Description { get; internal set; } = string.Empty;
         public bool IsDeleted { get; internal set; }
         public DateTime CreatedAt { get; internal set; } = DateTime.UtcNow;
-        public byte[] RowVersion { get; set; } = [];
+        public byte[] RowVersion { get; internal set; } = [];
 
         // Navigation
         public Category? Category { get; set; }

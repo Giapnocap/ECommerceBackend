@@ -12,14 +12,38 @@ env:
   NUGET_AUDIT_MODE: all
 
 jobs:
+  docker-compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - run: docker compose up --build --detach
+      - name: Wait for API readiness
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:5171/health/ready > /dev/null; then
+              exit 0
+            fi
+            sleep 4
+          done
+          exit 1
+      - if: always()
+        run: docker compose logs --no-color
+      - if: always()
+        run: docker compose down --volumes --remove-orphans
+
   build-and-unit-tests:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - shell: pwsh
         run: ./scripts/TestRepositorySecrets.ps1
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
       - run: >-
@@ -34,7 +58,7 @@ jobs:
       - run: >-
           ./.tools/dotnet-ef migrations has-pending-model-changes
           --project src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj
-          --startup-project src/ECommerceBackend/ECommerceBackend.csproj
+          --startup-project src/ECommerceBackend.Infrastructure/ECommerceBackend.Infrastructure.csproj
           --no-build
           --configuration Release
       - shell: pwsh
@@ -78,18 +102,18 @@ jobs:
           ./scripts/VerifyReleasePackage.ps1
           -ReleaseDirectory ./ReleasePackage
           -SmokeTest
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: unit-test-coverage
           path: TestResults/**/coverage.cobertura.xml
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: database-migration-artifacts
           path: MigrationArtifacts/*
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: backend-release-package
           path: |
@@ -121,10 +145,10 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - shell: pwsh
         run: ./scripts/TestRepositorySecrets.ps1
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
       - run: >-

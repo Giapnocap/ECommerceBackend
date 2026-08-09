@@ -9,6 +9,7 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Application.Mappings;
 using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Domain.Policies;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -203,17 +204,19 @@ namespace ECommerceBackend.Application.Services
                 await _productRepository.AddAsync(product, cancellationToken);
                 if (product.StockQuantity != 0)
                 {
-                    _inventoryRepository.AddTransaction(new InventoryTransaction
-                    {
-                        Id = Guid.NewGuid(),
-                        ProductId = product.Id,
-                        CreatedByUserId = actorUserId,
-                        Type = Domain.Enums.InventoryTransactionType.InitialStock,
-                        QuantityChange = product.StockQuantity,
-                        BalanceAfter = product.StockQuantity,
-                        Reason = "Tồn kho ban đầu",
-                        CreatedAt = occurredAt
-                    });
+                    _inventoryRepository.AddTransaction(
+                        DomainRuleGuard.AsBusiness(() =>
+                            InventoryTransaction.Create(
+                                Guid.NewGuid(),
+                                product.Id,
+                                (Guid?)null,
+                                actorUserId,
+                                Domain.Enums.InventoryTransactionType.InitialStock,
+                                new InventoryMutation(
+                                    product.StockQuantity,
+                                    product.StockQuantity),
+                                "Tồn kho ban đầu",
+                                occurredAt)));
                 }
                 _audit.Write(
                     "product.create",
@@ -351,17 +354,17 @@ namespace ECommerceBackend.Application.Services
                         "Tồn kho mục tiêu phải khác tồn kho hiện tại.");
                 }
 
-                _inventoryRepository.AddTransaction(new InventoryTransaction
-                {
-                    Id = Guid.NewGuid(),
-                    ProductId = product.Id,
-                    CreatedByUserId = actorUserId,
-                    Type = Domain.Enums.InventoryTransactionType.ManualAdjustment,
-                    QuantityChange = inventoryMutation.QuantityChange,
-                    BalanceAfter = inventoryMutation.BalanceAfter,
-                    Reason = reason,
-                    CreatedAt = occurredAt
-                });
+                _inventoryRepository.AddTransaction(
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryTransaction.Create(
+                            Guid.NewGuid(),
+                            product.Id,
+                            (Guid?)null,
+                            actorUserId,
+                            Domain.Enums.InventoryTransactionType.ManualAdjustment,
+                            inventoryMutation,
+                            reason,
+                            occurredAt)));
                 _audit.Write(
                     "inventory.adjust",
                     "Product",

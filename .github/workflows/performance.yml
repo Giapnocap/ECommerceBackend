@@ -33,10 +33,10 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - shell: pwsh
         run: ./scripts/TestRepositorySecrets.ps1
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
       - run: dotnet restore ECommerceBackend.sln
@@ -48,7 +48,7 @@ jobs:
           -ResultsDirectory ./PerformanceResults
           -Configuration Release
           -NoBuild
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: backend-performance-results

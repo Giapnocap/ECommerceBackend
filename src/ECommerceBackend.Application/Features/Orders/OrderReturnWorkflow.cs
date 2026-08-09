@@ -61,19 +61,16 @@ namespace ECommerceBackend.Application.Services
                 var mutation = DomainRuleGuard.AsBusiness(() =>
                     InventoryPolicy.Release(product, detail.Quantity));
                 _inventoryRepository.AddTransaction(
-                    new InventoryTransaction
-                    {
-                        Id = Guid.NewGuid(),
-                        ProductId = product.Id,
-                        OrderId = order.Id,
-                        CreatedByUserId = actorUserId,
-                        Type = InventoryTransactionType.OrderReturned,
-                        QuantityChange = mutation.QuantityChange,
-                        BalanceAfter = mutation.BalanceAfter,
-                        Reason =
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryTransaction.Create(
+                            Guid.NewGuid(),
+                            product.Id,
+                            order.Id,
+                            actorUserId,
+                            InventoryTransactionType.OrderReturned,
+                            mutation,
                             $"Nhận hàng hoàn của đơn {order.OrderNumber}",
-                        CreatedAt = occurredAt
-                    });
+                            occurredAt)));
             }
         }
 

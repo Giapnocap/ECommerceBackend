@@ -97,6 +97,33 @@ public sealed class DomainInvariantTests
     }
 
     [Fact]
+    public void OrderDetail_CreateProtectsPurchaseSnapshot()
+    {
+        var detail = OrderDetail.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "  Product snapshot  ",
+            quantity: 2,
+            unitPrice: 125_000m);
+
+        Assert.Equal("Product snapshot", detail.ProductNameSnapshot);
+        Assert.Equal(2, detail.Quantity);
+        Assert.Equal(125_000m, detail.UnitPrice);
+
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            OrderDetail.Create(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                "Product snapshot",
+                quantity: 0,
+                unitPrice: 125_000m));
+
+        Assert.Equal("order_detail_snapshot_invalid", exception.Code);
+    }
+
+    [Fact]
     public void PaymentStatus_PaidThenRefundedPreservesPaidTimestamp()
     {
         var paidAt = new DateTime(2026, 7, 19, 12, 0, 0, DateTimeKind.Utc);
@@ -195,6 +222,23 @@ public sealed class DomainInvariantTests
 
         Assert.Equal(new InventoryMutation(-4, 3), mutation);
         Assert.Equal(3, product.StockQuantity);
+    }
+
+    [Fact]
+    public void InventoryTransaction_RejectsMutationThatDoesNotMatchType()
+    {
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            InventoryTransaction.Create(
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                InventoryTransactionType.OrderPlaced,
+                new InventoryMutation(1, 5),
+                "Invalid reservation",
+                DateTime.UtcNow));
+
+        Assert.Equal("inventory_transaction_invalid", exception.Code);
     }
 
     [Fact]
@@ -325,13 +369,46 @@ public sealed class DomainInvariantTests
     {
         Assert.False(typeof(Order).GetProperty(nameof(Order.Status))!.SetMethod!.IsPublic);
         Assert.False(typeof(Order).GetProperty(nameof(Order.TotalAmount))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Order).GetProperty(nameof(Order.OrderNumber))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Order).GetProperty(nameof(Order.RowVersion))!.SetMethod!.IsPublic);
+        Assert.False(typeof(OrderDetail).GetProperty(nameof(OrderDetail.UnitPrice))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Product).GetProperty(nameof(Product.Id))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Product).GetProperty(nameof(Product.RowVersion))!.SetMethod!.IsPublic);
         Assert.False(typeof(Payment).GetProperty(nameof(Payment.Status))!.SetMethod!.IsPublic);
         Assert.False(typeof(Payment).GetProperty(nameof(Payment.PaidAt))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Payment).GetProperty(nameof(Payment.Amount))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Payment).GetProperty(nameof(Payment.RowVersion))!.SetMethod!.IsPublic);
         Assert.False(typeof(RefreshToken).GetProperty(nameof(RefreshToken.RevokedAt))!.SetMethod!.IsPublic);
+        Assert.False(typeof(RefreshToken).GetProperty(nameof(RefreshToken.TokenHash))!.SetMethod!.IsPublic);
+        Assert.False(typeof(RefreshToken).GetProperty(nameof(RefreshToken.RowVersion))!.SetMethod!.IsPublic);
+        Assert.False(typeof(InventoryTransaction).GetProperty(nameof(InventoryTransaction.QuantityChange))!.SetMethod!.IsPublic);
+        Assert.False(typeof(Shipment).GetProperty(nameof(Shipment.RowVersion))!.SetMethod!.IsPublic);
+        Assert.False(typeof(ReturnRequest).GetProperty(nameof(ReturnRequest.RowVersion))!.SetMethod!.IsPublic);
         Assert.False(typeof(User).GetProperty(nameof(User.TokenVersion))!.SetMethod!.IsPublic);
         Assert.False(typeof(User).GetProperty(nameof(User.FailedLoginCount))!.SetMethod!.IsPublic);
         Assert.False(typeof(User).GetProperty(nameof(User.LockoutEndAt))!.SetMethod!.IsPublic);
         Assert.False(typeof(PasswordResetToken).GetProperty(nameof(PasswordResetToken.ConsumedAt))!.SetMethod!.IsPublic);
         Assert.False(typeof(PasswordResetToken).GetProperty(nameof(PasswordResetToken.RevokedAt))!.SetMethod!.IsPublic);
+    }
+
+    [Fact]
+    public void AggregateParameterlessConstructors_AreNotPublic()
+    {
+        Type[] aggregateTypes =
+        [
+            typeof(Order),
+            typeof(OrderDetail),
+            typeof(Product),
+            typeof(Payment),
+            typeof(RefreshToken),
+            typeof(InventoryTransaction),
+            typeof(Shipment),
+            typeof(ReturnRequest)
+        ];
+
+        Assert.All(
+            aggregateTypes,
+            aggregateType => Assert.Null(
+                aggregateType.GetConstructor(Type.EmptyTypes)));
     }
 }

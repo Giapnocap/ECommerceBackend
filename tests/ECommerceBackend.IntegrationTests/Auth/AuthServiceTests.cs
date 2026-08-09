@@ -172,6 +172,87 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WithExpiredToken_IsRejectedWithoutMutatingSession()
+    {
+        var issuedAt = new DateTimeOffset(2026, 7, 24, 10, 0, 0, TimeSpan.Zero);
+        await using var context = TestAppDbContext.Create();
+        var issuingService = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(issuedAt));
+        var registered = await issuingService.RegisterAsync(new RegisterRequest
+        {
+            UserName = "expired_refresh_customer",
+            Email = "expired_refresh_customer@example.com",
+            Password = "Customer@123",
+            FullName = "Expired Refresh Customer"
+        });
+        var expiredService = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(issuedAt.AddDays(8)));
+
+        var exception = await Assert.ThrowsAsync<ApiException>(() =>
+            expiredService.RefreshAsync(new RefreshTokenRequest
+            {
+                RefreshToken = registered.RefreshToken
+            }));
+
+        Assert.Equal(401, exception.StatusCode);
+        Assert.Equal("unauthorized", exception.Code);
+        var token = await context.RefreshTokens.SingleAsync(candidate =>
+            candidate.UserId == registered.UserId);
+        Assert.Null(token.RevokedAt);
+        Assert.Null(token.ReplacedByTokenHash);
+    }
+
+    [Fact]
+    public async Task RefreshTokenReuse_RevokesOnlyCompromisedDeviceFamily()
+    {
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateAuthService(context);
+        var firstDevice = await service.RegisterAsync(new RegisterRequest
+        {
+            UserName = "multi_device_customer",
+            Email = "multi_device_customer@example.com",
+            Password = "Customer@123",
+            FullName = "Multi Device Customer"
+        });
+        var secondDevice = await service.LoginAsync(new LoginRequest
+        {
+            UserName = "multi_device_customer",
+            Password = "Customer@123"
+        });
+        _ = await service.RefreshAsync(new RefreshTokenRequest
+        {
+            RefreshToken = firstDevice.RefreshToken
+        });
+
+        await Assert.ThrowsAsync<ApiException>(() =>
+            service.RefreshAsync(new RefreshTokenRequest
+            {
+                RefreshToken = firstDevice.RefreshToken
+            }));
+        var secondDeviceRefresh = await service.RefreshAsync(
+            new RefreshTokenRequest
+            {
+                RefreshToken = secondDevice.RefreshToken
+            });
+
+        Assert.NotEqual(secondDevice.RefreshToken, secondDeviceRefresh.RefreshToken);
+        var families = (await context.RefreshTokens
+                .Where(token => token.UserId == firstDevice.UserId)
+                .ToListAsync())
+            .GroupBy(token => token.FamilyId)
+            .ToList();
+        Assert.Equal(2, families.Count);
+        Assert.Single(
+            families,
+            family => family.All(token => token.IsRevoked));
+        Assert.Single(
+            families,
+            family => family.Any(token => token.IsActiveAt(DateTime.UtcNow)));
+    }
+
+    [Fact]
     public async Task LogoutAllAsync_RevokesEverySessionAndIncrementsTokenVersion()
     {
         await using var context = TestAppDbContext.Create();

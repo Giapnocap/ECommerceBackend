@@ -3,7 +3,7 @@ using ECommerceBackend.API.Errors;
 using ECommerceBackend.API.Extensions;
 using ECommerceBackend.API.Middlewares;
 using ECommerceBackend.Application.Exceptions;
-using ECommerceBackend.Tests.Support;
+using ECommerceBackend.Domain.Common;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -107,6 +107,93 @@ public sealed class OperationsMiddlewareTests
     }
 
     [Fact]
+    public async Task ExceptionMiddleware_DomainRuleUsesUnprocessableEntityContract()
+    {
+        var middleware = CreateExceptionMiddleware(_ =>
+            Task.FromException(new DomainRuleViolationException(
+                "order_status_transition_invalid",
+                "Invalid order transition.")));
+        var context = new DefaultHttpContext
+        {
+            TraceIdentifier = "domain-trace-001"
+        };
+        context.Response.Body = new MemoryStream();
+
+        await middleware.Invoke(context);
+        context.Response.Body.Position = 0;
+        using var response = await JsonDocument.ParseAsync(context.Response.Body);
+
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, context.Response.StatusCode);
+        Assert.Equal(
+            "order_status_transition_invalid",
+            response.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            "Invalid order transition.",
+            response.RootElement.GetProperty("message").GetString());
+        Assert.Equal(string.Empty, response.RootElement.GetProperty("details").GetString());
+    }
+
+    [Fact]
+    public async Task ExceptionMiddleware_ArgumentErrorIsSafeInternalServerError()
+    {
+        var middleware = CreateExceptionMiddleware(_ =>
+            Task.FromException(new ArgumentException("Internal implementation detail.")));
+        var context = new DefaultHttpContext
+        {
+            TraceIdentifier = "server-trace-001"
+        };
+        context.Response.Body = new MemoryStream();
+
+        await middleware.Invoke(context);
+        context.Response.Body.Position = 0;
+        using var response = await JsonDocument.ParseAsync(context.Response.Body);
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        Assert.Equal(
+            "internal_server_error",
+            response.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            "Lỗi hệ thống. Vui lòng thử lại sau.",
+            response.RootElement.GetProperty("message").GetString());
+        Assert.DoesNotContain(
+            "Internal implementation detail",
+            response.RootElement.GetRawText(),
+            StringComparison.Ordinal);
+        Assert.Equal(string.Empty, response.RootElement.GetProperty("details").GetString());
+    }
+
+    [Fact]
+    public async Task ExceptionMiddleware_ApiExceptionOutsideClientRangeIsSafeInternalServerError()
+    {
+        var middleware = CreateExceptionMiddleware(_ =>
+            Task.FromException(new ApiException(
+                StatusCodes.Status500InternalServerError,
+                "internal_dependency_failure",
+                "Internal dependency details.")));
+        var context = new DefaultHttpContext
+        {
+            TraceIdentifier = "invalid-api-status-trace-001"
+        };
+        context.Response.Body = new MemoryStream();
+
+        await middleware.Invoke(context);
+        context.Response.Body.Position = 0;
+        using var response = await JsonDocument.ParseAsync(context.Response.Body);
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
+        Assert.Equal(
+            "internal_server_error",
+            response.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            "Lỗi hệ thống. Vui lòng thử lại sau.",
+            response.RootElement.GetProperty("message").GetString());
+        Assert.DoesNotContain(
+            "Internal dependency details",
+            response.RootElement.GetRawText(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ModelValidation_UsesProblemDetailsWithFieldErrors()
     {
         var services = new ServiceCollection();
@@ -173,6 +260,5 @@ public sealed class OperationsMiddlewareTests
     private static ExceptionMiddleware CreateExceptionMiddleware(RequestDelegate next)
         => new(
             next,
-            new TestWebHostEnvironment(Path.GetTempPath()),
             NullLogger<ExceptionMiddleware>.Instance);
 }

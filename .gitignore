@@ -14,3 +14,4 @@ PerformanceResults/
 MigrationArtifacts/
 ReleasePackage/
 .tools/
+.env

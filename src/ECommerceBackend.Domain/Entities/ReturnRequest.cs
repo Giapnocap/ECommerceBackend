@@ -5,6 +5,10 @@ namespace ECommerceBackend.Domain.Entities
 {
     public sealed class ReturnRequest
     {
+        internal ReturnRequest()
+        {
+        }
+
         public Guid Id { get; private set; }
         public Guid OrderId { get; private set; }
         public Guid RequestedByUserId { get; private set; }
@@ -18,7 +22,7 @@ namespace ECommerceBackend.Domain.Entities
         public DateTime? ReceivedAt { get; private set; }
         public string? InspectionNote { get; private set; }
         public DateTime? RefundedAt { get; private set; }
-        public byte[] RowVersion { get; set; } = [];
+        public byte[] RowVersion { get; internal set; } = [];
 
         public Order? Order { get; set; }
         public User? RequestedByUser { get; set; }

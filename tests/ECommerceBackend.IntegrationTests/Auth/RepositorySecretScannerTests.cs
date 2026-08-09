@@ -26,6 +26,25 @@ public sealed class RepositorySecretScannerTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Scanner_AllowsEnvironmentVariablePlaceholders()
+    {
+        const string content = """
+            JWT_KEY: "${JWT_KEY}"
+            MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?Set password in .env}"
+            AdminBootstrap__Password: "${ADMIN_BOOTSTRAP_PASSWORD:-}"
+            ConnectionStrings__Default: "Server=sqlserver;Password=${MSSQL_SA_PASSWORD};"
+            """;
+
+        var result = await RunScannerAsync(content);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains(
+            "No high-confidence secrets were found",
+            result.Output,
+            StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("@AdminPassword = P@ssw0rd-DoNotCommit-2026!", "HttpCredential")]
     [InlineData("{\"password\":\"P@ssw0rd-DoNotCommit-2026!\"}", "JsonCredential")]

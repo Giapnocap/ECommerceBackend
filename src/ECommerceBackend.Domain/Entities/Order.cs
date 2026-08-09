@@ -6,31 +6,35 @@ namespace ECommerceBackend.Domain.Entities
 {
     public class Order
     {
-        public Guid Id { get; set; }
-        public Guid UserId { get; set; }
-        public string OrderNumber { get; set; } = string.Empty;
-        public string IdempotencyKey { get; set; } = string.Empty;
-        public string IdempotencyRequestHash { get; set; } = string.Empty;
-        public Guid? PromotionId { get; set; }
-        public string? PromotionCodeSnapshot { get; set; }
-        public ShippingMethod ShippingMethod { get; set; }
-        public string Currency { get; set; } = "VND";
-        public DateTime OrderDate { get; set; } = DateTime.UtcNow;
+        internal Order()
+        {
+        }
+
+        public Guid Id { get; internal set; }
+        public Guid UserId { get; internal set; }
+        public string OrderNumber { get; internal set; } = string.Empty;
+        public string IdempotencyKey { get; internal set; } = string.Empty;
+        public string IdempotencyRequestHash { get; internal set; } = string.Empty;
+        public Guid? PromotionId { get; internal set; }
+        public string? PromotionCodeSnapshot { get; internal set; }
+        public ShippingMethod ShippingMethod { get; internal set; }
+        public string Currency { get; internal set; } = "VND";
+        public DateTime OrderDate { get; internal set; } = DateTime.UtcNow;
         public decimal SubtotalAmount { get; private set; }
         public decimal DiscountAmount { get; private set; }
         public decimal ShippingFee { get; private set; }
         public decimal TaxAmount { get; private set; }
         public decimal TotalAmount { get; private set; }
         public OrderStatus Status { get; private set; } = OrderStatusTransitions.Initial;
-        public string ShippingAddress { get; set; } = string.Empty;
+        public string ShippingAddress { get; internal set; } = string.Empty;
         public string RecipientName { get; private set; } = string.Empty;
         public string? RecipientPhone { get; private set; }
-        public string? Note { get; set; }
+        public string? Note { get; internal set; }
         public DateTime? ExpiresAt { get; private set; }
         public DateTime? CancelledAt { get; private set; }
         public DateTime? ExpiredAt { get; private set; }
         public string? CancellationReason { get; private set; }
-        public byte[] RowVersion { get; set; } = [];
+        public byte[] RowVersion { get; internal set; } = [];
 
         public User? User { get; set; }
         public ICollection<OrderDetail> OrderDetails { get; set; } = new List<OrderDetail>();
@@ -41,6 +45,81 @@ namespace ECommerceBackend.Domain.Entities
         public PromotionRedemption? PromotionRedemption { get; set; }
         public Shipment? Shipment { get; set; }
         public ReturnRequest? ReturnRequest { get; set; }
+
+        public static Order Create(
+            Guid id,
+            Guid userId,
+            string orderNumber,
+            string idempotencyKey,
+            string idempotencyRequestHash,
+            Guid? promotionId,
+            string? promotionCodeSnapshot,
+            ShippingMethod shippingMethod,
+            string currency,
+            DateTime orderDate,
+            string shippingAddress,
+            string? note)
+        {
+            if (id == Guid.Empty || userId == Guid.Empty)
+            {
+                throw new DomainRuleViolationException(
+                    "order_identity_invalid",
+                    "Thông tin định danh của đơn hàng không hợp lệ.");
+            }
+
+            if (string.IsNullOrWhiteSpace(orderNumber)
+                || orderNumber.Trim().Length > 32
+                || string.IsNullOrWhiteSpace(idempotencyKey)
+                || idempotencyKey.Trim().Length > 100
+                || idempotencyRequestHash is not { Length: 64 })
+            {
+                throw new DomainRuleViolationException(
+                    "order_request_identity_invalid",
+                    "Thông tin nhận diện yêu cầu đặt hàng không hợp lệ.");
+            }
+
+            if ((promotionId.HasValue && string.IsNullOrWhiteSpace(promotionCodeSnapshot))
+                || (!promotionId.HasValue && promotionCodeSnapshot != null))
+            {
+                throw new DomainRuleViolationException(
+                    "order_promotion_snapshot_invalid",
+                    "Thông tin khuyến mãi của đơn hàng không nhất quán.");
+            }
+
+            if (!Enum.IsDefined(shippingMethod)
+                || currency is not { Length: 3 }
+                || currency.Any(character => character is < 'A' or > 'Z'))
+            {
+                throw new DomainRuleViolationException(
+                    "order_shipping_invalid",
+                    "Thông tin giao hàng hoặc tiền tệ không hợp lệ.");
+            }
+
+            if (string.IsNullOrWhiteSpace(shippingAddress)
+                || shippingAddress.Trim().Length > 500
+                || note?.Trim().Length > 500)
+            {
+                throw new DomainRuleViolationException(
+                    "order_delivery_details_invalid",
+                    "Địa chỉ giao hàng hoặc ghi chú không hợp lệ.");
+            }
+
+            return new Order
+            {
+                Id = id,
+                UserId = userId,
+                OrderNumber = orderNumber.Trim(),
+                IdempotencyKey = idempotencyKey.Trim(),
+                IdempotencyRequestHash = idempotencyRequestHash,
+                PromotionId = promotionId,
+                PromotionCodeSnapshot = promotionCodeSnapshot?.Trim(),
+                ShippingMethod = shippingMethod,
+                Currency = currency,
+                OrderDate = orderDate,
+                ShippingAddress = shippingAddress.Trim(),
+                Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim()
+            };
+        }
 
         public void SetRecipient(string name, string? phone)
         {

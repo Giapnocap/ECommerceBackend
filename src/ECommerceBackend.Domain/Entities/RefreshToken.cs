@@ -4,16 +4,20 @@ namespace ECommerceBackend.Domain.Entities
 {
     public class RefreshToken
     {
-        public Guid Id { get; set; }
-        public Guid UserId { get; set; }
-        public Guid FamilyId { get; set; }
-        public string TokenHash { get; set; } = string.Empty;
-        public DateTime ExpiresAt { get; set; }
-        public DateTime CreatedAt { get; set; }
+        internal RefreshToken()
+        {
+        }
+
+        public Guid Id { get; internal set; }
+        public Guid UserId { get; internal set; }
+        public Guid FamilyId { get; internal set; }
+        public string TokenHash { get; internal set; } = string.Empty;
+        public DateTime ExpiresAt { get; internal set; }
+        public DateTime CreatedAt { get; internal set; }
         public DateTime? RevokedAt { get; private set; }
         public string? RevocationReason { get; private set; }
         public string? ReplacedByTokenHash { get; private set; }
-        public byte[] RowVersion { get; set; } = [];
+        public byte[] RowVersion { get; internal set; } = [];
 
         public User? User { get; set; }
 
@@ -22,6 +26,41 @@ namespace ECommerceBackend.Domain.Entities
         public bool IsExpiredAt(DateTime utcNow) => utcNow >= ExpiresAt;
 
         public bool IsActiveAt(DateTime utcNow) => !RevokedAt.HasValue && !IsExpiredAt(utcNow);
+
+        public static RefreshToken Create(
+            Guid id,
+            Guid userId,
+            Guid familyId,
+            string tokenHash,
+            DateTime createdAt,
+            DateTime expiresAt)
+        {
+            if (id == Guid.Empty || userId == Guid.Empty || familyId == Guid.Empty)
+            {
+                throw new DomainRuleViolationException(
+                    "refresh_token_identity_invalid",
+                    "Thông tin định danh của mã làm mới phiên không hợp lệ.");
+            }
+
+            if (string.IsNullOrWhiteSpace(tokenHash)
+                || tokenHash.Length > 128
+                || expiresAt <= createdAt)
+            {
+                throw new DomainRuleViolationException(
+                    "refresh_token_details_invalid",
+                    "Thông tin thời hạn hoặc giá trị băm của mã làm mới phiên không hợp lệ.");
+            }
+
+            return new RefreshToken
+            {
+                Id = id,
+                UserId = userId,
+                FamilyId = familyId,
+                TokenHash = tokenHash,
+                CreatedAt = createdAt,
+                ExpiresAt = expiresAt
+            };
+        }
 
         public bool Revoke(DateTime occurredAt, string reason)
         {
