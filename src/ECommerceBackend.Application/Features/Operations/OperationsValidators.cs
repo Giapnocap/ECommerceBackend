@@ -35,6 +35,10 @@ namespace ECommerceBackend.Application.Validation
                 .MaximumLength(100)
                 .WithMessage("Loại đối tượng không được vượt quá 100 ký tự.")
                 .When(x => x.EntityType != null);
+            RuleFor(x => x.EntityId)
+                .MaximumLength(100)
+                .WithMessage("Mã đối tượng không được vượt quá 100 ký tự.")
+                .When(x => x.EntityId != null);
             RuleFor(x => x.To)
                 .GreaterThan(x => x.From)
                 .WithMessage("Thời điểm kết thúc phải lớn hơn thời điểm bắt đầu.")

@@ -84,6 +84,14 @@ internal static class TestServiceFactory
             new OutboxRepository(context),
             clock,
             protector);
+        var emailVerification = new EmailVerificationUseCase(
+            authSessionRepository,
+            context,
+            consistency,
+            outbox,
+            audit,
+            options,
+            clock);
         return new AuthService(
             new AuthRegistrationUseCase(
                 userRepository,
@@ -93,6 +101,7 @@ internal static class TestServiceFactory
                 consistency,
                 hasher,
                 tokenIssuer,
+                emailVerification,
                 clock),
             new AuthLoginUseCase(
                 userRepository,
@@ -130,7 +139,14 @@ internal static class TestServiceFactory
                 outbox,
                 audit,
                 options,
-                clock));
+                clock),
+            new AuthSessionManagementUseCase(
+                authSessionRepository,
+                context,
+                consistency,
+                audit,
+                clock),
+            emailVerification);
     }
 
     public static UserService CreateUserService(AppDbContext context, TimeProvider? timeProvider = null)
@@ -142,12 +158,26 @@ internal static class TestServiceFactory
             new BCryptPasswordHasher(),
             timeProvider ?? TimeProvider.System);
 
+    public static CustomerManagementService CreateCustomerManagementService(
+        AppDbContext context,
+        TimeProvider? timeProvider = null,
+        IAuditWriter? auditWriter = null)
+        => new(
+            new CustomerManagementReadRepository(context),
+            new UserRepository(context),
+            new AuthSessionRepository(context),
+            context,
+            Consistency(context),
+            timeProvider ?? TimeProvider.System,
+            auditWriter);
+
     public static OrderService CreateOrderService(
         AppDbContext context,
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null,
         PricingOptions? pricingOptions = null,
-        ReturnPolicyOptions? returnPolicyOptions = null)
+        ReturnPolicyOptions? returnPolicyOptions = null,
+        IExchangeRateProvider? exchangeRateProvider = null)
     {
         var orderRepository = new OrderRepository(context);
         var userRepository = new UserRepository(context);
@@ -167,9 +197,14 @@ internal static class TestServiceFactory
         var pricing = new OrderPricingUseCase(
             cartRepository,
             promotionRepository,
+            exchangeRateProvider
+                ?? new TestExchangeRateProvider(clock),
             clock,
             Options.Create(
-                pricingOptions ?? new PricingOptions()));
+                pricingOptions ?? new PricingOptions
+                {
+                    SupportedCurrencies = ["VND"]
+                }));
         var checkoutCartLoader = new CheckoutCartLoader(
             cartRepository,
             consistency);

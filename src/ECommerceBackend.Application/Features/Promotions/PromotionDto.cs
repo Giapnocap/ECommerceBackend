@@ -1,3 +1,4 @@
+using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Enums;
 
 namespace ECommerceBackend.Application.DTOs
@@ -22,6 +23,7 @@ namespace ECommerceBackend.Application.DTOs
         public decimal Value { get; set; }
         public decimal MinimumSubtotal { get; set; }
         public decimal? MaximumDiscountAmount { get; set; }
+        public string Currency { get; set; } = CurrencyCatalog.BaseCurrency;
         public DateTime StartsAt { get; set; }
         public DateTime EndsAt { get; set; }
         public int UsageLimit { get; set; }
@@ -63,5 +65,34 @@ namespace ECommerceBackend.Application.DTOs
         public bool? IsActive { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 20;
+    }
+
+    public class PromotionAnalyticsRangeQuery
+    {
+        public DateTime? From { get; set; }
+        public DateTime? To { get; set; }
+    }
+
+    public sealed class PromotionAnalyticsQuery : PromotionAnalyticsRangeQuery
+    {
+        public string SortBy { get; set; } = "usage";
+        public int Page { get; set; } = 1;
+        public int PageSize { get; set; } = 20;
+    }
+
+    public sealed class PromotionAnalyticsResponse
+    {
+        public Guid PromotionId { get; set; }
+        public string Code { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTime StartsAt { get; set; }
+        public DateTime EndsAt { get; set; }
+        public int UsageCount { get; set; }
+        public int GeneratedOrderCount { get; set; }
+        public decimal GrossRevenue { get; set; }
+        public decimal DiscountAmount { get; set; }
+        public decimal NetRevenue { get; set; }
+        public string Currency { get; set; } = CurrencyCatalog.BaseCurrency;
     }
 }

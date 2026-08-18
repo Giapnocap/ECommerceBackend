@@ -1,6 +1,7 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces.Repositories;
+using ECommerceBackend.Application.Services;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,6 +23,7 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             Guid? actorUserId,
             string? action,
             string? entityType,
+            string? entityId,
             DateTime? from,
             DateTime? to,
             int skip,
@@ -35,6 +37,8 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 events = events.Where(item => item.Action == action);
             if (!string.IsNullOrWhiteSpace(entityType))
                 events = events.Where(item => item.EntityType == entityType);
+            if (!string.IsNullOrWhiteSpace(entityId))
+                events = events.Where(item => item.EntityId == entityId);
             if (from.HasValue)
                 events = events.Where(item => item.CreatedAt >= from.Value);
             if (to.HasValue)
@@ -60,7 +64,41 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 })
                 .ToListAsync(cancellationToken);
 
+            RedactMetadata(items);
+
             return new PageSlice<AuditEventResponse>(items, totalCount);
+        }
+
+        public async Task<AuditEventResponse?> GetByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
+        {
+            var auditEvent = await _context.AuditEvents
+                .AsNoTracking()
+                .Where(item => item.Id == id)
+                .Select(item => new AuditEventResponse
+                {
+                    Id = item.Id,
+                    ActorUserId = item.ActorUserId,
+                    Action = item.Action,
+                    EntityType = item.EntityType,
+                    EntityId = item.EntityId,
+                    CorrelationId = item.CorrelationId,
+                    IpAddress = item.IpAddress,
+                    MetadataJson = item.MetadataJson,
+                    CreatedAt = item.CreatedAt
+                })
+                .SingleOrDefaultAsync(cancellationToken);
+            if (auditEvent != null)
+                auditEvent.MetadataJson = AuditMetadataRedactor.RedactJson(auditEvent.MetadataJson);
+
+            return auditEvent;
+        }
+
+        private static void RedactMetadata(IEnumerable<AuditEventResponse> items)
+        {
+            foreach (var item in items)
+                item.MetadataJson = AuditMetadataRedactor.RedactJson(item.MetadataJson);
         }
     }
 }

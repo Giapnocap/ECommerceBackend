@@ -15,6 +15,7 @@ namespace ECommerceBackend.Domain.Entities
         public string ProductNameSnapshot { get; internal set; } = string.Empty;
         public int Quantity { get; internal set; }
         public decimal UnitPrice { get; internal set; }
+        public decimal BaseUnitPrice { get; internal set; }
 
         // Navigation
         public Order? Order { get; set; }
@@ -26,7 +27,8 @@ namespace ECommerceBackend.Domain.Entities
             Guid productId,
             string productNameSnapshot,
             int quantity,
-            decimal unitPrice)
+            decimal unitPrice,
+            decimal? baseUnitPrice = null)
         {
             if (id == Guid.Empty || orderId == Guid.Empty
                 || productId == Guid.Empty)
@@ -56,6 +58,18 @@ namespace ECommerceBackend.Domain.Entities
                     "Đơn giá sản phẩm trong đơn hàng phải lớn hơn 0.");
             }
 
+            var resolvedBaseUnitPrice = baseUnitPrice ?? unitPrice;
+            OrderPricingPolicy.EnsureMoneyValue(
+                resolvedBaseUnitPrice,
+                "order_detail_base_unit_price_invalid",
+                "Don gia co so cua san pham");
+            if (resolvedBaseUnitPrice <= 0)
+            {
+                throw new DomainRuleViolationException(
+                    "order_detail_base_unit_price_invalid",
+                    "Don gia co so cua san pham phai lon hon 0.");
+            }
+
             return new OrderDetail
             {
                 Id = id,
@@ -63,7 +77,8 @@ namespace ECommerceBackend.Domain.Entities
                 ProductId = productId,
                 ProductNameSnapshot = productNameSnapshot.Trim(),
                 Quantity = quantity,
-                UnitPrice = unitPrice
+                UnitPrice = unitPrice,
+                BaseUnitPrice = resolvedBaseUnitPrice
             };
         }
     }

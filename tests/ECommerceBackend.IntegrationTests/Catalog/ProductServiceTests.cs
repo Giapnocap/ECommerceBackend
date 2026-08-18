@@ -2,6 +2,7 @@ using System.Diagnostics.Metrics;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Domain.Enums;
 using ECommerceBackend.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 
@@ -150,6 +151,91 @@ public class ProductServiceTests
                 [8, 7, 6, 5, 4, 3, 2, 1]));
 
         Assert.Equal("inventory_version_conflict", exception.Code);
+        Assert.Equal(10, product.StockQuantity);
+        Assert.Empty(context.InventoryTransactions);
+    }
+
+    [Fact]
+    public async Task StockInAsync_WritesTraceablePositiveInventoryMutation()
+    {
+        var now = new DateTimeOffset(2026, 8, 18, 9, 0, 0, TimeSpan.Zero);
+        await using var context = TestAppDbContext.Create();
+        var category = new Category { Id = Guid.NewGuid(), Name = "Stock in" };
+        var product = Product("Stock in product", 25m, category.Id);
+        product.StockQuantity = 4;
+        product.RowVersion = [1, 2, 3, 4, 5, 6, 7, 8];
+        context.AddRange(category, product);
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateProductService(
+            context,
+            new FixedTimeProvider(now));
+
+        await service.StockInAsync(
+            product.Id,
+            new StockInRequest
+            {
+                Quantity = 6,
+                Reference = "  GRN-20260818-001  ",
+                Reason = "  Nhập hàng từ nhà cung cấp  "
+            },
+            product.RowVersion.ToArray());
+
+        var ledger = Assert.Single(await context.InventoryTransactions
+            .Where(transaction => transaction.ProductId == product.Id)
+            .ToListAsync());
+        Assert.Equal(10, product.StockQuantity);
+        Assert.Equal(InventoryTransactionType.StockIn, ledger.Type);
+        Assert.Equal(6, ledger.QuantityChange);
+        Assert.Equal(10, ledger.BalanceAfter);
+        Assert.Equal("GRN-20260818-001", ledger.Reference);
+        Assert.Equal("Nhập hàng từ nhà cung cấp", ledger.Reason);
+        Assert.Equal(now.UtcDateTime, ledger.CreatedAt);
+    }
+
+    [Fact]
+    public async Task StockInAsync_WhenVersionIsStale_DoesNotWriteInventoryLedger()
+    {
+        await using var context = TestAppDbContext.Create();
+        var category = new Category { Id = Guid.NewGuid(), Name = "Stale stock in" };
+        var product = Product("Stale stock in product", 25m, category.Id);
+        product.RowVersion = [1, 2, 3, 4, 5, 6, 7, 8];
+        context.AddRange(category, product);
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateProductService(context);
+
+        var exception = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.StockInAsync(
+                product.Id,
+                new StockInRequest
+                {
+                    Quantity = 3,
+                    Reason = "Nhập hàng"
+                },
+                [8, 7, 6, 5, 4, 3, 2, 1]));
+
+        Assert.Equal("inventory_version_conflict", exception.Code);
+        Assert.Equal(10, product.StockQuantity);
+        Assert.Empty(context.InventoryTransactions);
+    }
+
+    [Fact]
+    public async Task UpdateLowStockThresholdAsync_UpdatesOnlyThreshold()
+    {
+        await using var context = TestAppDbContext.Create();
+        var category = new Category { Id = Guid.NewGuid(), Name = "Threshold" };
+        var product = Product("Threshold product", 25m, category.Id);
+        product.RowVersion = [1, 2, 3, 4, 5, 6, 7, 8];
+        context.AddRange(category, product);
+        await context.SaveChangesAsync();
+        var service = TestServiceFactory.CreateProductService(context);
+
+        var response = await service.UpdateLowStockThresholdAsync(
+            product.Id,
+            new UpdateLowStockThresholdRequest { Threshold = 6 },
+            product.RowVersion.ToArray());
+
+        Assert.Equal(6, product.LowStockThreshold);
+        Assert.Equal(6, response.LowStockThreshold);
         Assert.Equal(10, product.StockQuantity);
         Assert.Empty(context.InventoryTransactions);
     }

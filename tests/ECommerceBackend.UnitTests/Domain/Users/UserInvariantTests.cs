@@ -55,6 +55,41 @@ public sealed class UserInvariantTests
     }
 
     [Fact]
+    public void AdministratorLock_RequiresExplicitUnlockAndInvalidatesSessions()
+    {
+        var user = CreateUser();
+        var now = new DateTime(2026, 8, 18, 10, 0, 0, DateTimeKind.Utc);
+
+        Assert.True(user.LockByAdministrator());
+        Assert.True(user.IsLockedOutAt(now.AddYears(10)));
+        Assert.Equal(DateTime.MaxValue, user.LockoutEndAt);
+        Assert.Equal(1, user.TokenVersion);
+        Assert.False(user.LockByAdministrator());
+
+        Assert.True(user.UnlockByAdministrator());
+        Assert.False(user.IsLockedOutAt(now));
+        Assert.Null(user.LockoutEndAt);
+        Assert.Equal(2, user.TokenVersion);
+    }
+
+    [Fact]
+    public void VerifyEmail_IsOneWayAndRejectsTimeBeforeRegistration()
+    {
+        var user = CreateUser();
+        user.CreatedAt = new DateTime(2026, 8, 18, 10, 0, 0, DateTimeKind.Utc);
+
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            user.VerifyEmail(user.CreatedAt.AddSeconds(-1)));
+        Assert.Equal("user_email_verification_time_invalid", exception.Code);
+        Assert.Null(user.EmailVerifiedAt);
+
+        var verifiedAt = user.CreatedAt.AddMinutes(1);
+        Assert.True(user.VerifyEmail(verifiedAt));
+        Assert.False(user.VerifyEmail(verifiedAt.AddMinutes(1)));
+        Assert.Equal(verifiedAt, user.EmailVerifiedAt);
+    }
+
+    [Fact]
     public void IdentityInvariantSetters_AreNotPublic()
     {
         Assert.False(

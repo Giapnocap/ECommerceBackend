@@ -1,5 +1,6 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
+using ECommerceBackend.Domain.Common;
 using FluentValidation;
 
 namespace ECommerceBackend.Application.Validation
@@ -47,6 +48,11 @@ namespace ECommerceBackend.Application.Validation
                 .WithMessage(
                     "Tổng tiền dự kiến phải lớn hơn 0 và có tối đa 2 chữ số thập phân.")
                 .When(x => x.ExpectedTotalAmount.HasValue);
+
+            RuleFor(x => x.Currency)
+                .Must(currency => string.IsNullOrWhiteSpace(currency)
+                    || CurrencyCatalog.IsSupported(currency))
+                .WithMessage("Tiền tệ yêu cầu chưa được hỗ trợ.");
         }
     }
 
@@ -63,6 +69,11 @@ namespace ECommerceBackend.Application.Validation
                 .WithMessage(
                     "Mã khuyến mãi phải có 3-32 ký tự gồm chữ cái, số, dấu gạch ngang hoặc gạch dưới.")
                 .When(x => !string.IsNullOrWhiteSpace(x.PromotionCode));
+
+            RuleFor(x => x.Currency)
+                .Must(currency => string.IsNullOrWhiteSpace(currency)
+                    || CurrencyCatalog.IsSupported(currency))
+                .WithMessage("Tiền tệ yêu cầu chưa được hỗ trợ.");
         }
     }
 
@@ -108,6 +119,11 @@ namespace ECommerceBackend.Application.Validation
             RuleFor(x => x.Note)
                 .MaximumLength(500).WithMessage("Ghi chú hoàn tiền không được vượt quá 500 ký tự.")
                 .When(x => x.Note != null);
+
+            RuleFor(x => x.Amount)
+                .GreaterThan(0)
+                .WithMessage("Số tiền hoàn phải lớn hơn 0.")
+                .When(x => x.Amount.HasValue);
         }
     }
 

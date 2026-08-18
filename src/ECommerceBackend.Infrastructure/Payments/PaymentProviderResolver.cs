@@ -63,7 +63,8 @@ namespace ECommerceBackend.Infrastructure.Payments
                 .Select(pair => new PaymentCheckoutCapability(
                     pair.Key,
                     PaymentProviderContract.NormalizeCode(pair.Value.Code),
-                    pair.Value.SupportsWebhooks))
+                    pair.Value.SupportsWebhooks,
+                    pair.Value.RequiresExternalInitialization))
                 .ToArray();
     }
 }

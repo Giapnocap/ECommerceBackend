@@ -1524,7 +1524,8 @@ public sealed class SqlServerCommerceFlowTests
                         ProductId = productId,
                         ProductNameSnapshot = product.Name,
                         Quantity = 1,
-                        UnitPrice = 100
+                        UnitPrice = 100,
+                        BaseUnitPrice = 100
                     },
                     new OrderStatusHistory
                     {
@@ -1733,6 +1734,7 @@ public sealed class SqlServerCommerceFlowTests
                     ProductId = product.Id,
                     ProductNameSnapshot = "Purchased Reporting Snapshot",
                     UnitPrice = 50m,
+                    BaseUnitPrice = 50m,
                     Quantity = 2
                 },
                 new OrderDetail
@@ -1742,6 +1744,7 @@ public sealed class SqlServerCommerceFlowTests
                     ProductId = product.Id,
                     ProductNameSnapshot = "Excluded Boundary Snapshot",
                     UnitPrice = 50m,
+                    BaseUnitPrice = 50m,
                     Quantity = 4
                 },
                 new OrderStatusHistory
@@ -1771,7 +1774,7 @@ public sealed class SqlServerCommerceFlowTests
                     PaymentId = refundedPayment.Id,
                     FromStatus = PaymentStatus.Paid,
                     ToStatus = PaymentStatus.Refunded,
-                    Source = PaymentStatusChangeSource.Webhook,
+                    Source = PaymentStatusChangeSource.ManualRefund,
                     Reference = "evt-report-refund",
                     OccurredAt = from,
                     CreatedAt = from
@@ -1848,6 +1851,12 @@ public sealed class SqlServerCommerceFlowTests
                 });
                 userId = registered.UserId;
 
+                var existingMessageIds = await setupContext.OutboxMessages
+                    .Where(candidate => candidate.Type
+                        == OutboxMessageTypes.ProtectedNotificationRequested)
+                    .Select(candidate => candidate.Id)
+                    .ToListAsync();
+
                 await auth.RequestPasswordResetAsync(new ForgotPasswordRequest
                 {
                     Email = "concurrent_reset_customer@example.com"
@@ -1856,7 +1865,8 @@ public sealed class SqlServerCommerceFlowTests
                 var firstMessage = await setupContext.OutboxMessages
                     .SingleAsync(candidate =>
                         candidate.Type
-                            == OutboxMessageTypes.ProtectedNotificationRequested);
+                            == OutboxMessageTypes.ProtectedNotificationRequested
+                        && !existingMessageIds.Contains(candidate.Id));
                 await auth.RequestPasswordResetAsync(new ForgotPasswordRequest
                 {
                     Email = "concurrent_reset_customer@example.com"
@@ -1865,6 +1875,7 @@ public sealed class SqlServerCommerceFlowTests
                     .SingleAsync(candidate =>
                         candidate.Type
                             == OutboxMessageTypes.ProtectedNotificationRequested
+                        && !existingMessageIds.Contains(candidate.Id)
                         && candidate.Id != firstMessage.Id);
                 var payload = JsonSerializer.Deserialize<NotificationRequestedPayload>(
                     protector.Unprotect(message.Payload),

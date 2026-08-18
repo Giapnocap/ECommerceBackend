@@ -11,11 +11,27 @@ namespace ECommerceBackend.Domain.Enums
 
             return current switch
             {
-                PaymentStatus.Pending => next is PaymentStatus.Paid
+                PaymentStatus.Pending => next is PaymentStatus.RequiresAction
+                    or PaymentStatus.Processing
+                    or PaymentStatus.Paid
                     or PaymentStatus.Failed
                     or PaymentStatus.Cancelled,
-                PaymentStatus.Paid => next == PaymentStatus.Refunded,
-                PaymentStatus.Failed or PaymentStatus.Cancelled or PaymentStatus.Refunded => false,
+                PaymentStatus.RequiresAction => next is PaymentStatus.Pending
+                    or PaymentStatus.Processing
+                    or PaymentStatus.Paid
+                    or PaymentStatus.Failed
+                    or PaymentStatus.Cancelled,
+                PaymentStatus.Processing => next is PaymentStatus.Pending
+                    or PaymentStatus.RequiresAction
+                    or PaymentStatus.Paid
+                    or PaymentStatus.Failed
+                    or PaymentStatus.Cancelled,
+                PaymentStatus.Paid => next is PaymentStatus.PartiallyRefunded
+                    or PaymentStatus.Refunded,
+                PaymentStatus.PartiallyRefunded => next == PaymentStatus.Refunded,
+                PaymentStatus.Failed
+                    or PaymentStatus.Cancelled
+                    or PaymentStatus.Refunded => false,
                 _ => false
             };
         }

@@ -102,6 +102,150 @@ public sealed class CheckoutConsistencySqlServerTests
 
     [Fact]
     [Trait("Category", "SqlServerIntegration")]
+    public async Task ConcurrentStockInAndCheckout_PreserveInventoryAndLedgerConsistency()
+    {
+        SqlServerIntegrationTestGate.Require();
+        var options = CreateOptions(
+            $"ECommerceBackendIntegration_{Guid.NewGuid():N}");
+
+        try
+        {
+            var fixture = await SeedCheckoutAsync(
+                options,
+                stockQuantity: 1,
+                customerCount: 1);
+            byte[] initialVersion;
+            await using (var versionContext = new AppDbContext(options))
+            {
+                initialVersion = await versionContext.Products
+                    .AsNoTracking()
+                    .Where(product => product.Id == fixture.ProductId)
+                    .Select(product => product.RowVersion)
+                    .SingleAsync();
+            }
+
+            var start = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var customer = Assert.Single(fixture.Customers);
+
+            async Task<CheckoutOutcome> CheckoutAsync()
+            {
+                await start.Task;
+                await using var context = new AppDbContext(options);
+                var service = TestServiceFactory.CreateOrderService(
+                    context,
+                    new FixedTimeProvider(Now));
+                try
+                {
+                    var response = await service.PlaceOrderAsync(
+                        customer.UserId,
+                        CreateRequest(),
+                        "checkout-during-stock-in");
+                    return new CheckoutOutcome(response, null);
+                }
+                catch (Exception ex)
+                {
+                    return new CheckoutOutcome(null, ex);
+                }
+            }
+
+            async Task<Exception?> StockInAsync(byte[] expectedVersion)
+            {
+                await using var context = new AppDbContext(options);
+                var service = TestServiceFactory.CreateProductService(
+                    context,
+                    new FixedTimeProvider(Now));
+                try
+                {
+                    await service.StockInAsync(
+                        fixture.ProductId,
+                        new StockInRequest
+                        {
+                            Quantity = 5,
+                            Reference = "CONCURRENT-STOCK-IN",
+                            Reason = "Concurrent stock-in test"
+                        },
+                        expectedVersion);
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    return ex;
+                }
+            }
+
+            async Task<Exception?> StockInWithRetryAsync()
+            {
+                await start.Task;
+                var firstAttempt = await StockInAsync(initialVersion);
+                if (firstAttempt is not ConflictException)
+                    return firstAttempt;
+
+                await using var versionContext = new AppDbContext(options);
+                var refreshedVersion = await versionContext.Products
+                    .AsNoTracking()
+                    .Where(product => product.Id == fixture.ProductId)
+                    .Select(product => product.RowVersion)
+                    .SingleAsync();
+                return await StockInAsync(refreshedVersion);
+            }
+
+            var checkout = CheckoutAsync();
+            var stockIn = StockInWithRetryAsync();
+            start.SetResult(true);
+            var checkoutOutcome = await checkout;
+            var stockInException = await stockIn;
+
+            Assert.Null(checkoutOutcome.Exception);
+            Assert.NotNull(checkoutOutcome.Response);
+            Assert.Null(stockInException);
+
+            await using var verificationContext = new AppDbContext(options);
+            Assert.Equal(
+                5,
+                await verificationContext.Products
+                    .Where(product => product.Id == fixture.ProductId)
+                    .Select(product => product.StockQuantity)
+                    .SingleAsync());
+            var mutations = await verificationContext.InventoryTransactions
+                .Where(transaction => transaction.ProductId == fixture.ProductId)
+                .ToListAsync();
+            var placed = Assert.Single(
+                mutations,
+                transaction => transaction.Type == InventoryTransactionType.OrderPlaced);
+            var stockInTransaction = Assert.Single(
+                mutations,
+                transaction => transaction.Type == InventoryTransactionType.StockIn);
+
+            Assert.Equal(-1, placed.QuantityChange);
+            Assert.Equal(5, stockInTransaction.QuantityChange);
+            Assert.Equal("CONCURRENT-STOCK-IN", stockInTransaction.Reference);
+
+            var stockBeforeCheckout = placed.BalanceAfter - placed.QuantityChange;
+            var stockBeforeStockIn = stockInTransaction.BalanceAfter - stockInTransaction.QuantityChange;
+            var checkoutCommittedFirst =
+                stockBeforeCheckout == 1
+                && placed.BalanceAfter == 0
+                && stockBeforeStockIn == 0
+                && stockInTransaction.BalanceAfter == 5;
+            var stockInCommittedFirst =
+                stockBeforeStockIn == 1
+                && stockInTransaction.BalanceAfter == 6
+                && stockBeforeCheckout == 6
+                && placed.BalanceAfter == 5;
+
+            Assert.True(
+                checkoutCommittedFirst || stockInCommittedFirst,
+                "Concurrent checkout and stock-in must produce one serial ledger sequence without a lost update.");
+        }
+        finally
+        {
+            await DeleteDatabaseAsync(options);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "SqlServerIntegration")]
     public async Task ConcurrentDuplicateCheckout_ReturnsOneCommittedOrder()
     {
         SqlServerIntegrationTestGate.Require();

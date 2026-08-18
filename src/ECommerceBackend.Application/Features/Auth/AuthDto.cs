@@ -37,10 +37,16 @@ namespace ECommerceBackend.Application.DTOs
         public string NewPassword { get; set; } = string.Empty;
     }
 
+    public sealed class ConfirmEmailRequest
+    {
+        public string Token { get; set; } = string.Empty;
+    }
+
     // ===== RESPONSE =====
     public class AuthResponse
     {
         public Guid UserId { get; set; }
+        public Guid SessionId { get; set; }
         public string Token { get; set; } = string.Empty;
         public string AccessToken { get; set; } = string.Empty;
         public DateTime AccessTokenExpiresAt { get; set; }
@@ -49,7 +55,16 @@ namespace ECommerceBackend.Application.DTOs
         public string UserName { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        public bool EmailVerified { get; set; }
         public IEnumerable<string> Roles { get; set; } = Enumerable.Empty<string>();
         public IEnumerable<string> Permissions { get; set; } = Enumerable.Empty<string>();
+    }
+
+    public sealed class AuthSessionResponse
+    {
+        public Guid SessionId { get; set; }
+        public DateTime LastRefreshedAt { get; set; }
+        public DateTime ExpiresAt { get; set; }
+        public bool IsCurrent { get; set; }
     }
 }

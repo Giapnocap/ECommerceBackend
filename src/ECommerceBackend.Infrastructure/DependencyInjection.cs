@@ -9,6 +9,7 @@ using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Observability;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Payments;
+using ECommerceBackend.Infrastructure.Pricing;
 using ECommerceBackend.Infrastructure.Security;
 using ECommerceBackend.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,8 @@ namespace ECommerceBackend.Infrastructure
             AddRepositories(services);
             AddSecurityAdapters(services);
             AddStorageAdapters(services);
-            AddPaymentAndNotificationAdapters(services);
+            AddPricingAdapters(services, configuration);
+            AddPaymentAndNotificationAdapters(services, configuration);
             AddHostedWorkers(services);
 
             return services;
@@ -65,6 +67,7 @@ namespace ECommerceBackend.Infrastructure
             services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
             services.AddScoped<ICartRepository, CartRepository>();
             services.AddScoped<ICategoryRepository, CategoryRepository>();
+            services.AddScoped<ICustomerManagementReadRepository, CustomerManagementReadRepository>();
             services.AddScoped<IDataRetentionRepository, DataRetentionRepository>();
             services.AddScoped<IInventoryRepository, InventoryRepository>();
             services.AddScoped<IFulfillmentRepository, FulfillmentRepository>();
@@ -73,6 +76,7 @@ namespace ECommerceBackend.Infrastructure
             services.AddScoped<IPaymentRepository, PaymentRepository>();
             services.AddScoped<IPromotionRepository, PromotionRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();
+            services.AddScoped<IAdminDashboardReadRepository, AdminDashboardReadRepository>();
             services.AddScoped<IReportReadRepository, ReportReadRepository>();
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IOutboxStore, EfOutboxStore>();
@@ -95,13 +99,66 @@ namespace ECommerceBackend.Infrastructure
                     .GetRequiredService<IProductImageStorage>());
         }
 
-        private static void AddPaymentAndNotificationAdapters(IServiceCollection services)
+        private static void AddPricingAdapters(
+            IServiceCollection services,
+            IConfiguration configuration)
         {
+            services.TryAddSingleton(TimeProvider.System);
+            var exchangeRateOptions = configuration
+                .GetSection(ExchangeRateOptions.SectionName)
+                .Get<ExchangeRateOptions>() ?? new ExchangeRateOptions();
+            services.Configure<ExchangeRateOptions>(
+                configuration.GetSection(ExchangeRateOptions.SectionName));
+            services.AddMemoryCache();
+            services.AddHttpClient(
+                CurrencyApiExchangeRateProvider.HttpClientName,
+                client =>
+                {
+                    client.BaseAddress = Uri.TryCreate(
+                        exchangeRateOptions.BaseUrl,
+                        UriKind.Absolute,
+                        out var baseUri)
+                            ? baseUri
+                            : new Uri("https://api.currencyapi.com/");
+                    client.Timeout = TimeSpan.FromSeconds(
+                        exchangeRateOptions.RequestTimeoutSeconds);
+                });
+            services.AddSingleton<
+                IExchangeRateProvider,
+                CurrencyApiExchangeRateProvider>();
+        }
+
+        private static void AddPaymentAndNotificationAdapters(
+            IServiceCollection services,
+            IConfiguration configuration)
+        {
+            var stripeOptions = configuration
+                .GetSection(StripePaymentOptions.SectionName)
+                .Get<StripePaymentOptions>() ?? new StripePaymentOptions();
+            services.Configure<StripePaymentOptions>(
+                configuration.GetSection(StripePaymentOptions.SectionName));
             services.AddScoped<INotificationSender, ConfigurableNotificationSender>();
             services.AddScoped<OutboxProcessor>();
             services.AddSingleton<IPaymentProvider, CashOnDeliveryPaymentProvider>();
             services.AddSingleton<IPaymentProvider, GenericHmacPaymentProvider>();
+            if (stripeOptions.Enabled)
+            {
+                services.AddSingleton<
+                    IPaymentProvider,
+                    StripeCheckoutPaymentProvider>();
+            }
             services.AddSingleton<IPaymentProviderResolver, PaymentProviderResolver>();
+            services.AddHttpClient<IPaymentGateway, StripePaymentGateway>(client =>
+            {
+                client.BaseAddress = Uri.TryCreate(
+                    stripeOptions.BaseUrl,
+                    UriKind.Absolute,
+                    out var baseUri)
+                        ? baseUri
+                        : new Uri("https://api.stripe.com/");
+                client.Timeout = TimeSpan.FromSeconds(
+                    stripeOptions.RequestTimeoutSeconds);
+            });
         }
 
         private static void AddHostedWorkers(IServiceCollection services)
@@ -109,10 +166,12 @@ namespace ECommerceBackend.Infrastructure
             services.AddSingleton<OrderExpirationWorkerStatus>();
             services.AddSingleton<OutboxWorkerStatus>();
             services.AddSingleton<DataRetentionWorkerStatus>();
+            services.AddSingleton<PaymentReconciliationWorkerStatus>();
             services.AddScoped<AdminBootstrapper>();
             services.AddHostedService<AdminBootstrapHostedService>();
             services.AddHostedService<OutboxDispatcherHostedService>();
             services.AddHostedService<OrderExpirationHostedService>();
+            services.AddHostedService<PaymentReconciliationHostedService>();
             services.AddHostedService<DataRetentionHostedService>();
         }
     }

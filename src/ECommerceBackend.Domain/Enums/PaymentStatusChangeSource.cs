@@ -6,6 +6,8 @@ namespace ECommerceBackend.Domain.Enums
         OrderLifecycle = 1,
         Webhook = 2,
         LegacyBackfill = 3,
-        ManualRefund = 4
+        ManualRefund = 4,
+        Gateway = 5,
+        Reconciliation = 6
     }
 }

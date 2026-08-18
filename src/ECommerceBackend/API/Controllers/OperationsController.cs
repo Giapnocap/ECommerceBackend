@@ -54,6 +54,14 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _operations.GetAuditEventsAsync(query, cancellationToken));
 
+        /// <summary>Xem chi tiết một bản ghi nhật ký bảo mật hoặc nghiệp vụ</summary>
+        [HttpGet("audit-events/{id:guid}")]
+        [ProducesResponseType(typeof(AuditEventResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetAuditEvent(
+            Guid id,
+            CancellationToken cancellationToken)
+            => Ok(await _operations.GetAuditEventAsync(id, cancellationToken));
+
         /// <summary>Phát hiện hoặc xử lý chênh lệch giữa tệp tải lên và dữ liệu trong cơ sở dữ liệu</summary>
         [HttpPost("uploads/reconcile")]
         [ProducesResponseType(typeof(UploadReconciliationResponse), StatusCodes.Status200OK)]

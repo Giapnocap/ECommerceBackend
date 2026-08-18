@@ -77,10 +77,12 @@ namespace ECommerceBackend.Application.Services
                 new KeyValuePair<string, object?>(
                     "payment.provider",
                     normalizedProvider));
-            var normalizedEventId = request.EventId.Trim();
             var verified = await provider.VerifyWebhookAsync(
-                request with { EventId = normalizedEventId },
+                request with { EventId = request.EventId.Trim() },
                 cancellationToken);
+            var normalizedEventId = (
+                verified.ProviderEventId ?? request.EventId).Trim();
+            ValidateEventId(normalizedEventId);
             ValidateOccurrenceTime(verified.OccurredAt, receivedAt);
             var payloadHash = Convert.ToHexString(
                 SHA256.HashData(Encoding.UTF8.GetBytes(request.Payload)));
@@ -139,8 +141,16 @@ namespace ECommerceBackend.Application.Services
                 }
 
                 ValidatePaymentAmount(payment, verified);
+                ValidatePaymentMetadata(payment, verified);
                 var previousStatus = payment.Status;
-                var statusChanged = ApplyStatus(payment, verified);
+                var statusChanged = false;
+                if (!payment.IsProviderEventStale(verified.OccurredAt))
+                {
+                    statusChanged = ApplyStatus(payment, verified);
+                    DomainRuleGuard.AsConflict(() =>
+                        payment.MarkProviderEventApplied(
+                            verified.OccurredAt));
+                }
                 var processedAt = UtcNow;
                 _paymentRepository.AddWebhookEvent(new PaymentWebhookEvent
                 {
@@ -148,6 +158,8 @@ namespace ECommerceBackend.Application.Services
                     PaymentId = payment.Id,
                     Provider = normalizedProvider,
                     ProviderEventId = normalizedEventId,
+                    EventType = verified.EventType
+                        ?? verified.Status.ToString(),
                     PayloadHash = payloadHash,
                     Payload = _options.RetainRawPayload ? request.Payload : string.Empty,
                     ResultingStatus = payment.Status,
@@ -287,7 +299,9 @@ namespace ECommerceBackend.Application.Services
             Payment payment,
             VerifiedPaymentWebhook webhook)
         {
-            if (webhook.Status is PaymentStatus.Paid or PaymentStatus.Refunded
+            if (webhook.Status is PaymentStatus.Paid
+                    or PaymentStatus.Refunded
+                    or PaymentStatus.PartiallyRefunded
                 && !webhook.Amount.HasValue)
             {
                 throw new ApiException(
@@ -304,15 +318,57 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
-        private static bool ApplyStatus(Payment payment, VerifiedPaymentWebhook webhook)
-            => DomainRuleGuard.AsConflict(() =>
-                payment.ChangeStatus(webhook.Status, webhook.OccurredAt).Changed);
+        private static void ValidatePaymentMetadata(
+            Payment payment,
+            VerifiedPaymentWebhook webhook)
+        {
+            if (webhook.Currency != null
+                && !string.Equals(
+                    webhook.Currency,
+                    payment.Currency,
+                    StringComparison.Ordinal))
+            {
+                throw new ConflictException(
+                    "payment_currency_mismatch",
+                    "Tiền tệ từ cổng thanh toán không khớp với giao dịch.");
+            }
+
+            if (webhook.RefundedAmount is <= 0
+                || webhook.RefundedAmount > payment.Amount
+                || webhook.RefundedAmount < payment.RefundedAmount)
+            {
+                throw new ConflictException(
+                    "payment_refunded_amount_mismatch",
+                    "Tổng số tiền hoàn từ cổng thanh toán không hợp lệ.");
+            }
+        }
+
+        private static bool ApplyStatus(
+            Payment payment,
+            VerifiedPaymentWebhook webhook)
+        {
+            if (webhook.RefundedAmount.HasValue)
+            {
+                var delta = webhook.RefundedAmount.Value
+                    - payment.RefundedAmount;
+                if (delta == 0)
+                    return false;
+
+                return DomainRuleGuard.AsConflict(() =>
+                    payment.RecordRefund(delta, webhook.OccurredAt).Changed);
+            }
+
+            return DomainRuleGuard.AsConflict(() =>
+                payment.ChangeStatus(
+                    webhook.Status,
+                    webhook.OccurredAt).Changed);
+        }
         private void ValidateRequest(string providerCode, PaymentWebhookRequest request)
         {
             if (string.IsNullOrWhiteSpace(providerCode) || providerCode.Trim().Length > 100)
                 throw new ApiException(400, "invalid_webhook", "Cổng thanh toán không hợp lệ.");
 
-            if (string.IsNullOrWhiteSpace(request.EventId) || request.EventId.Trim().Length > 200)
+            if (request.EventId.Trim().Length > 200)
                 throw new ApiException(400, "invalid_webhook", "X-Payment-Event-Id không hợp lệ.");
 
             if (string.IsNullOrWhiteSpace(request.Signature) || request.Signature.Length > 512)
@@ -325,6 +381,18 @@ namespace ECommerceBackend.Application.Services
             }
         }
 
+        private static void ValidateEventId(string eventId)
+        {
+            if (string.IsNullOrWhiteSpace(eventId)
+                || eventId.Length > 200)
+            {
+                throw new ApiException(
+                    400,
+                    "invalid_webhook_event_id",
+                    "Mã sự kiện webhook không hợp lệ.");
+            }
+        }
+
         private static string GetPaymentStatusLabel(PaymentStatus status)
             => status switch
             {
@@ -333,6 +401,9 @@ namespace ECommerceBackend.Application.Services
                 PaymentStatus.Failed => "Thất bại",
                 PaymentStatus.Cancelled => "Đã hủy",
                 PaymentStatus.Refunded => "Đã hoàn tiền",
+                PaymentStatus.RequiresAction => "Cần xác thực",
+                PaymentStatus.Processing => "Đang xử lý",
+                PaymentStatus.PartiallyRefunded => "Đã hoàn tiền một phần",
                 _ => status.ToString()
             };
     }

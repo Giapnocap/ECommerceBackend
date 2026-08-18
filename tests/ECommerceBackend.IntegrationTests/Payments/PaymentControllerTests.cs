@@ -24,6 +24,7 @@ public class PaymentControllerTests
         Assert.Equal("CashOnDelivery", method.Method);
         Assert.Equal("cod", method.Provider);
         Assert.False(method.SupportsWebhooks);
+        Assert.False(method.RequiresExternalInitialization);
     }
 
     [Fact]
@@ -82,12 +83,32 @@ public class PaymentControllerTests
         Assert.Equal(payload, service.LastRequest?.Payload);
     }
 
+    [Fact]
+    public async Task HandleStripeWebhook_UsesStripeSignatureAndRawPayload()
+    {
+        const string payload = "{\"id\":\"evt_stripe_controller\"}";
+        var service = new RecordingWebhookService();
+        var controller = CreateController(service, maxPayloadBytes: 1024);
+        controller.Request.Body = new MemoryStream(
+            Encoding.UTF8.GetBytes(payload));
+
+        var result = await controller.HandleStripeWebhook(
+            "t=1,v1=signature",
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result);
+        Assert.Equal(string.Empty, service.LastRequest?.EventId);
+        Assert.Equal("t=1,v1=signature", service.LastRequest?.Signature);
+        Assert.Equal(payload, service.LastRequest?.Payload);
+    }
+
     private static PaymentController CreateController(
         RecordingWebhookService service,
         int maxPayloadBytes)
     {
         var controller = new PaymentController(
             service,
+            new StubPaymentCommandService(),
             Options.Create(new PaymentWebhookOptions
             {
                 Enabled = true,
@@ -101,6 +122,16 @@ public class PaymentControllerTests
             HttpContext = new DefaultHttpContext()
         };
         return controller;
+    }
+
+    private sealed class StubPaymentCommandService : IPaymentCommandService
+    {
+        public Task<ExternalPaymentResponse> InitializeExternalPaymentAsync(
+            Guid orderId,
+            Guid actorUserId,
+            bool canProcessOrders,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 
     private sealed class RecordingWebhookService : IPaymentWebhookService

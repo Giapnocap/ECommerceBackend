@@ -28,9 +28,11 @@ namespace ECommerceBackend.Infrastructure.Data
         public DbSet<Payment> Payments { get; set; }
         public DbSet<PaymentWebhookEvent> PaymentWebhookEvents { get; set; }
         public DbSet<PaymentStatusHistory> PaymentStatusHistories { get; set; }
+        public DbSet<PaymentRefund> PaymentRefunds { get; set; }
         public DbSet<InventoryTransaction> InventoryTransactions { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
+        public DbSet<EmailVerificationToken> EmailVerificationTokens { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
         public DbSet<AuditEvent> AuditEvents { get; set; }
 

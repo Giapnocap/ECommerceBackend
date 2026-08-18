@@ -8,6 +8,7 @@ namespace ECommerceBackend.Domain.Entities
         public Guid PaymentId { get; set; }
         public string Provider { get; set; } = string.Empty;
         public string ProviderEventId { get; set; } = string.Empty;
+        public string EventType { get; set; } = string.Empty;
         public string PayloadHash { get; set; } = string.Empty;
         public string Payload { get; set; } = string.Empty;
         public PaymentStatus ResultingStatus { get; set; }

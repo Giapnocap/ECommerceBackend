@@ -23,6 +23,9 @@ namespace ECommerceBackend.Application.Interfaces
         Task<Payment?> LockPaymentByOrderIdAsync(
             Guid orderId,
             CancellationToken cancellationToken = default);
+        Task<Payment?> LockPaymentByIdAsync(
+            Guid paymentId,
+            CancellationToken cancellationToken = default);
         Task<Product?> LockProductAsync(Guid productId, bool activeOnly, CancellationToken cancellationToken = default);
         Task<RefreshToken?> LockRefreshTokenAsync(string tokenHash, CancellationToken cancellationToken = default);
         Task<User?> LockUserAsync(Guid userId, bool activeOnly, CancellationToken cancellationToken = default);

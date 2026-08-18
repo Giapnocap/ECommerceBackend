@@ -62,6 +62,42 @@ namespace ECommerceBackend.Application.Services
             return promotion.ToResponse();
         }
 
+        public async Task<PromotionAnalyticsResponse> GetAnalyticsAsync(
+            Guid promotionId,
+            PromotionAnalyticsRangeQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            var (from, to) = ResolveAnalyticsRange(query.From, query.To);
+            var analytics = await _promotionRepository.GetAnalyticsByIdAsync(
+                promotionId,
+                from,
+                to,
+                cancellationToken)
+                ?? throw PromotionNotFound(promotionId);
+            return ApplyCurrentStatus(analytics);
+        }
+
+        public async Task<PagedResult<PromotionAnalyticsResponse>> GetAnalyticsAsync(
+            PromotionAnalyticsQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            var (from, to) = ResolveAnalyticsRange(query.From, query.To);
+            var sortBy = NormalizeAnalyticsSortBy(query.SortBy);
+            var paging = Paging.Normalize(query.Page, query.PageSize);
+            var page = await _promotionRepository.GetAnalyticsPageAsync(
+                from,
+                to,
+                sortBy,
+                Paging.GetSkipCount(paging),
+                paging.Size,
+                cancellationToken);
+            return PagedResult<PromotionAnalyticsResponse>.Create(
+                page.Items.Select(ApplyCurrentStatus),
+                page.TotalCount,
+                paging.Page,
+                paging.Size);
+        }
+
         public async Task<PromotionResponse> CreateAsync(
             CreatePromotionRequest request,
             Guid actorUserId,
@@ -216,6 +252,63 @@ namespace ECommerceBackend.Application.Services
 
         private static NotFoundException PromotionNotFound(Guid id)
             => new($"Không tìm thấy mã khuyến mãi với Id '{id}'.");
+
+        private static (DateTime? From, DateTime? To) ResolveAnalyticsRange(
+            DateTime? requestedFrom,
+            DateTime? requestedTo)
+        {
+            DateTime? from = requestedFrom.HasValue
+                ? NormalizeUtc(requestedFrom.Value)
+                : null;
+            DateTime? to = requestedTo.HasValue
+                ? NormalizeUtc(requestedTo.Value)
+                : null;
+            if (from.HasValue && to.HasValue && from.Value >= to.Value)
+            {
+                throw new BusinessException(
+                    "promotion_analytics_range_invalid",
+                    "Thời điểm bắt đầu phải nhỏ hơn thời điểm kết thúc.");
+            }
+
+            return (from, to);
+        }
+
+        private static string NormalizeAnalyticsSortBy(string? value)
+        {
+            var sortBy = value?.Trim().ToLowerInvariant();
+            return sortBy switch
+            {
+                "usage" => sortBy,
+                "grossrevenue" => "grossRevenue",
+                "discountamount" => "discountAmount",
+                "netrevenue" => "netRevenue",
+                _ => throw new BusinessException(
+                    "promotion_analytics_sort_invalid",
+                    "Kiểu xếp hạng phải là usage, grossRevenue, discountAmount hoặc netRevenue.")
+            };
+        }
+
+        private PromotionAnalyticsResponse ApplyCurrentStatus(
+            PromotionAnalyticsResponse analytics)
+        {
+            var now = _timeProvider.GetUtcNow().UtcDateTime;
+            analytics.Status = !analytics.IsActive
+                ? "Inactive"
+                : now < analytics.StartsAt
+                    ? "Upcoming"
+                    : now >= analytics.EndsAt
+                        ? "Expired"
+                        : "Active";
+            return analytics;
+        }
+
+        private static DateTime NormalizeUtc(DateTime value)
+            => value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            };
 
         private static Dictionary<string, object?> AuditMetadata(
             Promotion promotion)

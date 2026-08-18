@@ -39,6 +39,11 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default)
             => _auditQuery.ExecuteAsync(query, cancellationToken);
 
+        public Task<AuditEventResponse> GetAuditEventAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
+            => _auditQuery.GetByIdAsync(id, cancellationToken);
+
         public Task<DataRetentionResponse> RunDataRetentionAsync(
             DataRetentionRequest request,
             Guid? actorUserId,

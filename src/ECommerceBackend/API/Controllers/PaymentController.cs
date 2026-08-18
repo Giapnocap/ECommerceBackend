@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Security.Claims;
 using System.Text;
 using Asp.Versioning;
 using ECommerceBackend.Application.Common;
@@ -25,18 +26,28 @@ namespace ECommerceBackend.API.Controllers
             throwOnInvalidBytes: true);
 
         private readonly IPaymentWebhookService _webhookService;
+        private readonly IPaymentCommandService _paymentCommands;
         private readonly IPaymentProviderResolver _providers;
         private readonly int _maxPayloadBytes;
 
         public PaymentController(
             IPaymentWebhookService webhookService,
+            IPaymentCommandService paymentCommands,
             IOptions<PaymentWebhookOptions> options,
             IPaymentProviderResolver providers)
         {
             _webhookService = webhookService;
+            _paymentCommands = paymentCommands;
             _providers = providers;
             _maxPayloadBytes = options.Value.MaxPayloadBytes;
         }
+
+        private Guid CurrentUserId => Guid.Parse(
+            User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        private bool CanProcessOrders => User.HasClaim(
+            AuthClaimTypes.Permission,
+            PermissionNames.ProcessOrders);
 
         /// <summary>Liệt kê các phương thức thanh toán đang khả dụng khi đặt hàng</summary>
         [HttpGet("methods")]
@@ -49,12 +60,30 @@ namespace ECommerceBackend.API.Controllers
                 {
                     Method = capability.Method.ToString(),
                     Provider = capability.ProviderCode,
-                    SupportsWebhooks = capability.SupportsWebhooks
+                    SupportsWebhooks = capability.SupportsWebhooks,
+                    RequiresExternalInitialization =
+                        capability.RequiresExternalInitialization
                 })
                 .ToArray();
 
             return Ok(methods);
         }
+
+        /// <summary>Khởi tạo giao dịch thanh toán trực tuyến sau khi đơn hàng đã được lưu</summary>
+        [HttpPost("orders/{orderId:guid}/initialize")]
+        [Authorize]
+        [EnableRateLimiting("checkout")]
+        [ProducesResponseType(
+            typeof(ExternalPaymentResponse),
+            StatusCodes.Status200OK)]
+        public async Task<IActionResult> InitializeExternalPayment(
+            Guid orderId,
+            CancellationToken cancellationToken)
+            => Ok(await _paymentCommands.InitializeExternalPaymentAsync(
+                orderId,
+                CurrentUserId,
+                CanProcessOrders,
+                cancellationToken));
 
         /// <summary>Xử lý thông báo đã ký từ cổng thanh toán</summary>
         /// <remarks>Chữ ký được xác minh bằng chính xác nội dung JSON UTF-8 của yêu cầu.</remarks>
@@ -75,6 +104,29 @@ namespace ECommerceBackend.API.Controllers
                 new PaymentWebhookRequest(eventId, signature, payload),
                 cancellationToken);
 
+            return Ok(result);
+        }
+
+        /// <summary>Xử lý webhook Stripe bằng chữ ký trên raw request body</summary>
+        [HttpPost("webhooks/stripe")]
+        [AllowAnonymous]
+        [EnableRateLimiting("webhook")]
+        [Consumes("application/json")]
+        [ProducesResponseType(
+            typeof(PaymentWebhookResponse),
+            StatusCodes.Status200OK)]
+        public async Task<IActionResult> HandleStripeWebhook(
+            [FromHeader(Name = "Stripe-Signature")] string signature,
+            CancellationToken cancellationToken)
+        {
+            var payload = await ReadPayloadAsync(cancellationToken);
+            var result = await _webhookService.HandleAsync(
+                "stripe",
+                new PaymentWebhookRequest(
+                    string.Empty,
+                    signature,
+                    payload),
+                cancellationToken);
             return Ok(result);
         }
 

@@ -6,6 +6,7 @@ using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
+using ECommerceBackend.Domain.Common;
 
 namespace ECommerceBackend.Application.Services
 {
@@ -62,6 +63,21 @@ namespace ECommerceBackend.Application.Services
                     request.ExpectedTotalAmount.Value.ToString(
                         "0.00",
                         CultureInfo.InvariantCulture));
+            }
+
+            var normalizedCurrency = string.IsNullOrWhiteSpace(
+                request.Currency)
+                    ? CurrencyCatalog.BaseCurrency
+                    : CurrencyCatalog.Normalize(request.Currency);
+            if (!string.Equals(
+                    normalizedCurrency,
+                    CurrencyCatalog.BaseCurrency,
+                    StringComparison.Ordinal))
+            {
+                canonical = string.Join(
+                    '\n',
+                    canonical,
+                    normalizedCurrency);
             }
 
             var recipientName = NormalizeOptional(request.RecipientName);

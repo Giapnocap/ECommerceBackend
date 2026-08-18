@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Asp.Versioning;
+using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -20,6 +21,8 @@ namespace ECommerceBackend.API.Controllers
         public AuthController(IAuthService authService) => _authService = authService;
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        private Guid CurrentSessionId => Guid.Parse(
+            User.FindFirstValue(AuthClaimTypes.SessionId)!);
 
         /// <summary>Đăng ký tài khoản mới (tự động gán vai trò Customer)</summary>
         [HttpPost("register")]
@@ -77,6 +80,79 @@ namespace ECommerceBackend.API.Controllers
             {
                 Message = "Đặt lại mật khẩu thành công."
             });
+        }
+
+        /// <summary>Gửi lại liên kết xác minh email cho tài khoản hiện tại</summary>
+        [HttpPost("email-verification")]
+        [Authorize]
+        [EnableRateLimiting("auth")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> RequestEmailVerification(
+            CancellationToken cancellationToken)
+        {
+            await _authService.RequestEmailVerificationAsync(
+                CurrentUserId,
+                cancellationToken);
+            return Ok(new MessageResponse
+            {
+                Message = "Nếu email chưa được xác minh, liên kết mới sẽ được gửi."
+            });
+        }
+
+        /// <summary>Xác minh email bằng mã dùng một lần</summary>
+        [HttpPost("email-verification/confirm")]
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
+        [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ConfirmEmail(
+            [FromBody] ConfirmEmailRequest request,
+            CancellationToken cancellationToken)
+        {
+            await _authService.ConfirmEmailAsync(request, cancellationToken);
+            return Ok(new MessageResponse
+            {
+                Message = "Xác minh email thành công."
+            });
+        }
+
+        /// <summary>Liệt kê các phiên đăng nhập đang hoạt động</summary>
+        [HttpGet("sessions")]
+        [Authorize]
+        [ProducesResponseType(
+            typeof(IReadOnlyList<AuthSessionResponse>),
+            StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetSessions(
+            CancellationToken cancellationToken)
+            => Ok(await _authService.GetSessionsAsync(
+                CurrentUserId,
+                CurrentSessionId,
+                cancellationToken));
+
+        /// <summary>Thu hồi một phiên đăng nhập theo mã phiên</summary>
+        [HttpDelete("sessions/{sessionId:guid}")]
+        [Authorize]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> RevokeSession(
+            Guid sessionId,
+            CancellationToken cancellationToken)
+        {
+            await _authService.RevokeSessionAsync(
+                CurrentUserId,
+                sessionId,
+                cancellationToken);
+            return NoContent();
+        }
+
+        /// <summary>Thu hồi toàn bộ phiên đăng nhập của tài khoản</summary>
+        [HttpDelete("sessions")]
+        [Authorize]
+        [EnableRateLimiting("auth")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        public async Task<IActionResult> RevokeAllSessions(
+            CancellationToken cancellationToken)
+        {
+            await _authService.LogoutAllAsync(CurrentUserId, cancellationToken);
+            return NoContent();
         }
 
         /// <summary>Làm mới mã truy cập bằng mã làm mới</summary>

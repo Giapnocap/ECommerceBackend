@@ -21,6 +21,7 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
                 .HasFilter("[OrderId] IS NOT NULL")
                 .IsUnique();
             builder.Property(transaction => transaction.Reason).HasMaxLength(500);
+            builder.Property(transaction => transaction.Reference).HasMaxLength(200);
             builder.ToTable(table =>
             {
                 table.HasCheckConstraint(
@@ -31,13 +32,13 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
                     "[BalanceAfter] >= 0");
                 table.HasCheckConstraint(
                     "CK_InventoryTransactions_Type_Valid",
-                    "[Type] BETWEEN 0 AND 4");
+                    "[Type] BETWEEN 0 AND 5");
                 table.HasCheckConstraint(
                     "CK_InventoryTransactions_QuantityChange_MatchesType",
-                    "([Type] = 0 AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] IN (3, 4) AND [QuantityChange] > 0)");
+                    "([Type] IN (0, 5) AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] IN (3, 4) AND [QuantityChange] > 0)");
                 table.HasCheckConstraint(
                     "CK_InventoryTransactions_OrderLink_MatchesType",
-                    "([Type] IN (0, 1) AND [OrderId] IS NULL) OR ([Type] IN (2, 3, 4) AND [OrderId] IS NOT NULL)");
+                    "([Type] IN (0, 1, 5) AND [OrderId] IS NULL) OR ([Type] IN (2, 3, 4) AND [OrderId] IS NOT NULL)");
             });
 
             builder.HasOne(transaction => transaction.Product)

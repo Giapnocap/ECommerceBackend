@@ -17,6 +17,7 @@ namespace ECommerceBackend.Domain.Entities
         public InventoryTransactionType Type { get; internal set; }
         public int QuantityChange { get; internal set; }
         public int BalanceAfter { get; internal set; }
+        public string? Reference { get; internal set; }
         public string? Reason { get; internal set; }
         public DateTime CreatedAt { get; internal set; } = DateTime.UtcNow;
 
@@ -32,7 +33,8 @@ namespace ECommerceBackend.Domain.Entities
             InventoryTransactionType type,
             InventoryMutation mutation,
             string? reason,
-            DateTime createdAt)
+            DateTime createdAt,
+            string? reference = null)
         {
             if (id == Guid.Empty || productId == Guid.Empty
                 || createdByUserId == Guid.Empty)
@@ -59,6 +61,13 @@ namespace ECommerceBackend.Domain.Entities
                     "Lý do biến động tồn kho không được vượt quá 500 ký tự.");
             }
 
+            if (reference?.Trim().Length > 200)
+            {
+                throw new DomainRuleViolationException(
+                    "inventory_transaction_reference_invalid",
+                    "Mã tham chiếu biến động tồn kho không được vượt quá 200 ký tự.");
+            }
+
             return new InventoryTransaction
             {
                 Id = id,
@@ -68,6 +77,9 @@ namespace ECommerceBackend.Domain.Entities
                 Type = type,
                 QuantityChange = mutation.QuantityChange,
                 BalanceAfter = mutation.BalanceAfter,
+                Reference = string.IsNullOrWhiteSpace(reference)
+                    ? null
+                    : reference.Trim(),
                 Reason = string.IsNullOrWhiteSpace(reason)
                     ? null
                     : reason.Trim(),
@@ -82,6 +94,8 @@ namespace ECommerceBackend.Domain.Entities
             => type switch
             {
                 InventoryTransactionType.InitialStock =>
+                    !orderId.HasValue && quantityChange > 0,
+                InventoryTransactionType.StockIn =>
                     !orderId.HasValue && quantityChange > 0,
                 InventoryTransactionType.ManualAdjustment =>
                     !orderId.HasValue,

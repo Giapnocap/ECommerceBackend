@@ -97,12 +97,14 @@ public sealed class RbacAuthorizationTests
             $"{nameof(AuthController)}.{nameof(AuthController.Refresh)}",
             $"{nameof(AuthController)}.{nameof(AuthController.ForgotPassword)}",
             $"{nameof(AuthController)}.{nameof(AuthController.ResetPassword)}",
+            $"{nameof(AuthController)}.{nameof(AuthController.ConfirmEmail)}",
             $"{nameof(ProductController)}.{nameof(ProductController.GetAll)}",
             $"{nameof(ProductController)}.{nameof(ProductController.GetSummaries)}",
             $"{nameof(ProductController)}.{nameof(ProductController.GetById)}",
             $"{nameof(CategoryController)}.{nameof(CategoryController.GetAll)}",
             $"{nameof(CategoryController)}.{nameof(CategoryController.GetById)}",
             $"{nameof(PaymentController)}.{nameof(PaymentController.GetMethods)}",
+            $"{nameof(PaymentController)}.{nameof(PaymentController.HandleStripeWebhook)}",
             $"{nameof(PaymentController)}.{nameof(PaymentController.HandleWebhook)}"
         };
 
@@ -157,7 +159,12 @@ public sealed class RbacAuthorizationTests
         AssertActionPolicy<OrderController>(nameof(OrderController.GetAllOrders), PermissionNames.ProcessOrders);
         AssertActionPolicy<OrderController>(nameof(OrderController.UpdateStatus), PermissionNames.ProcessOrders);
         AssertControllerPolicy<InventoryController>(PermissionNames.ViewInventory);
+        AssertControllerPolicy<AdminInventoryController>(PermissionNames.ManageProducts);
+        AssertControllerPolicy<AdminCustomerController>(PermissionNames.ManageUsers);
         AssertControllerPolicy<ReportController>(PermissionNames.ViewReports);
+        AssertControllerPolicy<AdminReportController>(PermissionNames.ViewReports);
+        AssertControllerPolicy<AdminDashboardController>(PermissionNames.ViewReports);
+        AssertControllerPolicy<AdminPromotionAnalyticsController>(PermissionNames.ManageProducts);
     }
 
     [Fact]

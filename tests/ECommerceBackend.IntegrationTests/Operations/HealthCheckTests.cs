@@ -10,6 +10,7 @@ using ECommerceBackend.Infrastructure.Storage;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Maintenance;
+using ECommerceBackend.Infrastructure.Payments;
 using ECommerceBackend.Tests.Support;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +20,49 @@ namespace ECommerceBackend.Tests;
 
 public sealed class HealthCheckTests
 {
+    [Fact]
+    public async Task PaymentReconciliation_RequiresEnabledWorkerAndFreshHeartbeat()
+    {
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            18,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        var timeProvider = new FixedTimeProvider(now);
+        var status = new PaymentReconciliationWorkerStatus();
+        var disabled = new PaymentReconciliationHealthCheck(
+            Options.Create(new StripePaymentOptions
+            {
+                RequireReconciliation = true,
+                ReconciliationEnabled = false
+            }),
+            timeProvider,
+            status);
+
+        Assert.Equal(
+            HealthStatus.Unhealthy,
+            (await disabled.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        status.MarkStarted(now.UtcDateTime.AddSeconds(-10));
+        status.MarkSuccessfulCycle(now.UtcDateTime.AddSeconds(-10));
+        var running = new PaymentReconciliationHealthCheck(
+            Options.Create(new StripePaymentOptions
+            {
+                RequireReconciliation = true,
+                ReconciliationEnabled = true,
+                ReconciliationPollIntervalSeconds = 30
+            }),
+            timeProvider,
+            status);
+
+        Assert.Equal(
+            HealthStatus.Healthy,
+            (await running.CheckHealthAsync(new HealthCheckContext())).Status);
+    }
+
     [Fact]
     public async Task Database_ReportsHealthyAndConvertsProviderFailureToUnhealthy()
     {

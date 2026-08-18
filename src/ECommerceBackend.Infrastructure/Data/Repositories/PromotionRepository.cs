@@ -1,4 +1,5 @@
 using ECommerceBackend.Application.Common;
+using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -100,6 +101,33 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                     && redemption.UserId == userId,
                 cancellationToken);
 
+        public async Task<PromotionAnalyticsResponse?> GetAnalyticsByIdAsync(
+            Guid promotionId,
+            DateTime? from,
+            DateTime? to,
+            CancellationToken cancellationToken = default)
+            => await BuildAnalyticsQuery(from, to)
+                .SingleOrDefaultAsync(
+                    analytics => analytics.PromotionId == promotionId,
+                    cancellationToken);
+
+        public async Task<PageSlice<PromotionAnalyticsResponse>> GetAnalyticsPageAsync(
+            DateTime? from,
+            DateTime? to,
+            string sortBy,
+            int skip,
+            int take,
+            CancellationToken cancellationToken = default)
+        {
+            var analytics = BuildAnalyticsQuery(from, to);
+            var totalCount = await analytics.CountAsync(cancellationToken);
+            var items = await SortAnalytics(analytics, sortBy)
+                .Skip(skip)
+                .Take(take)
+                .ToListAsync(cancellationToken);
+            return new PageSlice<PromotionAnalyticsResponse>(items, totalCount);
+        }
+
         public Task AddAsync(
             Promotion promotion,
             CancellationToken cancellationToken = default)
@@ -113,5 +141,77 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             => _context.PromotionRedemptions.AddAsync(
                 redemption,
                 cancellationToken).AsTask();
+
+        private IQueryable<PromotionAnalyticsResponse> BuildAnalyticsQuery(
+            DateTime? from,
+            DateTime? to)
+        {
+            var rangeFrom = from;
+            var rangeTo = to;
+            var redemptions =
+                from redemption in _context.PromotionRedemptions.AsNoTracking()
+                join order in _context.Orders.AsNoTracking()
+                    on redemption.OrderId equals order.Id
+                where (!rangeFrom.HasValue || redemption.CreatedAt >= rangeFrom.Value)
+                    && (!rangeTo.HasValue || redemption.CreatedAt < rangeTo.Value)
+                select new
+                {
+                    redemption.PromotionId,
+                    redemption.OrderId,
+                    redemption.DiscountAmount,
+                    order.BaseSubtotalAmount
+                };
+
+            return
+                from promotion in _context.Promotions.AsNoTracking()
+                join redemption in redemptions
+                    on promotion.Id equals redemption.PromotionId into promotionRedemptions
+                select new PromotionAnalyticsResponse
+                {
+                    PromotionId = promotion.Id,
+                    Code = promotion.Code,
+                    IsActive = promotion.IsActive,
+                    StartsAt = promotion.StartsAt,
+                    EndsAt = promotion.EndsAt,
+                    UsageCount = promotionRedemptions.Count(),
+                    GeneratedOrderCount = promotionRedemptions
+                        .Select(redemption => redemption.OrderId)
+                        .Distinct()
+                        .Count(),
+                    GrossRevenue = promotionRedemptions
+                        .Sum(redemption =>
+                            (decimal?)redemption.BaseSubtotalAmount) ?? 0,
+                    DiscountAmount = promotionRedemptions
+                        .Sum(redemption => (decimal?)redemption.DiscountAmount) ?? 0,
+                    NetRevenue = (promotionRedemptions
+                        .Sum(redemption =>
+                            (decimal?)redemption.BaseSubtotalAmount) ?? 0)
+                        - (promotionRedemptions
+                            .Sum(redemption => (decimal?)redemption.DiscountAmount) ?? 0)
+                };
+        }
+
+        private static IOrderedQueryable<PromotionAnalyticsResponse> SortAnalytics(
+            IQueryable<PromotionAnalyticsResponse> analytics,
+            string sortBy)
+            => sortBy switch
+            {
+                "grossRevenue" => analytics
+                    .OrderByDescending(item => item.GrossRevenue)
+                    .ThenBy(item => item.Code)
+                    .ThenBy(item => item.PromotionId),
+                "discountAmount" => analytics
+                    .OrderByDescending(item => item.DiscountAmount)
+                    .ThenBy(item => item.Code)
+                    .ThenBy(item => item.PromotionId),
+                "netRevenue" => analytics
+                    .OrderByDescending(item => item.NetRevenue)
+                    .ThenBy(item => item.Code)
+                    .ThenBy(item => item.PromotionId),
+                _ => analytics
+                    .OrderByDescending(item => item.UsageCount)
+                    .ThenBy(item => item.Code)
+                    .ThenBy(item => item.PromotionId)
+            };
     }
 }

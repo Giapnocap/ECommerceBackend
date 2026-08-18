@@ -11,6 +11,8 @@ namespace ECommerceBackend.Application.Services
         private readonly AuthLogoutUseCase _logout;
         private readonly AuthLogoutAllUseCase _logoutAll;
         private readonly PasswordResetUseCase _passwordReset;
+        private readonly AuthSessionManagementUseCase _sessionManagement;
+        private readonly EmailVerificationUseCase _emailVerification;
 
         public AuthService(
             AuthRegistrationUseCase registration,
@@ -18,7 +20,9 @@ namespace ECommerceBackend.Application.Services
             AuthRefreshUseCase refresh,
             AuthLogoutUseCase logout,
             AuthLogoutAllUseCase logoutAll,
-            PasswordResetUseCase passwordReset)
+            PasswordResetUseCase passwordReset,
+            AuthSessionManagementUseCase sessionManagement,
+            EmailVerificationUseCase emailVerification)
         {
             _registration = registration;
             _login = login;
@@ -26,6 +30,8 @@ namespace ECommerceBackend.Application.Services
             _logout = logout;
             _logoutAll = logoutAll;
             _passwordReset = passwordReset;
+            _sessionManagement = sessionManagement;
+            _emailVerification = emailVerification;
         }
 
         public Task<AuthResponse> RegisterAsync(
@@ -47,6 +53,34 @@ namespace ECommerceBackend.Application.Services
             ResetPasswordRequest request,
             CancellationToken cancellationToken = default)
             => _passwordReset.ResetAsync(request, cancellationToken);
+
+        public Task RequestEmailVerificationAsync(
+            Guid userId,
+            CancellationToken cancellationToken = default)
+            => _emailVerification.RequestAsync(userId, cancellationToken);
+
+        public Task ConfirmEmailAsync(
+            ConfirmEmailRequest request,
+            CancellationToken cancellationToken = default)
+            => _emailVerification.ConfirmAsync(request, cancellationToken);
+
+        public Task<IReadOnlyList<AuthSessionResponse>> GetSessionsAsync(
+            Guid userId,
+            Guid currentSessionId,
+            CancellationToken cancellationToken = default)
+            => _sessionManagement.GetAsync(
+                userId,
+                currentSessionId,
+                cancellationToken);
+
+        public Task RevokeSessionAsync(
+            Guid userId,
+            Guid sessionId,
+            CancellationToken cancellationToken = default)
+            => _sessionManagement.RevokeAsync(
+                userId,
+                sessionId,
+                cancellationToken);
 
         public Task<AuthResponse> RefreshAsync(
             RefreshTokenRequest request,

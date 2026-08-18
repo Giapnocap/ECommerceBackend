@@ -70,6 +70,10 @@ namespace ECommerceBackend.API.Extensions
                     "order-expiration",
                     tags: ["ready"],
                     timeout: dependencyTimeout)
+                .AddCheck<PaymentReconciliationHealthCheck>(
+                    "payment-reconciliation",
+                    tags: ["ready"],
+                    timeout: dependencyTimeout)
                 .AddCheck<DataRetentionHealthCheck>(
                     "data-retention",
                     tags: ["ready"],

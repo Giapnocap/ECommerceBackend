@@ -38,6 +38,8 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
         public void Configure(EntityTypeBuilder<Product> builder)
         {
             builder.Property(product => product.Price).HasPrecision(18, 2);
+            builder.Property(product => product.LowStockThreshold)
+                .HasDefaultValue(10);
             builder.Property(product => product.RowVersion).IsRowVersion();
             builder.HasIndex(product => new { product.IsDeleted, product.StockQuantity });
             builder.HasIndex(product => new { product.IsDeleted, product.CreatedAt, product.Id })
@@ -49,6 +51,9 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             {
                 table.HasCheckConstraint("CK_Products_Price_Positive", "[Price] > 0");
                 table.HasCheckConstraint("CK_Products_Stock_NonNegative", "[StockQuantity] >= 0");
+                table.HasCheckConstraint(
+                    "CK_Products_LowStockThreshold_Valid",
+                    "[LowStockThreshold] BETWEEN 0 AND 1000000");
             });
 
             builder.HasOne(product => product.Category)

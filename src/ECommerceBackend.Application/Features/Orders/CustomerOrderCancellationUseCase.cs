@@ -75,6 +75,12 @@ namespace ECommerceBackend.Application.Services
                     await _consistency.LockPaymentByOrderIdAsync(
                         order.Id,
                         cancellationToken);
+                if (payment?.HasActiveExternalTransaction == true)
+                {
+                    throw new ConflictException(
+                        "external_payment_cancellation_pending",
+                        "Không thể hủy đơn khi giao dịch trực tuyến đang được xử lý.");
+                }
                 var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
                 var statusChange = DomainRuleGuard.AsConflict(() =>
                     order.Cancel(

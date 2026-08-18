@@ -21,6 +21,7 @@ namespace ECommerceBackend.Application.Services
         private readonly OrderQueryUseCase _queries;
         private readonly TimeProvider _timeProvider;
         private readonly IAuditWriter _audit;
+        private readonly OnlinePaymentRefundUseCase? _onlineRefund;
 
         public OrderRefundUseCase(
             IPaymentRepository paymentRepository,
@@ -51,7 +52,8 @@ namespace ECommerceBackend.Application.Services
             IOutboxWriter outbox,
             OrderQueryUseCase queries,
             TimeProvider timeProvider,
-            IAuditWriter? auditWriter = null)
+            IAuditWriter? auditWriter = null,
+            OnlinePaymentRefundUseCase? onlineRefund = null)
         {
             _paymentRepository = paymentRepository;
             _fulfillmentRepository = fulfillmentRepository;
@@ -62,6 +64,7 @@ namespace ECommerceBackend.Application.Services
             _queries = queries;
             _timeProvider = timeProvider;
             _audit = auditWriter ?? NullAuditWriter.Instance;
+            _onlineRefund = onlineRefund;
         }
 
         public async Task<OrderResponse> ExecuteAsync(
@@ -70,6 +73,24 @@ namespace ECommerceBackend.Application.Services
             RecordOrderRefundRequest request,
             CancellationToken cancellationToken = default)
         {
+            var paymentMethod = await _paymentRepository
+                .GetMethodByOrderIdAsync(orderId, cancellationToken);
+            if (paymentMethod == PaymentMethod.Card)
+            {
+                if (_onlineRefund == null)
+                {
+                    throw new ConflictException(
+                        "online_refund_unavailable",
+                        "Luồng hoàn tiền trực tuyến chưa sẵn sàng.");
+                }
+
+                return await _onlineRefund.ExecuteAsync(
+                    orderId,
+                    actorUserId,
+                    request,
+                    cancellationToken);
+            }
+
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);

@@ -9,6 +9,7 @@ namespace ECommerceBackend.Application.DTOs
         public string ProductName { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
+        public decimal BaseUnitPrice { get; set; }
         public decimal SubTotal => UnitPrice * Quantity;
     }
 
@@ -30,8 +31,11 @@ namespace ECommerceBackend.Application.DTOs
         public string Method { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
         public decimal Amount { get; set; }
+        public string Currency { get; set; } = "VND";
+        public decimal RefundedAmount { get; set; }
         public string? Provider { get; set; }
         public string? ProviderTransactionId { get; set; }
+        public DateTime? ExternalCreatedAt { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? PaidAt { get; set; }
         public IEnumerable<PaymentStatusHistoryResponse> StatusHistory { get; set; } = Enumerable.Empty<PaymentStatusHistoryResponse>();
@@ -81,6 +85,14 @@ namespace ECommerceBackend.Application.DTOs
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
         public string Currency { get; set; } = "VND";
+        public decimal BaseSubtotalAmount { get; set; }
+        public decimal BaseDiscountAmount { get; set; }
+        public decimal BaseShippingFee { get; set; }
+        public decimal BaseTaxAmount { get; set; }
+        public decimal BaseTotalAmount { get; set; }
+        public string BaseCurrency { get; set; } = "VND";
+        public decimal ExchangeRate { get; set; }
+        public DateTime ExchangeRateCapturedAt { get; set; }
         public string ShippingMethod { get; set; } = string.Empty;
         public string? PromotionCode { get; set; }
         public string Status { get; set; } = string.Empty;
@@ -126,12 +138,14 @@ namespace ECommerceBackend.Application.DTOs
         public ShippingMethod ShippingMethod { get; set; } = ShippingMethod.Standard;
         public string? PromotionCode { get; set; }
         public decimal? ExpectedTotalAmount { get; set; }
+        public string? Currency { get; set; }
     }
 
     public sealed class OrderQuoteRequest
     {
         public ShippingMethod ShippingMethod { get; set; } = ShippingMethod.Standard;
         public string? PromotionCode { get; set; }
+        public string? Currency { get; set; }
     }
 
     public sealed class OrderQuoteResponse
@@ -142,6 +156,14 @@ namespace ECommerceBackend.Application.DTOs
         public decimal TaxAmount { get; set; }
         public decimal TotalAmount { get; set; }
         public string Currency { get; set; } = string.Empty;
+        public decimal BaseSubtotalAmount { get; set; }
+        public decimal BaseDiscountAmount { get; set; }
+        public decimal BaseShippingFee { get; set; }
+        public decimal BaseTaxAmount { get; set; }
+        public decimal BaseTotalAmount { get; set; }
+        public string BaseCurrency { get; set; } = "VND";
+        public decimal ExchangeRate { get; set; }
+        public DateTime ExchangeRateCapturedAt { get; set; }
         public string ShippingMethod { get; set; } = string.Empty;
         public string? PromotionCode { get; set; }
         public DateTime CalculatedAt { get; set; }
@@ -162,6 +184,7 @@ namespace ECommerceBackend.Application.DTOs
     public sealed class RecordOrderRefundRequest
     {
         public string Reference { get; set; } = string.Empty;
+        public decimal? Amount { get; set; }
         public string? Note { get; set; }
     }
 

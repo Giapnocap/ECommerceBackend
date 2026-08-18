@@ -32,11 +32,43 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             DateTime to,
             CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyList<RevenueDailyAggregate>> GetRevenueDailyAggregatesAsync(
+            DateTime from,
+            DateTime to,
+            CancellationToken cancellationToken = default);
+
         Task<int> CountLowStockProductsAsync(
             int threshold,
             CancellationToken cancellationToken = default);
 
         Task<IReadOnlyList<TopSellingProductResponse>> GetTopSellingProductsAsync(
+            DateTime from,
+            DateTime to,
+            int limit,
+            CancellationToken cancellationToken = default);
+
+        Task<int> CountNewCustomersAsync(
+            DateTime from,
+            DateTime to,
+            CancellationToken cancellationToken = default);
+
+        Task<CustomerOrderReportMetrics> GetCustomerOrderMetricsAsync(
+            DateTime from,
+            DateTime to,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<TopCustomerResponse>> GetTopCustomersAsync(
+            DateTime from,
+            DateTime to,
+            int limit,
+            CancellationToken cancellationToken = default);
+
+        Task<int> CountReturnRequestsAsync(
+            DateTime from,
+            DateTime to,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<ReturnReasonResponse>> GetCommonReturnReasonsAsync(
             DateTime from,
             DateTime to,
             int limit,

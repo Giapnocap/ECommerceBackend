@@ -10,6 +10,7 @@ using ECommerceBackend.Infrastructure.Maintenance;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Payments;
+using ECommerceBackend.Infrastructure.Pricing;
 using ECommerceBackend.Infrastructure.Security;
 using ECommerceBackend.Infrastructure.Storage;
 using Microsoft.Extensions.Configuration;
@@ -51,7 +52,7 @@ public sealed class DependencyRegistrationTests
             .ToArray();
 
         Assert.Equal("Ứng dụng đang hoạt động.", selfResult.Description);
-        Assert.Equal(5, readinessRegistrations.Length);
+        Assert.Equal(6, readinessRegistrations.Length);
         Assert.All(
             readinessRegistrations,
             registration => Assert.Equal(
@@ -68,11 +69,17 @@ public sealed class DependencyRegistrationTests
 
         AssertRegistration<IAuthService, AuthService>(services, ServiceLifetime.Scoped);
         AssertRegistration<IUserService, UserService>(services, ServiceLifetime.Scoped);
+        AssertRegistration<ICustomerManagementService, CustomerManagementService>(
+            services,
+            ServiceLifetime.Scoped);
         AssertRegistration<IProductService, ProductService>(services, ServiceLifetime.Scoped);
         AssertRegistration<ICartService, CartService>(services, ServiceLifetime.Scoped);
         AssertRegistration<IOrderService, OrderService>(services, ServiceLifetime.Scoped);
         AssertRegistration<IInventoryService, InventoryService>(services, ServiceLifetime.Scoped);
         AssertRegistration<IReportService, ReportService>(services, ServiceLifetime.Scoped);
+        AssertRegistration<IAdminDashboardService, AdminDashboardService>(
+            services,
+            ServiceLifetime.Scoped);
         AssertRegistration<IOperationsService, OperationsService>(
             services,
             ServiceLifetime.Scoped);
@@ -95,6 +102,9 @@ public sealed class DependencyRegistrationTests
             services,
             ServiceLifetime.Scoped);
         AssertRegistration<OrderReturnRequestUseCase, OrderReturnRequestUseCase>(
+            services,
+            ServiceLifetime.Scoped);
+        AssertRegistration<PaymentReconciliationUseCase, PaymentReconciliationUseCase>(
             services,
             ServiceLifetime.Scoped);
 
@@ -125,7 +135,13 @@ public sealed class DependencyRegistrationTests
         AssertRegistration<IProductRepository, ProductRepository>(
             services,
             ServiceLifetime.Scoped);
+        AssertRegistration<ICustomerManagementReadRepository, CustomerManagementReadRepository>(
+            services,
+            ServiceLifetime.Scoped);
         AssertRegistration<IOrderRepository, OrderRepository>(
+            services,
+            ServiceLifetime.Scoped);
+        AssertRegistration<IAdminDashboardReadRepository, AdminDashboardReadRepository>(
             services,
             ServiceLifetime.Scoped);
         AssertRegistration<IOutboxRepository, OutboxRepository>(
@@ -135,6 +151,9 @@ public sealed class DependencyRegistrationTests
             services,
             ServiceLifetime.Scoped);
         AssertRegistration<IPaymentProviderResolver, PaymentProviderResolver>(
+            services,
+            ServiceLifetime.Singleton);
+        AssertRegistration<IExchangeRateProvider, CurrencyApiExchangeRateProvider>(
             services,
             ServiceLifetime.Singleton);
         AssertRegistration<IPasswordHasher, BCryptPasswordHasher>(
@@ -164,7 +183,42 @@ public sealed class DependencyRegistrationTests
         AssertHostedService<AdminBootstrapHostedService>(services);
         AssertHostedService<OutboxDispatcherHostedService>(services);
         AssertHostedService<OrderExpirationHostedService>(services);
+        AssertHostedService<PaymentReconciliationHostedService>(services);
         AssertHostedService<DataRetentionHostedService>(services);
+    }
+
+    [Fact]
+    public void InfrastructureModule_WithStripeEnabled_ExposesCardCapability()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Default"] =
+                    "Server=localhost;Database=ECommerceIntegration;Trusted_Connection=True;TrustServerCertificate=True;",
+                ["Payments:Stripe:Enabled"] = "true",
+                ["Payments:Stripe:SecretKey"] =
+                    "sk_test_dependency_secret_123456",
+                ["Payments:Stripe:PublishableKey"] =
+                    "pk_test_dependency_public_123456",
+                ["Payments:Stripe:WebhookSecret"] =
+                    "whsec_dependency_webhook_123456"
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddECommerceInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider();
+
+        var resolver = provider
+            .GetRequiredService<IPaymentProviderResolver>();
+        var card = Assert.Single(
+            resolver.GetCheckoutCapabilities(),
+            capability => capability.Method
+                == Domain.Enums.PaymentMethod.Card);
+
+        Assert.Equal("stripe", card.ProviderCode);
+        Assert.True(card.SupportsWebhooks);
+        Assert.True(card.RequiresExternalInitialization);
+        Assert.NotNull(provider.GetRequiredService<IPaymentGateway>());
     }
 
     private static void AssertRegistration<TService, TImplementation>(

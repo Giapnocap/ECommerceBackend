@@ -131,6 +131,27 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
         }
     }
 
+    internal sealed class EmailVerificationTokenConfiguration
+        : IEntityTypeConfiguration<EmailVerificationToken>
+    {
+        public void Configure(EntityTypeBuilder<EmailVerificationToken> builder)
+        {
+            builder.Property(token => token.RowVersion).IsRowVersion();
+            builder.HasIndex(token => token.TokenHash).IsUnique();
+            builder.HasIndex(token => token.ExpiresAt);
+            builder.HasIndex(token => token.UserId)
+                .HasDatabaseName("UX_EmailVerificationTokens_UserId_Active")
+                .HasFilter("[ConsumedAt] IS NULL AND [RevokedAt] IS NULL")
+                .IsUnique();
+            builder.Property(token => token.TokenHash).HasMaxLength(64);
+
+            builder.HasOne(token => token.User)
+                .WithMany(user => user.EmailVerificationTokens)
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        }
+    }
+
     internal static class AuthorizationSeedData
     {
         private static readonly Guid AdminRoleId =

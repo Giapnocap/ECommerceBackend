@@ -91,6 +91,11 @@ public sealed class CancellationFlowTests
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
+        public Task<Payment?> LockPaymentByIdAsync(
+            Guid paymentId,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
+
         public Task<Product?> LockProductAsync(
             Guid productId,
             bool activeOnly,

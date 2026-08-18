@@ -92,4 +92,15 @@ namespace ECommerceBackend.Application.Validation
                 .MaximumLength(128).WithMessage("Mật khẩu mới không được vượt quá 128 ký tự.");
         }
     }
+
+    public sealed class ConfirmEmailRequestValidator
+        : AbstractValidator<ConfirmEmailRequest>
+    {
+        public ConfirmEmailRequestValidator()
+        {
+            RuleFor(request => request.Token)
+                .NotEmpty().WithMessage("Mã xác minh email không được để trống.")
+                .MaximumLength(512).WithMessage("Mã xác minh email không hợp lệ.");
+        }
+    }
 }

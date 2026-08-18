@@ -30,6 +30,30 @@ namespace ECommerceBackend.API.Swagger
                     "ETag mạnh nhận từ API sản phẩm, dùng để ngăn ghi đè tồn kho đã thay đổi.");
             }
 
+            if (IsAction<PaymentController>(
+                    context,
+                    nameof(PaymentController.InitializeExternalPayment)))
+            {
+                ConfigureParameter(
+                    operation,
+                    "orderId",
+                    ParameterLocation.Path,
+                    "Ma don hang can khoi tao giao dich thanh toan.",
+                    required: true);
+            }
+
+            if (IsAction<PaymentController>(
+                    context,
+                    nameof(PaymentController.HandleStripeWebhook)))
+            {
+                ConfigureRequiredHeader(
+                    operation,
+                    "Stripe-Signature",
+                    "Chu ky webhook Stripe duoc xac minh tren raw request body.");
+                ConfigureWebhookBody(operation);
+                return;
+            }
+
             if (!IsAction<PaymentController>(context, nameof(PaymentController.HandleWebhook)))
                 return;
 
@@ -48,6 +72,11 @@ namespace ECommerceBackend.API.Swagger
                 "X-Payment-Signature",
                 "Chữ ký do cổng thanh toán đã cấu hình tạo ra.");
 
+            ConfigureWebhookBody(operation);
+        }
+
+        private static void ConfigureWebhookBody(OpenApiOperation operation)
+        {
             operation.RequestBody = new OpenApiRequestBody
             {
                 Required = true,

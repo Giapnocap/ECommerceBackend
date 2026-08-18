@@ -43,6 +43,38 @@ namespace ECommerceBackend.Application.Validation
         }
     }
 
+    public sealed class PromotionAnalyticsRangeQueryValidator
+        : AbstractValidator<PromotionAnalyticsRangeQuery>
+    {
+        public PromotionAnalyticsRangeQueryValidator()
+        {
+            RuleFor(request => request.To)
+                .GreaterThan(request => request.From)
+                .When(request => request.From.HasValue && request.To.HasValue)
+                .WithMessage("Thời điểm kết thúc phải lớn hơn thời điểm bắt đầu.");
+        }
+    }
+
+    public sealed class PromotionAnalyticsQueryValidator
+        : AbstractValidator<PromotionAnalyticsQuery>
+    {
+        public PromotionAnalyticsQueryValidator()
+        {
+            Include(new PromotionAnalyticsRangeQueryValidator());
+            RuleFor(request => request.SortBy)
+                .Must(sortBy => sortBy is not null
+                    && new[] { "usage", "grossRevenue", "discountAmount", "netRevenue" }
+                        .Contains(sortBy.Trim(), StringComparer.OrdinalIgnoreCase))
+                .WithMessage("Kiểu xếp hạng phải là usage, grossRevenue, discountAmount hoặc netRevenue.");
+            RuleFor(request => request.Page)
+                .InclusiveBetween(1, CommerceLimits.MaxPage)
+                .WithMessage($"Số trang phải từ 1 đến {CommerceLimits.MaxPage}.");
+            RuleFor(request => request.PageSize)
+                .InclusiveBetween(1, 100)
+                .WithMessage("Số bản ghi mỗi trang phải từ 1 đến 100.");
+        }
+    }
+
     internal static class PromotionValidationRules
     {
         public static void Add<T>(AbstractValidator<T> validator)

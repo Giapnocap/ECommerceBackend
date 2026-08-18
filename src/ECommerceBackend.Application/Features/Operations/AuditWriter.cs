@@ -1,5 +1,4 @@
 using System.Diagnostics.Metrics;
-using System.Text.Json;
 using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
@@ -34,11 +33,9 @@ namespace ECommerceBackend.Application.Services
             IReadOnlyDictionary<string, object?>? metadata = null)
         {
             var resolvedActor = actorUserId ?? _requestContext.ActorUserId;
-            var metadataJson = metadata is { Count: > 0 }
-                ? JsonSerializer.Serialize(metadata)
-                : null;
+            var metadataJson = AuditMetadataRedactor.Serialize(metadata);
             if (metadataJson?.Length > MaxMetadataLength)
-                metadataJson = JsonSerializer.Serialize(new { truncated = true });
+                metadataJson = "{\"truncated\":true}";
 
             _auditRepository.Add(new AuditEvent
             {

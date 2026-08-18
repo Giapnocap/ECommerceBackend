@@ -22,11 +22,13 @@ public sealed class ArchitectureBoundaryTests
             "Auth",
             "Carts",
             "Catalog",
+            "Dashboard",
             "Inventory",
             "Notifications",
             "Operations",
             "Orders",
             "Payments",
+            "Pricing",
             "Promotions",
             "Reports",
             "Users"
@@ -121,7 +123,7 @@ public sealed class ArchitectureBoundaryTests
         AssertPublicMethodCount<OrderReturnReceiptUseCase>(1);
         AssertPublicMethodCount<OrderRefundUseCase>(1);
         AssertPublicMethodCount<DeadLetterUseCase>(2);
-        AssertPublicMethodCount<AuditQueryUseCase>(1);
+        AssertPublicMethodCount<AuditQueryUseCase>(2);
         AssertPublicMethodCount<DataRetentionUseCase>(1);
     }
 

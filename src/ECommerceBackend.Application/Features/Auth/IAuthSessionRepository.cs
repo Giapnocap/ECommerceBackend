@@ -2,6 +2,11 @@ using ECommerceBackend.Domain.Entities;
 
 namespace ECommerceBackend.Application.Interfaces.Repositories
 {
+    public sealed record AuthSessionRecord(
+        Guid SessionId,
+        DateTime LastRefreshedAt,
+        DateTime ExpiresAt);
+
     public interface IAuthSessionRepository
     {
         Task<Guid?> GetRefreshTokenOwnerIdAsync(
@@ -21,6 +26,11 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             RefreshToken refreshToken,
             CancellationToken cancellationToken = default);
 
+        Task<IReadOnlyList<AuthSessionRecord>> GetActiveSessionsAsync(
+            Guid userId,
+            DateTime occurredAt,
+            CancellationToken cancellationToken = default);
+
         Task<Guid?> GetPasswordResetTokenOwnerIdAsync(
             string tokenHash,
             CancellationToken cancellationToken = default);
@@ -35,5 +45,20 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             CancellationToken cancellationToken = default);
 
         void AddPasswordResetToken(PasswordResetToken token);
+
+        Task<Guid?> GetEmailVerificationTokenOwnerIdAsync(
+            string tokenHash,
+            CancellationToken cancellationToken = default);
+
+        Task<EmailVerificationToken?> GetEmailVerificationTokenAsync(
+            string tokenHash,
+            CancellationToken cancellationToken = default);
+
+        Task<IReadOnlyList<EmailVerificationToken>> GetActiveEmailVerificationTokensAsync(
+            Guid userId,
+            Guid? excludedTokenId,
+            CancellationToken cancellationToken = default);
+
+        void AddEmailVerificationToken(EmailVerificationToken token);
     }
 }

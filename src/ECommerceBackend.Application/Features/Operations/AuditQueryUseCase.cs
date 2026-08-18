@@ -1,5 +1,6 @@
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
+using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces.Repositories;
 
 namespace ECommerceBackend.Application.Services
@@ -25,6 +26,7 @@ namespace ECommerceBackend.Application.Services
                 query.ActorUserId,
                 query.Action?.Trim(),
                 query.EntityType?.Trim(),
+                query.EntityId?.Trim(),
                 query.From,
                 query.To,
                 Paging.GetSkipCount(paging),
@@ -36,5 +38,11 @@ namespace ECommerceBackend.Application.Services
                 paging.Page,
                 paging.Size);
         }
+
+        public async Task<AuditEventResponse> GetByIdAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
+            => await _auditRepository.GetByIdAsync(id, cancellationToken)
+                ?? throw new NotFoundException("Không tìm thấy bản ghi nhật ký.");
     }
 }

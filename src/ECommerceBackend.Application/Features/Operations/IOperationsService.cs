@@ -28,6 +28,10 @@ namespace ECommerceBackend.Application.Interfaces
             AuditQueryParams query,
             CancellationToken cancellationToken = default);
 
+        Task<AuditEventResponse> GetAuditEventAsync(
+            Guid id,
+            CancellationToken cancellationToken = default);
+
         Task<DataRetentionResponse> RunDataRetentionAsync(
             DataRetentionRequest request,
             Guid? actorUserId,

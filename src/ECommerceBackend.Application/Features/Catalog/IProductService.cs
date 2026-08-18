@@ -27,6 +27,18 @@ namespace ECommerceBackend.Application.Interfaces
             byte[] expectedRowVersion,
             Guid? actorUserId = null,
             CancellationToken cancellationToken = default);
+        Task<ProductResponse> StockInAsync(
+            Guid id,
+            StockInRequest request,
+            byte[] expectedRowVersion,
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default);
+        Task<ProductResponse> UpdateLowStockThresholdAsync(
+            Guid id,
+            UpdateLowStockThresholdRequest request,
+            byte[] expectedRowVersion,
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default);
         Task DeleteAsync(
             Guid id,
             Guid? actorUserId = null,

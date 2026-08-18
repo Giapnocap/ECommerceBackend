@@ -50,7 +50,9 @@ namespace ECommerceBackend.Application.Common
                     $"Payment provider '{providerCode}' returned a transaction ID that is too long.");
             }
 
-            if (provider.SupportsWebhooks && transactionId is null)
+            if (provider.SupportsWebhooks
+                && !provider.RequiresExternalInitialization
+                && transactionId is null)
             {
                 throw new InvalidOperationException(
                     $"Checkout provider '{providerCode}' must return a transaction ID when webhooks are enabled.");

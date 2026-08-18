@@ -14,6 +14,7 @@ namespace ECommerceBackend.Application.DTOs
         public string Name { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int StockQuantity { get; set; }
+        public int LowStockThreshold { get; set; }
         public string Description { get; set; } = string.Empty;
         public Guid CategoryId { get; set; }
         public string CategoryName { get; set; } = string.Empty;

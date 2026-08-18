@@ -288,6 +288,25 @@ public class PaymentAndOutboxTests
         Assert.Equal(PaymentMethod.CashOnDelivery, capability.Method);
         Assert.Equal("cod", capability.ProviderCode);
         Assert.False(capability.SupportsWebhooks);
+        Assert.False(capability.RequiresExternalInitialization);
+    }
+
+    [Fact]
+    public void StripeCheckoutProvider_DefersExternalCreationUntilAfterCommit()
+    {
+        var provider = new StripeCheckoutPaymentProvider();
+        var result = PaymentProviderContract.NormalizeInitialization(
+            provider,
+            provider.Initialize(new PaymentInitializationRequest(
+                Guid.NewGuid(),
+                "ORDER-STRIPE",
+                100_000)));
+
+        Assert.Equal(PaymentMethod.Card, provider.CheckoutMethod);
+        Assert.True(provider.SupportsWebhooks);
+        Assert.True(provider.RequiresExternalInitialization);
+        Assert.Equal(PaymentStatus.Pending, result.Status);
+        Assert.Null(result.ProviderTransactionId);
     }
 
     [Theory]

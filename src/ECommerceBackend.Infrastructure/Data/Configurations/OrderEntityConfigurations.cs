@@ -9,12 +9,23 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
         public void Configure(EntityTypeBuilder<Order> builder)
         {
             builder.Property(order => order.TotalAmount).HasPrecision(18, 2);
+            builder.Property(order => order.BaseTotalAmount).HasPrecision(18, 2);
             builder.Property(order => order.SubtotalAmount).HasPrecision(18, 2);
+            builder.Property(order => order.BaseSubtotalAmount).HasPrecision(18, 2);
             builder.Property(order => order.DiscountAmount).HasPrecision(18, 2);
+            builder.Property(order => order.BaseDiscountAmount).HasPrecision(18, 2);
             builder.Property(order => order.ShippingFee).HasPrecision(18, 2);
+            builder.Property(order => order.BaseShippingFee).HasPrecision(18, 2);
             builder.Property(order => order.TaxAmount).HasPrecision(18, 2);
+            builder.Property(order => order.BaseTaxAmount).HasPrecision(18, 2);
+            builder.Property(order => order.ExchangeRate).HasPrecision(18, 10);
             builder.Property(order => order.Currency)
                 .HasMaxLength(3)
+                .IsUnicode(false)
+                .HasDefaultValue("VND");
+            builder.Property(order => order.BaseCurrency)
+                .HasMaxLength(3)
+                .IsUnicode(false)
                 .HasDefaultValue("VND");
             builder.Property(order => order.RowVersion).IsRowVersion();
 
@@ -49,6 +60,15 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
                     "CK_Orders_Currency_Valid",
                     "LEN([Currency]) = 3 AND [Currency] = UPPER([Currency])");
                 table.HasCheckConstraint(
+                    "CK_Orders_BaseCurrency_Valid",
+                    "LEN([BaseCurrency]) = 3 AND [BaseCurrency] = UPPER([BaseCurrency])");
+                table.HasCheckConstraint(
+                    "CK_Orders_ExchangeRate_Valid",
+                    "[ExchangeRate] > 0 AND [ExchangeRate] <= 1000000");
+                table.HasCheckConstraint(
+                    "CK_Orders_ExchangeRateCapturedAt_Valid",
+                    "[ExchangeRateCapturedAt] <= DATEADD(minute, 5, [OrderDate])");
+                table.HasCheckConstraint(
                     "CK_Orders_PromotionSnapshot_Consistent",
                     "([PromotionId] IS NULL AND [PromotionCodeSnapshot] IS NULL) OR ([PromotionId] IS NOT NULL AND [PromotionCodeSnapshot] IS NOT NULL)");
                 table.HasCheckConstraint(
@@ -57,6 +77,15 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
                 table.HasCheckConstraint(
                     "CK_Orders_TotalAmount_Consistent",
                     "[TotalAmount] = [SubtotalAmount] - [DiscountAmount] + [ShippingFee] + [TaxAmount]");
+                table.HasCheckConstraint(
+                    "CK_Orders_BaseAmounts_NonNegative",
+                    "[BaseSubtotalAmount] >= 0 AND [BaseDiscountAmount] >= 0 AND [BaseShippingFee] >= 0 AND [BaseTaxAmount] >= 0");
+                table.HasCheckConstraint(
+                    "CK_Orders_BaseTotalAmount_Consistent",
+                    "[BaseTotalAmount] = [BaseSubtotalAmount] - [BaseDiscountAmount] + [BaseShippingFee] + [BaseTaxAmount] AND [BaseTotalAmount] > 0");
+                table.HasCheckConstraint(
+                    "CK_Orders_SameCurrencySnapshot_Consistent",
+                    "[BaseCurrency] <> [Currency] OR ([ExchangeRate] = 1 AND [BaseSubtotalAmount] = [SubtotalAmount] AND [BaseDiscountAmount] = [DiscountAmount] AND [BaseShippingFee] = [ShippingFee] AND [BaseTaxAmount] = [TaxAmount] AND [BaseTotalAmount] = [TotalAmount])");
                 table.HasCheckConstraint(
                     "CK_Orders_ExpiresAt_Valid",
                     "[ExpiresAt] IS NULL OR [ExpiresAt] > [OrderDate]");
@@ -85,6 +114,7 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
         public void Configure(EntityTypeBuilder<OrderDetail> builder)
         {
             builder.Property(detail => detail.UnitPrice).HasPrecision(18, 2);
+            builder.Property(detail => detail.BaseUnitPrice).HasPrecision(18, 2);
             builder.HasIndex(detail => new { detail.OrderId, detail.ProductId })
                 .HasDatabaseName("UX_OrderDetails_OrderId_ProductId")
                 .IsUnique();
@@ -93,6 +123,7 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             {
                 table.HasCheckConstraint("CK_OrderDetails_Quantity_Positive", "[Quantity] > 0");
                 table.HasCheckConstraint("CK_OrderDetails_UnitPrice_Positive", "[UnitPrice] > 0");
+                table.HasCheckConstraint("CK_OrderDetails_BaseUnitPrice_Positive", "[BaseUnitPrice] > 0");
             });
 
             builder.HasOne(detail => detail.Order)

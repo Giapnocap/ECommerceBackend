@@ -28,8 +28,11 @@ namespace ECommerceBackend.Application
             services.AddScoped<AuthLogoutUseCase>();
             services.AddScoped<AuthLogoutAllUseCase>();
             services.AddScoped<PasswordResetUseCase>();
+            services.AddScoped<AuthSessionManagementUseCase>();
+            services.AddScoped<EmailVerificationUseCase>();
             services.AddScoped<AuthTokenIssuer>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<ICustomerManagementService, CustomerManagementService>();
         }
 
         private static void AddCatalogFeature(IServiceCollection services)
@@ -62,14 +65,19 @@ namespace ECommerceBackend.Application
             services.AddScoped<OrderReturnReviewUseCase>();
             services.AddScoped<OrderReturnReceiptUseCase>();
             services.AddScoped<OrderRefundUseCase>();
+            services.AddScoped<OnlinePaymentRefundUseCase>();
             services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();
+            services.AddScoped<IPaymentCommandService, PaymentCommandService>();
+            services.AddScoped<ExternalPaymentCreationUseCase>();
+            services.AddScoped<PaymentReconciliationUseCase>();
             services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         }
 
         private static void AddOperationsFeature(IServiceCollection services)
         {
             services.AddScoped<IReportService, ReportService>();
+            services.AddScoped<IAdminDashboardService, AdminDashboardService>();
             services.AddScoped<IOutboxWriter, OutboxWriter>();
             services.AddScoped<IAuditWriter, AuditWriter>();
             services.AddScoped<IOperationsService, OperationsService>();

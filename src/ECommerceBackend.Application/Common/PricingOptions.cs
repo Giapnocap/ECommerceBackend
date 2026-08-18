@@ -5,6 +5,8 @@ namespace ECommerceBackend.Application.Common
         public const string SectionName = "Pricing";
 
         public string Currency { get; set; } = "VND";
+        public string[] SupportedCurrencies { get; set; } =
+            [];
         public int QuoteValidityMinutes { get; set; } = 5;
         public decimal StandardShippingFee { get; set; } = 30_000m;
         public decimal ExpressShippingFee { get; set; } = 60_000m;

@@ -1,4 +1,5 @@
 using ECommerceBackend.Application.Common;
+using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Domain.Entities;
 
 namespace ECommerceBackend.Application.Interfaces.Repositories
@@ -30,6 +31,20 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
         Task<int> CountCustomerRedemptionsAsync(
             Guid promotionId,
             Guid userId,
+            CancellationToken cancellationToken = default);
+
+        Task<PromotionAnalyticsResponse?> GetAnalyticsByIdAsync(
+            Guid promotionId,
+            DateTime? from,
+            DateTime? to,
+            CancellationToken cancellationToken = default);
+
+        Task<PageSlice<PromotionAnalyticsResponse>> GetAnalyticsPageAsync(
+            DateTime? from,
+            DateTime? to,
+            string sortBy,
+            int skip,
+            int take,
             CancellationToken cancellationToken = default);
 
         Task AddAsync(

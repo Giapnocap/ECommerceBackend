@@ -69,6 +69,9 @@ namespace ECommerceBackend.Application.Services
                     throw AuthSessionRules.Unauthorized();
 
                 var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
+                if (user.IsLockedOutAt(occurredAt))
+                    throw AuthSessionRules.Unauthorized();
+
                 if (storedToken.RevokedAt.HasValue)
                 {
                     if (!string.IsNullOrWhiteSpace(

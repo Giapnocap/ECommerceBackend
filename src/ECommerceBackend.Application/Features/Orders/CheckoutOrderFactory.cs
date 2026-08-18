@@ -47,11 +47,12 @@ namespace ECommerceBackend.Application.Services
                     recipient.Name,
                     recipient.Phone));
             DomainRuleGuard.AsBusiness(() =>
-                order.SetPricing(
-                    pricing.Amounts.Subtotal,
-                    pricing.Amounts.Discount,
-                    pricing.Amounts.Shipping,
-                    pricing.Amounts.Tax));
+                order.SetPricingSnapshot(
+                    pricing.BaseCurrency,
+                    pricing.ExchangeRate,
+                    pricing.ExchangeRateCapturedAt,
+                    pricing.BaseAmounts,
+                    pricing.Amounts));
             DomainRuleGuard.AsBusiness(() =>
                 order.SetPendingExpiration(
                     occurredAt.AddMinutes(
@@ -74,7 +75,8 @@ namespace ECommerceBackend.Application.Services
                     order.TotalAmount,
                     initialized.Provider,
                     initialized.ProviderTransactionId,
-                    occurredAt));
+                    occurredAt,
+                    pricing.Currency));
             if (initialized.Status != payment.Status)
             {
                 DomainRuleGuard.AsBusiness(() =>

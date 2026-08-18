@@ -14,6 +14,7 @@ namespace ECommerceBackend.Domain.Entities
         public string Name { get; internal set; } = string.Empty;
         public decimal Price { get; internal set; }
         public int StockQuantity { get; internal set; }
+        public int LowStockThreshold { get; private set; } = 10;
         public string Description { get; internal set; } = string.Empty;
         public bool IsDeleted { get; internal set; }
         public DateTime CreatedAt { get; internal set; } = DateTime.UtcNow;
@@ -76,6 +77,22 @@ namespace ECommerceBackend.Domain.Entities
 
         public InventoryMutation AdjustStockTo(int targetQuantity)
             => InventoryPolicy.AdjustTo(this, targetQuantity);
+
+        public bool SetLowStockThreshold(int threshold)
+        {
+            if (threshold is < 0 or > 1_000_000)
+            {
+                throw new DomainRuleViolationException(
+                    "product_low_stock_threshold_invalid",
+                    "Ngưỡng tồn kho phải từ 0 đến 1.000.000.");
+            }
+
+            if (LowStockThreshold == threshold)
+                return false;
+
+            LowStockThreshold = threshold;
+            return true;
+        }
 
         public bool MarkDeleted()
         {

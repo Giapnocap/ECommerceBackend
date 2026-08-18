@@ -211,6 +211,21 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             .GetProperty("429")
             .GetProperty("headers")
             .TryGetProperty("Retry-After", out _));
+
+        var stripeWebhook = paths
+            .GetProperty("/api/v1/payments/webhooks/stripe")
+            .GetProperty("post");
+        Assert.False(stripeWebhook.TryGetProperty("security", out _));
+        AssertRequiredParameter(
+            stripeWebhook,
+            "Stripe-Signature",
+            "header");
+
+        var initializePayment = paths
+            .GetProperty("/api/v1/payments/orders/{orderId}/initialize")
+            .GetProperty("post");
+        Assert.True(initializePayment.TryGetProperty("security", out _));
+        AssertRequiredParameter(initializePayment, "orderId", "path");
     }
 
     [Fact]
@@ -365,6 +380,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             HttpStatusCode.Forbidden,
             (await client.GetAsync("/api/orders/summaries")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports/sales-summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/dashboard/summary")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/health/details")).StatusCode);
 
         using var checkout = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
@@ -422,8 +438,22 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             "/api/orders?page=1&pageSize=10",
             "/api/orders/summaries?page=1&pageSize=10",
             "/api/promotions?page=1&pageSize=10",
+            "/api/admin/promotions/analytics?page=1&pageSize=10&sortBy=usage",
             "/api/inventory/low-stock?page=1&pageSize=10",
+            "/api/admin/inventory?page=1&pageSize=10",
+            "/api/admin/customers?page=1&pageSize=10",
             "/api/reports/sales-summary",
+            "/api/admin/reports/revenue?groupBy=day",
+            "/api/admin/reports/orders",
+            "/api/admin/reports/products?limit=5",
+            "/api/admin/reports/customers?limit=5",
+            "/api/admin/reports/returns?reasonLimit=5",
+            "/api/admin/dashboard/summary",
+            "/api/admin/dashboard/revenue?groupBy=day",
+            "/api/admin/dashboard/orders-by-status",
+            "/api/admin/dashboard/top-products?limit=5",
+            "/api/admin/dashboard/low-stock?page=1&pageSize=10",
+            "/api/admin/dashboard/recent-activities?limit=5",
             "/api/operations/outbox/dead-letters?page=1&pageSize=10",
             "/api/operations/audit-events?page=1&pageSize=10",
             "/health/details"
@@ -505,6 +535,76 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task AdminStockIn_RequiresEtagAndWritesTraceableInventoryLedger()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Admin)).AccessToken);
+        var categoryId = Guid.NewGuid();
+        var productId = Guid.NewGuid();
+        byte[] version = [1, 2, 3, 4, 5, 6, 7, 8];
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            context.Categories.Add(new Category
+            {
+                Id = categoryId,
+                Name = "API stock in"
+            });
+            context.Products.Add(new Product
+            {
+                Id = productId,
+                CategoryId = categoryId,
+                Name = "API stock in product",
+                Price = 100m,
+                StockQuantity = 5,
+                Description = "API stock in product",
+                CreatedAt = DateTime.UtcNow,
+                RowVersion = version
+            });
+            await context.SaveChangesAsync();
+        }
+
+        using var missingPrecondition = await client.PostAsJsonAsync(
+            $"/api/admin/inventory/{productId}/stock-in",
+            new StockInRequest { Quantity = 3, Reason = "Nhập hàng" });
+        Assert.Equal((HttpStatusCode)428, missingPrecondition.StatusCode);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/admin/inventory/{productId}/stock-in")
+        {
+            Content = JsonContent.Create(new StockInRequest
+            {
+                Quantity = 3,
+                Reference = " GRN-API-001 ",
+                Reason = " Nhập hàng API "
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            $"\"{Convert.ToBase64String(version)}\"");
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var verificationScope = _factory.Services.CreateScope();
+        var verificationContext = verificationScope.ServiceProvider
+            .GetRequiredService<AppDbContext>();
+        Assert.Equal(
+            8,
+            await verificationContext.Products
+                .Where(product => product.Id == productId)
+                .Select(product => product.StockQuantity)
+                .SingleAsync());
+        var transaction = await verificationContext.InventoryTransactions
+            .SingleAsync(item => item.ProductId == productId);
+        Assert.Equal(InventoryTransactionType.StockIn, transaction.Type);
+        Assert.Equal(3, transaction.QuantityChange);
+        Assert.Equal(8, transaction.BalanceAfter);
+        Assert.Equal("GRN-API-001", transaction.Reference);
+        Assert.Equal("Nhập hàng API", transaction.Reason);
+    }
+
+    [Fact]
     public async Task StaffSession_UsesPermissionsWithoutReceivingAdminAccess()
     {
         using var client = await _factory.CreateInitializedClientAsync();
@@ -516,11 +616,75 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             "/api/orders/summaries?page=1&pageSize=10",
             HttpStatusCode.OK);
         await AssertStatusAsync(client, "/api/inventory/low-stock?page=1&pageSize=10", HttpStatusCode.OK);
+        await AssertStatusAsync(client, "/api/admin/inventory?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/admin/customers?page=1&pageSize=10", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/users?page=1&pageSize=10", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/promotions?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/admin/promotions/analytics?page=1&pageSize=10&sortBy=usage", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/reports/sales-summary", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/admin/reports/revenue?groupBy=day", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/api/operations/audit-events", HttpStatusCode.Forbidden);
         await AssertStatusAsync(client, "/health/details", HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task AdminSession_CanReadRedactedAuditEventDetail()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        var auditEventId = Guid.NewGuid();
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            context.AuditEvents.Add(new AuditEvent
+            {
+                Id = auditEventId,
+                Action = "user.update",
+                EntityType = "User",
+                EntityId = Guid.NewGuid().ToString(),
+                CorrelationId = "audit-contract-test",
+                MetadataJson = "{\"reason\":\"manual review\",\"accessToken\":\"secret-token\"}",
+                CreatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+        }
+
+        SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Admin)).AccessToken);
+        using var response = await client.GetAsync($"/api/operations/audit-events/{auditEventId}");
+        using var payload = await ReadJsonAsync(response);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var metadata = payload.RootElement.GetProperty("metadataJson").GetString();
+        Assert.Contains("manual review", metadata, StringComparison.Ordinal);
+        Assert.Contains("[REDACTED]", metadata, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-token", metadata, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AdminCustomerLock_RevokesCustomerSessionAndInvalidatesAccessToken()
+    {
+        using var client = await _factory.CreateInitializedClientAsync();
+        var customer = await CreateRoleSessionAsync(client, RoleNames.Customer);
+        var administrator = await CreateRoleSessionAsync(client, RoleNames.Admin);
+        SetBearerToken(client, administrator.AccessToken);
+
+        using (var lockResponse = await client.PostAsync(
+                   $"/api/admin/customers/{customer.UserId}/lock",
+                   content: null))
+        {
+            Assert.Equal(HttpStatusCode.OK, lockResponse.StatusCode);
+        }
+
+        SetBearerToken(client, customer.AccessToken);
+        await AssertStatusAsync(client, "/api/users/me", HttpStatusCode.Unauthorized);
+
+        SetBearerToken(client, administrator.AccessToken);
+        using var unlockResponse = await client.PostAsync(
+            $"/api/admin/customers/{customer.UserId}/unlock",
+            content: null);
+        Assert.Equal(HttpStatusCode.OK, unlockResponse.StatusCode);
+
+        SetBearerToken(client, customer.AccessToken);
+        await AssertStatusAsync(client, "/api/users/me", HttpStatusCode.Unauthorized);
     }
 
     private async Task<AuthResponse> CreateRoleSessionAsync(HttpClient client, string roleName)
@@ -663,7 +827,8 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
                 ["AdminBootstrap:Enabled"] = "false",
                 ["Outbox:Enabled"] = "false",
                 ["OrderLifecycle:ExpirationEnabled"] = "false",
-                ["Notifications:Smtp:Enabled"] = "false"
+                ["Notifications:Smtp:Enabled"] = "false",
+                ["RateLimiting:Auth:PermitLimit"] = "1000"
             });
         });
         builder.ConfigureServices(services =>

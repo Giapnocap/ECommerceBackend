@@ -69,6 +69,7 @@ namespace ECommerceBackend.Application.Services
             return new AuthResponse
             {
                 UserId = user.Id,
+                SessionId = sessionId,
                 Token = accessToken.Token,
                 AccessToken = accessToken.Token,
                 AccessTokenExpiresAt = accessToken.ExpiresAt,
@@ -77,6 +78,7 @@ namespace ECommerceBackend.Application.Services
                 UserName = user.UserName,
                 FullName = user.FullName,
                 Email = user.Email,
+                EmailVerified = user.EmailVerifiedAt.HasValue,
                 Roles = roleList,
                 Permissions = permissionList
             };

@@ -3,6 +3,8 @@ using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
 using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Security;
 using ECommerceBackend.Tests.Support;
 using Microsoft.EntityFrameworkCore;
@@ -42,6 +44,143 @@ public class AuthServiceTests
             .Where(token => token.UserId == response.UserId)
             .ToListAsync();
         Assert.Contains(refreshTokens, token => !token.IsRevoked);
+        Assert.False(response.EmailVerified);
+        Assert.Single(await context.EmailVerificationTokens
+            .Where(token => token.UserId == response.UserId)
+            .ToListAsync());
+    }
+
+    [Fact]
+    public async Task SessionManagement_ListsAndRevokesOnlySelectedSession()
+    {
+        var now = new DateTimeOffset(2026, 8, 18, 13, 0, 0, TimeSpan.Zero);
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(now));
+        var first = await service.RegisterAsync(new RegisterRequest
+        {
+            UserName = "session_customer",
+            Email = "session_customer@example.com",
+            Password = "Customer@123",
+            FullName = "Session Customer"
+        });
+        var second = await service.LoginAsync(new LoginRequest
+        {
+            UserName = "session_customer",
+            Password = "Customer@123"
+        });
+
+        var sessions = await service.GetSessionsAsync(
+            first.UserId,
+            first.SessionId);
+        Assert.Equal(2, sessions.Count);
+        Assert.Single(sessions, session => session.IsCurrent);
+        Assert.Contains(sessions, session => session.SessionId == second.SessionId);
+
+        await service.RevokeSessionAsync(first.UserId, second.SessionId);
+
+        var remaining = await service.GetSessionsAsync(
+            first.UserId,
+            first.SessionId);
+        var current = Assert.Single(remaining);
+        Assert.Equal(first.SessionId, current.SessionId);
+        await Assert.ThrowsAsync<ApiException>(() => service.RefreshAsync(
+            new RefreshTokenRequest { RefreshToken = second.RefreshToken }));
+        var refreshedFirst = await service.RefreshAsync(
+            new RefreshTokenRequest { RefreshToken = first.RefreshToken });
+        Assert.Equal(first.SessionId, refreshedFirst.SessionId);
+    }
+
+    [Fact]
+    public async Task EmailVerification_IsHashedExpiringAndSingleUse()
+    {
+        var now = new DateTimeOffset(2026, 8, 18, 14, 0, 0, TimeSpan.Zero);
+        var protector = new TestSensitivePayloadProtector();
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(now),
+            payloadProtector: protector);
+        var registered = await service.RegisterAsync(new RegisterRequest
+        {
+            UserName = "verified_customer",
+            Email = "verified_customer@example.com",
+            Password = "Customer@123",
+            FullName = "Verified Customer"
+        });
+        var (message, payload) = await GetProtectedNotificationAsync(
+            context,
+            protector,
+            "Xác minh địa chỉ email");
+        var verificationUrl = new Uri(
+            payload.Message.Split('\n')[0].Split(": ", 2)[1]);
+        var rawToken = Uri.UnescapeDataString(
+            verificationUrl.Query["?token=".Length..]);
+        var storedToken = await context.EmailVerificationTokens.SingleAsync();
+
+        Assert.Equal(64, storedToken.TokenHash.Length);
+        Assert.NotEqual(rawToken, storedToken.TokenHash);
+        Assert.DoesNotContain(rawToken, message.Payload, StringComparison.Ordinal);
+
+        await service.ConfirmEmailAsync(
+            new ConfirmEmailRequest { Token = rawToken });
+
+        var user = await context.Users.SingleAsync(candidate =>
+            candidate.Id == registered.UserId);
+        Assert.Equal(now.UtcDateTime, user.EmailVerifiedAt);
+        Assert.Equal(now.UtcDateTime, storedToken.ConsumedAt);
+        var reused = await Assert.ThrowsAsync<ApiException>(() =>
+            service.ConfirmEmailAsync(
+                new ConfirmEmailRequest { Token = rawToken }));
+        Assert.Equal("invalid_email_verification_token", reused.Code);
+    }
+
+    [Fact]
+    public async Task EmailVerification_ExpiredTokenDoesNotVerifyUser()
+    {
+        var now = new DateTimeOffset(2026, 8, 18, 15, 0, 0, TimeSpan.Zero);
+        var protector = new TestSensitivePayloadProtector();
+        var options = new AuthSecurityOptions
+        {
+            EmailVerificationTokenMinutes = 5
+        };
+        await using var context = TestAppDbContext.Create();
+        var issuingService = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(now),
+            options,
+            payloadProtector: protector);
+        var registered = await issuingService.RegisterAsync(new RegisterRequest
+        {
+            UserName = "expired_verification",
+            Email = "expired_verification@example.com",
+            Password = "Customer@123",
+            FullName = "Expired Verification"
+        });
+        var (_, payload) = await GetProtectedNotificationAsync(
+            context,
+            protector,
+            "Xác minh địa chỉ email");
+        var verificationUrl = new Uri(
+            payload.Message.Split('\n')[0].Split(": ", 2)[1]);
+        var rawToken = Uri.UnescapeDataString(
+            verificationUrl.Query["?token=".Length..]);
+        var expiredService = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(now.AddMinutes(6)),
+            options,
+            payloadProtector: protector);
+
+        var exception = await Assert.ThrowsAsync<ApiException>(() =>
+            expiredService.ConfirmEmailAsync(
+                new ConfirmEmailRequest { Token = rawToken }));
+
+        Assert.Equal("invalid_email_verification_token", exception.Code);
+        var user = await context.Users.SingleAsync(candidate =>
+            candidate.Id == registered.UserId);
+        Assert.Null(user.EmailVerifiedAt);
+        Assert.Null((await context.EmailVerificationTokens.SingleAsync()).ConsumedAt);
     }
 
     [Fact]
@@ -303,6 +442,36 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task RefreshAsync_RejectsLockedAccountWithoutRotatingItsSession()
+    {
+        var now = new DateTimeOffset(2026, 8, 18, 10, 0, 0, TimeSpan.Zero);
+        await using var context = TestAppDbContext.Create();
+        var service = TestServiceFactory.CreateAuthService(
+            context,
+            new FixedTimeProvider(now));
+        var registered = await service.RegisterAsync(new RegisterRequest
+        {
+            UserName = "refresh_locked_customer",
+            Email = "refresh_locked_customer@example.com",
+            Password = "Customer@123",
+            FullName = "Refresh Locked Customer"
+        });
+        var user = await context.Users.SingleAsync(candidate => candidate.Id == registered.UserId);
+        user.RecordFailedLogin(now.UtcDateTime, maxFailedAttempts: 1, TimeSpan.FromMinutes(15));
+        await context.SaveChangesAsync();
+
+        var exception = await Assert.ThrowsAsync<ApiException>(() => service.RefreshAsync(
+            new RefreshTokenRequest { RefreshToken = registered.RefreshToken }));
+
+        Assert.Equal(401, exception.StatusCode);
+        var tokens = await context.RefreshTokens
+            .Where(token => token.UserId == registered.UserId)
+            .ToListAsync();
+        Assert.Single(tokens);
+        Assert.True(tokens[0].IsActiveAt(now.UtcDateTime));
+    }
+
+    [Fact]
     public async Task LoginAsync_LocksAfterConfiguredFailures_ThenAutomaticallyUnlocks()
     {
         var now = new DateTimeOffset(2026, 7, 24, 10, 0, 0, TimeSpan.Zero);
@@ -392,13 +561,10 @@ public class AuthServiceTests
         });
 
         var resetToken = await context.PasswordResetTokens.SingleAsync();
-        var outboxMessage = await context.OutboxMessages
-            .SingleAsync(message =>
-                message.Type == OutboxMessageTypes.ProtectedNotificationRequested);
-        var payload = JsonSerializer.Deserialize<NotificationRequestedPayload>(
-            protector.Unprotect(outboxMessage.Payload),
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.NotNull(payload);
+        var (outboxMessage, payload) = await GetProtectedNotificationAsync(
+            context,
+            protector,
+            "Đặt lại mật khẩu");
         var resetUrl = new Uri(payload.Message.Split('\n')[0].Split(": ", 2)[1]);
         var rawToken = Uri.UnescapeDataString(resetUrl.Query["?token=".Length..]);
 
@@ -487,12 +653,10 @@ public class AuthServiceTests
         {
             Email = "expired_reset_customer@example.com"
         });
-        var message = await context.OutboxMessages.SingleAsync(candidate =>
-            candidate.Type == OutboxMessageTypes.ProtectedNotificationRequested);
-        var payload = JsonSerializer.Deserialize<NotificationRequestedPayload>(
-            protector.Unprotect(message.Payload),
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.NotNull(payload);
+        var (_, payload) = await GetProtectedNotificationAsync(
+            context,
+            protector,
+            "Đặt lại mật khẩu");
         var resetUrl = new Uri(payload.Message.Split('\n')[0].Split(": ", 2)[1]);
         var rawToken = Uri.UnescapeDataString(resetUrl.Query["?token=".Length..]);
         var expiredService = TestServiceFactory.CreateAuthService(
@@ -533,6 +697,30 @@ public class AuthServiceTests
             Verifications.Add((password, passwordHash));
             return _inner.Verify(password, passwordHash);
         }
+    }
+
+    private static async Task<(OutboxMessage Message, NotificationRequestedPayload Payload)>
+        GetProtectedNotificationAsync(
+            AppDbContext context,
+            TestSensitivePayloadProtector protector,
+            string subject)
+    {
+        var candidates = await context.OutboxMessages
+            .Where(message =>
+                message.Type == OutboxMessageTypes.ProtectedNotificationRequested)
+            .ToListAsync();
+        var matches = candidates
+            .Select(message =>
+            {
+                var payload = JsonSerializer.Deserialize<NotificationRequestedPayload>(
+                    protector.Unprotect(message.Payload),
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                return (Message: message, Payload: payload);
+            })
+            .Where(candidate => candidate.Payload?.Subject == subject)
+            .ToArray();
+        var match = Assert.Single(matches);
+        return (match.Message, Assert.IsType<NotificationRequestedPayload>(match.Payload));
     }
 
     private sealed class RecordingAuditWriter : IAuditWriter

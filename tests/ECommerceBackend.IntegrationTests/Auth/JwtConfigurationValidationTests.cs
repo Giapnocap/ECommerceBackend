@@ -270,6 +270,42 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void StripeEnabled_RequiresTestKeysAndWebhookSecret()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Payments:Stripe:Enabled"] = "true",
+            ["Payments:Stripe:SecretKey"] = "live-secret",
+            ["Payments:Stripe:PublishableKey"] = "public-key",
+            ["Payments:Stripe:WebhookSecret"] = "webhook-secret"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<StripePaymentOptions>>()
+                .Value);
+    }
+
+    [Fact]
+    public void PaymentReconciliation_CannotRunWhenStripeIsDisabled()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Payments:Stripe:Enabled"] = "false",
+            ["Payments:Stripe:ReconciliationEnabled"] = "true"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<StripePaymentOptions>>()
+                .Value);
+    }
+
+    [Fact]
     public void Pricing_WithInvalidCurrencyOrTaxRate_FailsValidation()
     {
         var values = new Dictionary<string, string?>
@@ -283,6 +319,23 @@ public sealed class JwtConfigurationValidationTests
 
         Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IOptions<PricingOptions>>()
+                .Value);
+    }
+
+    [Fact]
+    public void ExchangeRates_EnabledWithoutApiKey_FailsValidation()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["Pricing:ExchangeRates:Enabled"] = "true",
+            ["Pricing:ExchangeRates:ApiKey"] = ""
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<ExchangeRateOptions>>()
                 .Value);
     }
 
@@ -327,7 +380,8 @@ public sealed class JwtConfigurationValidationTests
     {
         var values = new Dictionary<string, string?>
         {
-            ["AuthSecurity:PasswordResetUrl"] = "http://localhost:3000/reset-password"
+            ["AuthSecurity:PasswordResetUrl"] = "http://localhost:3000/reset-password",
+            ["AuthSecurity:EmailVerificationUrl"] = "https://shop.example.com/verify-email"
         };
         using var provider = CreateProvider(
             new string('a', JwtOptions.MinimumKeyBytes),
@@ -343,7 +397,8 @@ public sealed class JwtConfigurationValidationTests
     {
         var values = new Dictionary<string, string?>
         {
-            ["AuthSecurity:PasswordResetUrl"] = "https://shop.example.com/reset-password"
+            ["AuthSecurity:PasswordResetUrl"] = "https://shop.example.com/reset-password",
+            ["AuthSecurity:EmailVerificationUrl"] = "https://shop.example.com/verify-email"
         };
         using var provider = CreateProvider(
             new string('a', JwtOptions.MinimumKeyBytes),
@@ -357,6 +412,23 @@ public sealed class JwtConfigurationValidationTests
         Assert.Equal(
             "https://shop.example.com/reset-password",
             options.PasswordResetUrl);
+    }
+
+    [Fact]
+    public void ProductionEmailVerificationUrl_MustUsePublicHttps()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["AuthSecurity:PasswordResetUrl"] = "https://shop.example.com/reset-password",
+            ["AuthSecurity:EmailVerificationUrl"] = "http://localhost:3000/verify-email"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Production,
+            values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<AuthSecurityOptions>>().Value);
     }
 
     private static ServiceProvider CreateProvider(

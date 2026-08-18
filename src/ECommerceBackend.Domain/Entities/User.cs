@@ -17,6 +17,7 @@ namespace ECommerceBackend.Domain.Entities
         public int FailedLoginCount { get; private set; }
         public DateTime? LockoutEndAt { get; private set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime? EmailVerifiedAt { get; private set; }
         public DateTime? PasswordChangedAt { get; private set; }
         public byte[] RowVersion { get; set; } = [];
 
@@ -26,6 +27,8 @@ namespace ECommerceBackend.Domain.Entities
         public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
         public ICollection<PasswordResetToken> PasswordResetTokens { get; set; } =
             new List<PasswordResetToken>();
+        public ICollection<EmailVerificationToken> EmailVerificationTokens { get; set; } =
+            new List<EmailVerificationToken>();
         public ICollection<OrderStatusHistory> OrderStatusChanges { get; set; } = new List<OrderStatusHistory>();
         public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = new List<InventoryTransaction>();
 
@@ -117,6 +120,22 @@ namespace ECommerceBackend.Domain.Entities
             InvalidateSessions();
         }
 
+        public bool VerifyEmail(DateTime occurredAt)
+        {
+            if (EmailVerifiedAt.HasValue)
+                return false;
+
+            if (occurredAt < CreatedAt)
+            {
+                throw new DomainRuleViolationException(
+                    "user_email_verification_time_invalid",
+                    "Thời điểm xác minh email không được trước thời điểm tạo tài khoản.");
+            }
+
+            EmailVerifiedAt = occurredAt;
+            return true;
+        }
+
         public bool IsLockedOutAt(DateTime occurredAt)
             => LockoutEndAt.HasValue && LockoutEndAt.Value > occurredAt;
 
@@ -150,6 +169,35 @@ namespace ECommerceBackend.Domain.Entities
         {
             FailedLoginCount = 0;
             LockoutEndAt = null;
+        }
+
+        public bool LockByAdministrator()
+        {
+            if (IsDeleted)
+            {
+                throw new DomainRuleViolationException(
+                    "user_deleted",
+                    "Không thể khóa tài khoản đã bị xóa.");
+            }
+
+            // DateTime.MaxValue represents a manual lock that requires an explicit unlock.
+            if (LockoutEndAt == DateTime.MaxValue)
+                return false;
+
+            FailedLoginCount = 0;
+            LockoutEndAt = DateTime.MaxValue;
+            InvalidateSessions();
+            return true;
+        }
+
+        public bool UnlockByAdministrator()
+        {
+            if (!LockoutEndAt.HasValue)
+                return false;
+
+            ClearLoginFailures();
+            InvalidateSessions();
+            return true;
         }
 
         public void InvalidateSessions()

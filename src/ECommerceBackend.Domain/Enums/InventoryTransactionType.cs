@@ -6,6 +6,7 @@ namespace ECommerceBackend.Domain.Enums
         ManualAdjustment = 1,
         OrderPlaced = 2,
         OrderCancelled = 3,
-        OrderReturned = 4
+        OrderReturned = 4,
+        StockIn = 5
     }
 }

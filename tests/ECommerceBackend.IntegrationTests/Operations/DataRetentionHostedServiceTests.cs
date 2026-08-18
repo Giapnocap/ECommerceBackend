@@ -124,5 +124,10 @@ public sealed class DataRetentionHostedServiceTests
             AuditQueryParams query,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+
+        public Task<AuditEventResponse> GetAuditEventAsync(
+            Guid id,
+            CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
     }
 }

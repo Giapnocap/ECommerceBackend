@@ -19,7 +19,15 @@ namespace ECommerceBackend.Domain.Entities
         public string? PromotionCodeSnapshot { get; internal set; }
         public ShippingMethod ShippingMethod { get; internal set; }
         public string Currency { get; internal set; } = "VND";
+        public string BaseCurrency { get; private set; } = "VND";
+        public decimal ExchangeRate { get; private set; } = 1m;
+        public DateTime ExchangeRateCapturedAt { get; private set; }
         public DateTime OrderDate { get; internal set; } = DateTime.UtcNow;
+        public decimal BaseSubtotalAmount { get; private set; }
+        public decimal BaseDiscountAmount { get; private set; }
+        public decimal BaseShippingFee { get; private set; }
+        public decimal BaseTaxAmount { get; private set; }
+        public decimal BaseTotalAmount { get; private set; }
         public decimal SubtotalAmount { get; private set; }
         public decimal DiscountAmount { get; private set; }
         public decimal ShippingFee { get; private set; }
@@ -87,8 +95,7 @@ namespace ECommerceBackend.Domain.Entities
             }
 
             if (!Enum.IsDefined(shippingMethod)
-                || currency is not { Length: 3 }
-                || currency.Any(character => character is < 'A' or > 'Z'))
+                || !CurrencyCatalog.IsSupported(currency))
             {
                 throw new DomainRuleViolationException(
                     "order_shipping_invalid",
@@ -114,7 +121,7 @@ namespace ECommerceBackend.Domain.Entities
                 PromotionId = promotionId,
                 PromotionCodeSnapshot = promotionCodeSnapshot?.Trim(),
                 ShippingMethod = shippingMethod,
-                Currency = currency,
+                Currency = CurrencyCatalog.Normalize(currency),
                 OrderDate = orderDate,
                 ShippingAddress = shippingAddress.Trim(),
                 Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim()
@@ -163,11 +170,74 @@ namespace ECommerceBackend.Domain.Entities
                 shipping,
                 tax);
 
-            SubtotalAmount = amounts.Subtotal;
-            DiscountAmount = amounts.Discount;
-            ShippingFee = amounts.Shipping;
-            TaxAmount = amounts.Tax;
-            TotalAmount = amounts.Total;
+            SetPricingSnapshot(
+                Currency,
+                1m,
+                OrderDate,
+                amounts,
+                amounts);
+        }
+
+        public void SetPricingSnapshot(
+            string baseCurrency,
+            decimal exchangeRate,
+            DateTime exchangeRateCapturedAt,
+            OrderAmounts baseAmounts,
+            OrderAmounts orderAmounts)
+        {
+            var normalizedBaseCurrency = CurrencyCatalog.Get(
+                baseCurrency).Code;
+            _ = CurrencyCatalog.Get(Currency);
+            var validatedBaseAmounts = OrderPricingPolicy.CalculateAmounts(
+                baseAmounts.Subtotal,
+                baseAmounts.Discount,
+                baseAmounts.Shipping,
+                baseAmounts.Tax);
+            var validatedOrderAmounts = OrderPricingPolicy.CalculateAmounts(
+                orderAmounts.Subtotal,
+                orderAmounts.Discount,
+                orderAmounts.Shipping,
+                orderAmounts.Tax);
+
+            if (exchangeRate <= 0
+                || exchangeRate > 1_000_000m
+                || decimal.Round(
+                    exchangeRate,
+                    10,
+                    MidpointRounding.ToEven) != exchangeRate
+                || exchangeRateCapturedAt
+                    > OrderDate.AddMinutes(5))
+            {
+                throw new DomainRuleViolationException(
+                    "order_exchange_rate_invalid",
+                    "Snapshot tỷ giá của đơn hàng không hợp lệ.");
+            }
+
+            if (string.Equals(
+                    normalizedBaseCurrency,
+                    Currency,
+                    StringComparison.Ordinal)
+                && (exchangeRate != 1m
+                    || validatedBaseAmounts != validatedOrderAmounts))
+            {
+                throw new DomainRuleViolationException(
+                    "order_same_currency_snapshot_invalid",
+                    "Đơn hàng dùng tiền tệ cơ sở phải có tỷ giá 1 và số tiền không đổi.");
+            }
+
+            BaseCurrency = normalizedBaseCurrency;
+            ExchangeRate = exchangeRate;
+            ExchangeRateCapturedAt = exchangeRateCapturedAt;
+            BaseSubtotalAmount = validatedBaseAmounts.Subtotal;
+            BaseDiscountAmount = validatedBaseAmounts.Discount;
+            BaseShippingFee = validatedBaseAmounts.Shipping;
+            BaseTaxAmount = validatedBaseAmounts.Tax;
+            BaseTotalAmount = validatedBaseAmounts.Total;
+            SubtotalAmount = validatedOrderAmounts.Subtotal;
+            DiscountAmount = validatedOrderAmounts.Discount;
+            ShippingFee = validatedOrderAmounts.Shipping;
+            TaxAmount = validatedOrderAmounts.Tax;
+            TotalAmount = validatedOrderAmounts.Total;
         }
 
         public StatusChange<OrderStatus> ChangeStatus(

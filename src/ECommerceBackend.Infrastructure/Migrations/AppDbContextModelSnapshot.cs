@@ -179,6 +179,53 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("ECommerceBackend.Domain.Entities.EmailVerificationToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("UX_EmailVerificationTokens_UserId_Active")
+                        .HasFilter("[ConsumedAt] IS NULL AND [RevokedAt] IS NULL");
+
+                    b.ToTable("EmailVerificationTokens");
+                });
+
             modelBuilder.Entity("ECommerceBackend.Domain.Entities.InventoryTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -207,6 +254,10 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("Reference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<int>("Type")
                         .HasColumnType("int");
 
@@ -227,13 +278,13 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_InventoryTransactions_Balance_NonNegative", "[BalanceAfter] >= 0");
 
-                            t.HasCheckConstraint("CK_InventoryTransactions_OrderLink_MatchesType", "([Type] IN (0, 1) AND [OrderId] IS NULL) OR ([Type] IN (2, 3, 4) AND [OrderId] IS NOT NULL)");
+                            t.HasCheckConstraint("CK_InventoryTransactions_OrderLink_MatchesType", "([Type] IN (0, 1, 5) AND [OrderId] IS NULL) OR ([Type] IN (2, 3, 4) AND [OrderId] IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_InventoryTransactions_QuantityChange_MatchesType", "([Type] = 0 AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] IN (3, 4) AND [QuantityChange] > 0)");
+                            t.HasCheckConstraint("CK_InventoryTransactions_QuantityChange_MatchesType", "([Type] IN (0, 5) AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] IN (3, 4) AND [QuantityChange] > 0)");
 
                             t.HasCheckConstraint("CK_InventoryTransactions_QuantityChange_NotZero", "[QuantityChange] <> 0");
 
-                            t.HasCheckConstraint("CK_InventoryTransactions_Type_Valid", "[Type] BETWEEN 0 AND 4");
+                            t.HasCheckConstraint("CK_InventoryTransactions_Type_Valid", "[Type] BETWEEN 0 AND 5");
                         });
                 });
 
@@ -242,6 +293,34 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("BaseCurrency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(3)")
+                        .HasDefaultValue("VND");
+
+                    b.Property<decimal>("BaseDiscountAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseShippingFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseSubtotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseTaxAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("BaseTotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<string>("CancellationReason")
                         .HasMaxLength(200)
@@ -254,12 +333,20 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .IsRequired()
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(3)
-                        .HasColumnType("nvarchar(3)")
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(3)")
                         .HasDefaultValue("VND");
 
                     b.Property<decimal>("DiscountAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ExchangeRate")
+                        .HasPrecision(18, 10)
+                        .HasColumnType("decimal(18,10)");
+
+                    b.Property<DateTime>("ExchangeRateCapturedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime?>("ExpiredAt")
                         .HasColumnType("datetime2");
@@ -366,15 +453,27 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_Orders_Amounts_NonNegative", "[SubtotalAmount] >= 0 AND [DiscountAmount] >= 0 AND [ShippingFee] >= 0 AND [TaxAmount] >= 0");
 
+                            t.HasCheckConstraint("CK_Orders_BaseAmounts_NonNegative", "[BaseSubtotalAmount] >= 0 AND [BaseDiscountAmount] >= 0 AND [BaseShippingFee] >= 0 AND [BaseTaxAmount] >= 0");
+
+                            t.HasCheckConstraint("CK_Orders_BaseCurrency_Valid", "LEN([BaseCurrency]) = 3 AND [BaseCurrency] = UPPER([BaseCurrency])");
+
+                            t.HasCheckConstraint("CK_Orders_BaseTotalAmount_Consistent", "[BaseTotalAmount] = [BaseSubtotalAmount] - [BaseDiscountAmount] + [BaseShippingFee] + [BaseTaxAmount] AND [BaseTotalAmount] > 0");
+
                             t.HasCheckConstraint("CK_Orders_Cancellation_Consistent", "([Status] = 4 AND (([CancelledAt] IS NOT NULL AND [CancellationReason] IS NOT NULL) OR ([CancelledAt] IS NULL AND [ExpiredAt] IS NULL AND [CancellationReason] IS NULL))) OR ([Status] <> 4 AND [CancelledAt] IS NULL AND [ExpiredAt] IS NULL AND [CancellationReason] IS NULL)");
 
                             t.HasCheckConstraint("CK_Orders_Currency_Valid", "LEN([Currency]) = 3 AND [Currency] = UPPER([Currency])");
+
+                            t.HasCheckConstraint("CK_Orders_ExchangeRateCapturedAt_Valid", "[ExchangeRateCapturedAt] <= DATEADD(minute, 5, [OrderDate])");
+
+                            t.HasCheckConstraint("CK_Orders_ExchangeRate_Valid", "[ExchangeRate] > 0 AND [ExchangeRate] <= 1000000");
 
                             t.HasCheckConstraint("CK_Orders_Expiration_Consistent", "[ExpiredAt] IS NULL OR ([ExpiresAt] IS NOT NULL AND [ExpiredAt] >= [ExpiresAt] AND [Status] = 4)");
 
                             t.HasCheckConstraint("CK_Orders_ExpiresAt_Valid", "[ExpiresAt] IS NULL OR [ExpiresAt] > [OrderDate]");
 
                             t.HasCheckConstraint("CK_Orders_PromotionSnapshot_Consistent", "([PromotionId] IS NULL AND [PromotionCodeSnapshot] IS NULL) OR ([PromotionId] IS NOT NULL AND [PromotionCodeSnapshot] IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_Orders_SameCurrencySnapshot_Consistent", "[BaseCurrency] <> [Currency] OR ([ExchangeRate] = 1 AND [BaseSubtotalAmount] = [SubtotalAmount] AND [BaseDiscountAmount] = [DiscountAmount] AND [BaseShippingFee] = [ShippingFee] AND [BaseTaxAmount] = [TaxAmount] AND [BaseTotalAmount] = [TotalAmount])");
 
                             t.HasCheckConstraint("CK_Orders_ShippingMethod_Valid", "[ShippingMethod] BETWEEN 0 AND 1");
 
@@ -391,6 +490,10 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("BaseUnitPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<Guid>("OrderId")
                         .HasColumnType("uniqueidentifier");
@@ -420,6 +523,8 @@ namespace ECommerceBackend.Infrastructure.Migrations
 
                     b.ToTable("OrderDetails", t =>
                         {
+                            t.HasCheckConstraint("CK_OrderDetails_BaseUnitPrice_Positive", "[BaseUnitPrice] > 0");
+
                             t.HasCheckConstraint("CK_OrderDetails_Quantity_Positive", "[Quantity] > 0");
 
                             t.HasCheckConstraint("CK_OrderDetails_UnitPrice_Positive", "[UnitPrice] > 0");
@@ -600,6 +705,29 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<DateTime?>("ExternalCreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ExternalCreationIdempotencyKey")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<DateTime?>("ExternalCreationLeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastProviderEventAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastReconciledAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Method")
                         .HasColumnType("int");
 
@@ -617,6 +745,10 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<decimal>("RefundedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -627,6 +759,16 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExternalCreationIdempotencyKey")
+                        .IsUnique()
+                        .HasFilter("[ExternalCreationIdempotencyKey] IS NOT NULL");
+
+                    b.HasIndex("ExternalCreationLeaseUntil")
+                        .HasFilter("[ExternalCreationLeaseUntil] IS NOT NULL");
+
+                    b.HasIndex("LastProviderEventAt")
+                        .HasFilter("[LastProviderEventAt] IS NOT NULL");
 
                     b.HasIndex("OrderId")
                         .IsUnique();
@@ -640,15 +782,118 @@ namespace ECommerceBackend.Infrastructure.Migrations
 
                     b.HasIndex("Status", "CreatedAt");
 
+                    b.HasIndex("Status", "LastReconciledAt")
+                        .HasFilter("[ProviderTransactionId] IS NOT NULL");
+
                     b.ToTable("Payments", t =>
                         {
                             t.HasCheckConstraint("CK_Payments_Amount_Positive", "[Amount] > 0");
 
-                            t.HasCheckConstraint("CK_Payments_Method_Valid", "[Method] BETWEEN 0 AND 0");
+                            t.HasCheckConstraint("CK_Payments_Currency_Format", "LEN([Currency]) = 3 AND [Currency] = UPPER([Currency])");
 
-                            t.HasCheckConstraint("CK_Payments_PaidAt_MatchesStatus", "([Status] IN (1, 4) AND [PaidAt] IS NOT NULL) OR ([Status] IN (0, 2, 3) AND [PaidAt] IS NULL)");
+                            t.HasCheckConstraint("CK_Payments_Method_Valid", "[Method] BETWEEN 0 AND 1");
 
-                            t.HasCheckConstraint("CK_Payments_Status_Valid", "[Status] BETWEEN 0 AND 4");
+                            t.HasCheckConstraint("CK_Payments_PaidAt_MatchesStatus", "([Status] IN (1, 4, 7) AND [PaidAt] IS NOT NULL) OR ([Status] IN (0, 2, 3, 5, 6) AND [PaidAt] IS NULL)");
+
+                            t.HasCheckConstraint("CK_Payments_RefundedAmount_Valid", "([Status] = 4 AND [RefundedAmount] = [Amount]) OR ([Status] = 7 AND [RefundedAmount] > 0 AND [RefundedAmount] < [Amount]) OR ([Status] NOT IN (4, 7) AND [RefundedAmount] = 0)");
+
+                            t.HasCheckConstraint("CK_Payments_Status_Valid", "[Status] BETWEEN 0 AND 7");
+                        });
+                });
+
+            modelBuilder.Entity("ECommerceBackend.Domain.Entities.PaymentRefund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("BaseAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("BaseCurrency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(3)");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(100)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(100)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ProcessingLeaseUntil")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ProviderRefundId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProviderRefundId")
+                        .IsUnique()
+                        .HasFilter("[ProviderRefundId] IS NOT NULL");
+
+                    b.HasIndex("RequestedByUserId");
+
+                    b.HasIndex("PaymentId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("Status", "ProcessingLeaseUntil");
+
+                    b.ToTable("PaymentRefunds", t =>
+                        {
+                            t.HasCheckConstraint("CK_PaymentRefunds_Amount_Positive", "[Amount] > 0");
+
+                            t.HasCheckConstraint("CK_PaymentRefunds_AttemptCount_Valid", "[AttemptCount] >= 0");
+
+                            t.HasCheckConstraint("CK_PaymentRefunds_BaseAmount_Positive", "[BaseAmount] > 0");
+
+                            t.HasCheckConstraint("CK_PaymentRefunds_BaseCurrency_Format", "LEN([BaseCurrency]) = 3 AND [BaseCurrency] = UPPER([BaseCurrency])");
+
+                            t.HasCheckConstraint("CK_PaymentRefunds_Currency_Format", "LEN([Currency]) = 3 AND [Currency] = UPPER([Currency])");
+
+                            t.HasCheckConstraint("CK_PaymentRefunds_Status_Valid", "[Status] BETWEEN 0 AND 4");
                         });
                 });
 
@@ -690,18 +935,17 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.HasIndex("PaymentId", "CreatedAt");
 
                     b.HasIndex("PaymentId", "ToStatus")
-                        .IsUnique()
-                        .HasDatabaseName("UX_PaymentStatusHistories_PaymentId_ToStatus");
+                        .HasDatabaseName("IX_PaymentStatusHistories_PaymentId_ToStatus");
 
                     b.HasIndex("ToStatus", "OccurredAt");
 
                     b.ToTable("PaymentStatusHistories", t =>
                         {
-                            t.HasCheckConstraint("CK_PaymentStatusHistories_Source_Valid", "[Source] BETWEEN 0 AND 4");
+                            t.HasCheckConstraint("CK_PaymentStatusHistories_Source_Valid", "[Source] BETWEEN 0 AND 6");
 
                             t.HasCheckConstraint("CK_PaymentStatusHistories_Status_Changed", "[FromStatus] IS NULL OR [FromStatus] <> [ToStatus]");
 
-                            t.HasCheckConstraint("CK_PaymentStatusHistories_Status_Valid", "[ToStatus] BETWEEN 0 AND 4 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 4)");
+                            t.HasCheckConstraint("CK_PaymentStatusHistories_Status_Valid", "[ToStatus] BETWEEN 0 AND 7 AND ([FromStatus] IS NULL OR [FromStatus] BETWEEN 0 AND 7)");
                         });
                 });
 
@@ -710,6 +954,11 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<DateTime>("OccurredAt")
                         .HasColumnType("datetime2");
@@ -762,7 +1011,7 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_PaymentWebhookEvents_PayloadHash_Length", "LEN([PayloadHash]) = 64");
 
-                            t.HasCheckConstraint("CK_PaymentWebhookEvents_ResultingStatus_Valid", "[ResultingStatus] BETWEEN 0 AND 4");
+                            t.HasCheckConstraint("CK_PaymentWebhookEvents_ResultingStatus_Valid", "[ResultingStatus] BETWEEN 0 AND 7");
                         });
                 });
 
@@ -841,6 +1090,11 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<int>("LowStockThreshold")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(10);
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -871,6 +1125,8 @@ namespace ECommerceBackend.Infrastructure.Migrations
 
                     b.ToTable("Products", t =>
                         {
+                            t.HasCheckConstraint("CK_Products_LowStockThreshold_Valid", "[LowStockThreshold] BETWEEN 0 AND 1000000");
+
                             t.HasCheckConstraint("CK_Products_Price_Positive", "[Price] > 0");
 
                             t.HasCheckConstraint("CK_Products_Stock_NonNegative", "[StockQuantity] >= 0");
@@ -1333,6 +1589,9 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .HasMaxLength(254)
                         .HasColumnType("nvarchar(254)");
 
+                    b.Property<DateTime?>("EmailVerifiedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("FailedLoginCount")
                         .HasColumnType("int");
 
@@ -1455,6 +1714,17 @@ namespace ECommerceBackend.Infrastructure.Migrations
                     b.Navigation("Parent");
                 });
 
+            modelBuilder.Entity("ECommerceBackend.Domain.Entities.EmailVerificationToken", b =>
+                {
+                    b.HasOne("ECommerceBackend.Domain.Entities.User", "User")
+                        .WithMany("EmailVerificationTokens")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ECommerceBackend.Domain.Entities.InventoryTransaction", b =>
                 {
                     b.HasOne("ECommerceBackend.Domain.Entities.User", "CreatedByUser")
@@ -1555,6 +1825,23 @@ namespace ECommerceBackend.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
+                });
+
+            modelBuilder.Entity("ECommerceBackend.Domain.Entities.PaymentRefund", b =>
+                {
+                    b.HasOne("ECommerceBackend.Domain.Entities.Payment", "Payment")
+                        .WithMany("Refunds")
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ECommerceBackend.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Payment");
                 });
 
             modelBuilder.Entity("ECommerceBackend.Domain.Entities.PaymentStatusHistory", b =>
@@ -1764,6 +2051,8 @@ namespace ECommerceBackend.Infrastructure.Migrations
 
             modelBuilder.Entity("ECommerceBackend.Domain.Entities.Payment", b =>
                 {
+                    b.Navigation("Refunds");
+
                     b.Navigation("StatusHistory");
 
                     b.Navigation("WebhookEvents");
@@ -1802,6 +2091,8 @@ namespace ECommerceBackend.Infrastructure.Migrations
             modelBuilder.Entity("ECommerceBackend.Domain.Entities.User", b =>
                 {
                     b.Navigation("Cart");
+
+                    b.Navigation("EmailVerificationTokens");
 
                     b.Navigation("InventoryTransactions");
 

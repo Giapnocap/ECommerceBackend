@@ -105,7 +105,7 @@ namespace ECommerceBackend.API.Swagger
                 "ProductController" => methodName is "Update" or "AdjustStock" or "Delete" or "UploadImage" or "DeleteImage",
                 "CategoryController" => methodName is "Create" or "Update" or "Delete",
                 "UserController" => methodName is "AssignRole" or "ChangePassword",
-                "AuthController" => methodName is "Register" or "Refresh" or "ResetPassword",
+                "AuthController" => methodName is "Register" or "Refresh" or "ResetPassword" or "ConfirmEmail",
                 "PaymentController" => methodName == "HandleWebhook",
                 _ => false
             };
@@ -113,7 +113,8 @@ namespace ECommerceBackend.API.Swagger
 
         private static bool IsPaymentWebhook(OperationFilterContext context)
             => context.MethodInfo.DeclaringType?.Name == "PaymentController"
-                && context.MethodInfo.Name == "HandleWebhook";
+                && context.MethodInfo.Name is "HandleWebhook"
+                    or "HandleStripeWebhook";
 
         private static bool CanReturnPayloadTooLarge(OperationFilterContext context)
             => IsPaymentWebhook(context)

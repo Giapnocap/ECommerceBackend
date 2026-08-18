@@ -179,6 +179,24 @@ namespace ECommerceBackend.Infrastructure.Data
                 .SingleOrDefaultAsync(payment => payment.OrderId == orderId, cancellationToken);
         }
 
+        public async Task<Payment?> LockPaymentByIdAsync(
+            Guid paymentId,
+            CancellationToken cancellationToken = default)
+        {
+            if (_context.Database.IsSqlServer())
+            {
+                return await _context.Payments
+                    .FromSqlInterpolated(
+                        $"SELECT * FROM [Payments] WITH (UPDLOCK, ROWLOCK) WHERE [Id] = {paymentId}")
+                    .SingleOrDefaultAsync(cancellationToken);
+            }
+
+            return await _context.Payments
+                .SingleOrDefaultAsync(
+                    payment => payment.Id == paymentId,
+                    cancellationToken);
+        }
+
         public async Task<Product?> LockProductAsync(
             Guid productId,
             bool activeOnly,

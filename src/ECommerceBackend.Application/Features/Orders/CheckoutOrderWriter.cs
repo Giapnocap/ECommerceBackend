@@ -29,6 +29,7 @@ namespace ECommerceBackend.Application.Services
             Order order,
             Payment payment,
             Cart cart,
+            OrderPricingCalculation pricing,
             Guid userId,
             DateTime occurredAt)
         {
@@ -72,6 +73,7 @@ namespace ECommerceBackend.Application.Services
                             item.ProductId,
                             product.Name,
                             item.Quantity,
+                            pricing.UnitPrices[item.ProductId],
                             product.Price)));
                 _inventoryRepository.AddTransaction(
                     DomainRuleGuard.AsBusiness(() =>

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using ECommerceBackend.Application.Common;
+using ECommerceBackend.Domain.Common;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.SqlClient;
 
@@ -103,6 +104,13 @@ namespace ECommerceBackend.API.Extensions
                     "Generic HMAC payment webhook config is invalid or enabled in Production.")
                 .ValidateOnStart();
 
+            services.AddOptions<StripePaymentOptions>()
+                .Bind(configuration.GetSection(StripePaymentOptions.SectionName))
+                .Validate(
+                    IsValidStripePaymentOptions,
+                    "Stripe payment config is invalid.")
+                .ValidateOnStart();
+
             services.AddOptions<OutboxOptions>()
                 .Bind(configuration.GetSection(OutboxOptions.SectionName))
                 .Validate(IsValidOutboxOptions, "Outbox config is invalid.")
@@ -135,6 +143,14 @@ namespace ECommerceBackend.API.Extensions
                     "Pricing config is invalid.")
                 .ValidateOnStart();
 
+            services.AddOptions<ExchangeRateOptions>()
+                .Bind(configuration.GetSection(
+                    ExchangeRateOptions.SectionName))
+                .Validate(
+                    IsValidExchangeRateOptions,
+                    "Exchange rate config is invalid.")
+                .ValidateOnStart();
+
             services.AddOptions<ReturnPolicyOptions>()
                 .Bind(configuration.GetSection(ReturnPolicyOptions.SectionName))
                 .Validate(
@@ -154,9 +170,20 @@ namespace ECommerceBackend.API.Extensions
 
         private static bool IsValidPricingOptions(
             PricingOptions options)
-            => options.Currency is { Length: 3 }
-                && options.Currency.All(
-                    character => character is >= 'A' and <= 'Z')
+            => CurrencyCatalog.IsSupported(options.Currency)
+                && options.SupportedCurrencies is { Length: > 0 }
+                && options.SupportedCurrencies.All(currency =>
+                    CurrencyCatalog.IsSupported(currency)
+                    && string.Equals(
+                        currency,
+                        currency.Trim().ToUpperInvariant(),
+                        StringComparison.Ordinal))
+                && options.SupportedCurrencies
+                    .Distinct(StringComparer.Ordinal)
+                    .Count() == options.SupportedCurrencies.Length
+                && options.SupportedCurrencies.Contains(
+                    options.Currency,
+                    StringComparer.Ordinal)
                 && options.QuoteValidityMinutes is >= 1 and <= 60
                 && IsValidMoney(options.StandardShippingFee)
                 && IsValidMoney(options.ExpressShippingFee)
@@ -164,6 +191,32 @@ namespace ECommerceBackend.API.Extensions
                     options.FreeStandardShippingMinimum)
                 && IsValidMoney(options.TaxRatePercent)
                 && options.TaxRatePercent <= 100;
+
+        private static bool IsValidExchangeRateOptions(
+            ExchangeRateOptions options)
+        {
+            if (options.RequestTimeoutSeconds is < 1 or > 60
+                || options.CacheMinutes is < 1 or > 1440
+                || options.MaxStaleMinutes is < 1 or > 10080
+                || options.MaxStaleMinutes < options.CacheMinutes
+                || !Uri.TryCreate(
+                    options.BaseUrl,
+                    UriKind.Absolute,
+                    out var baseUri)
+                || baseUri.Scheme != Uri.UriSchemeHttps
+                || !string.Equals(
+                    baseUri.Host,
+                    "api.currencyapi.com",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return !options.Enabled
+                || (!string.IsNullOrWhiteSpace(options.ApiKey)
+                    && options.ApiKey.Trim().Length >= 16
+                    && !LooksLikePlaceholder(options.ApiKey));
+        }
 
         private static bool IsValidMoney(decimal value)
             => value >= 0
@@ -203,6 +256,7 @@ namespace ECommerceBackend.API.Extensions
             if (options.MaxFailedLoginAttempts is < 2 or > 20
                 || options.LockoutMinutes is < 1 or > 1440
                 || options.PasswordResetTokenMinutes is < 5 or > 1440
+                || options.EmailVerificationTokenMinutes is < 5 or > 10080
                 || !Uri.TryCreate(
                     options.PasswordResetUrl?.Trim(),
                     UriKind.Absolute,
@@ -210,15 +264,28 @@ namespace ECommerceBackend.API.Extensions
                 || resetUrl.Scheme is not ("http" or "https")
                 || !string.IsNullOrEmpty(resetUrl.UserInfo)
                 || !string.IsNullOrEmpty(resetUrl.Query)
-                || !string.IsNullOrEmpty(resetUrl.Fragment))
+                || !string.IsNullOrEmpty(resetUrl.Fragment)
+                || !Uri.TryCreate(
+                    options.EmailVerificationUrl?.Trim(),
+                    UriKind.Absolute,
+                    out var verificationUrl)
+                || verificationUrl.Scheme is not ("http" or "https")
+                || !string.IsNullOrEmpty(verificationUrl.UserInfo)
+                || !string.IsNullOrEmpty(verificationUrl.Query)
+                || !string.IsNullOrEmpty(verificationUrl.Fragment))
             {
                 return false;
             }
 
             return !environment.IsProduction()
                 || (resetUrl.Scheme == "https"
+                    && verificationUrl.Scheme == "https"
                     && !string.Equals(
                         resetUrl.Host,
+                        "localhost",
+                        StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(
+                        verificationUrl.Host,
                         "localhost",
                         StringComparison.OrdinalIgnoreCase));
         }
@@ -342,6 +409,51 @@ namespace ECommerceBackend.API.Extensions
             return !options.Enabled
                 || (Encoding.UTF8.GetByteCount(options.Secret) >= PaymentWebhookOptions.MinimumSecretBytes
                     && !LooksLikePlaceholder(options.Secret));
+        }
+
+        private static bool IsValidStripePaymentOptions(
+            StripePaymentOptions options)
+        {
+            if (options.RequestTimeoutSeconds is < 1 or > 60
+                || options.CreationLeaseSeconds is < 30 or > 600
+                || options.WebhookToleranceSeconds is < 60 or > 600
+                || options.ReconciliationPollIntervalSeconds is < 5 or > 3600
+                || options.ReconciliationStaleAfterMinutes is < 1 or > 1440
+                || options.ReconciliationBatchSize is < 1 or > 500
+                || options.RequireReconciliation
+                    && !options.ReconciliationEnabled
+                || options.ReconciliationEnabled && !options.Enabled
+                || !Uri.TryCreate(
+                    options.BaseUrl,
+                    UriKind.Absolute,
+                    out var baseUri)
+                || baseUri.Scheme != Uri.UriSchemeHttps
+                || !string.Equals(
+                    baseUri.Host,
+                    "api.stripe.com",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!options.Enabled)
+                return true;
+
+            return options.SecretKey.StartsWith(
+                    "sk_test_",
+                    StringComparison.Ordinal)
+                && options.SecretKey.Length >= 20
+                && !LooksLikePlaceholder(options.SecretKey)
+                && options.PublishableKey.StartsWith(
+                    "pk_test_",
+                    StringComparison.Ordinal)
+                && options.PublishableKey.Length >= 20
+                && !LooksLikePlaceholder(options.PublishableKey)
+                && options.WebhookSecret.StartsWith(
+                    "whsec_",
+                    StringComparison.Ordinal)
+                && options.WebhookSecret.Length >= 20
+                && !LooksLikePlaceholder(options.WebhookSecret);
         }
 
         private static bool IsValidOutboxOptions(OutboxOptions options)

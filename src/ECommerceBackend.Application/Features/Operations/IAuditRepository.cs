@@ -12,10 +12,15 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             Guid? actorUserId,
             string? action,
             string? entityType,
+            string? entityId,
             DateTime? from,
             DateTime? to,
             int skip,
             int take,
+            CancellationToken cancellationToken = default);
+
+        Task<AuditEventResponse?> GetByIdAsync(
+            Guid id,
             CancellationToken cancellationToken = default);
     }
 }

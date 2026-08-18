@@ -21,18 +21,24 @@ namespace ECommerceBackend.Application.Interfaces
         string ProviderTransactionId,
         PaymentStatus Status,
         DateTime OccurredAt,
-        decimal? Amount);
+        decimal? Amount,
+        string? Currency = null,
+        decimal? RefundedAmount = null,
+        string? ProviderEventId = null,
+        string? EventType = null);
 
     public sealed record PaymentCheckoutCapability(
         PaymentMethod Method,
         string ProviderCode,
-        bool SupportsWebhooks);
+        bool SupportsWebhooks,
+        bool RequiresExternalInitialization);
 
     public interface IPaymentProvider
     {
         string Code { get; }
         PaymentMethod? CheckoutMethod { get; }
         bool SupportsWebhooks { get; }
+        bool RequiresExternalInitialization => false;
 
         // Must be local and side-effect free because checkout holds database row locks.
         PaymentInitializationResult Initialize(PaymentInitializationRequest request);

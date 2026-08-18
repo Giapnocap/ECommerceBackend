@@ -10,6 +10,10 @@ namespace ECommerceBackend.Application.Interfaces
             InventoryQueryParams queryParams,
             CancellationToken cancellationToken = default);
 
+        Task<PagedResult<InventoryProductResponse>> GetProductsAsync(
+            InventoryProductQueryParams queryParams,
+            CancellationToken cancellationToken = default);
+
         Task<PagedResult<LowStockProductResponse>> GetLowStockAsync(
             LowStockQueryParams queryParams,
             CancellationToken cancellationToken = default);

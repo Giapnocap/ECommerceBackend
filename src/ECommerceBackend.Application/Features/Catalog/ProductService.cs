@@ -329,6 +329,7 @@ namespace ECommerceBackend.Application.Services
             }
 
             var reason = NormalizeInventoryAdjustmentReason(request.Reason);
+            var reference = NormalizeInventoryReference(request.Reference);
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
@@ -364,7 +365,8 @@ namespace ECommerceBackend.Application.Services
                             Domain.Enums.InventoryTransactionType.ManualAdjustment,
                             inventoryMutation,
                             reason,
-                            occurredAt)));
+                            occurredAt,
+                            reference)));
                 _audit.Write(
                     "inventory.adjust",
                     "Product",
@@ -373,7 +375,8 @@ namespace ECommerceBackend.Application.Services
                     new Dictionary<string, object?>
                     {
                         ["quantityChange"] = inventoryMutation.QuantityChange,
-                        ["stockBalance"] = inventoryMutation.BalanceAfter
+                        ["stockBalance"] = inventoryMutation.BalanceAfter,
+                        ["reference"] = reference
                     });
 
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -398,6 +401,185 @@ namespace ECommerceBackend.Application.Services
             {
                 await transaction.RollbackAsync(CancellationToken.None);
 
+                throw;
+            }
+
+            return await GetByIdAsync(id, cancellationToken);
+        }
+
+        public async Task<ProductResponse> StockInAsync(
+            Guid id,
+            StockInRequest request,
+            byte[] expectedRowVersion,
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (expectedRowVersion is not { Length: > 0 })
+            {
+                throw new BusinessException(
+                    "inventory_version_invalid",
+                    "Phiên bản tồn kho không hợp lệ.");
+            }
+
+            if (request.Quantity is < 1 or > 1_000_000)
+            {
+                throw new BusinessException(
+                    "inventory_stock_in_quantity_invalid",
+                    "Số lượng nhập kho phải từ 1 đến 1.000.000.");
+            }
+
+            var reason = NormalizeStockInReason(request.Reason);
+            var reference = NormalizeInventoryReference(request.Reference);
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+
+            try
+            {
+                var product = await LoadProductForUpdateAsync(id, cancellationToken)
+                    ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
+                if (!product.RowVersion.AsSpan().SequenceEqual(expectedRowVersion))
+                {
+                    throw new ConflictException(
+                        "inventory_version_conflict",
+                        "Tồn kho đã được thay đổi bởi yêu cầu khác. Vui lòng tải lại sản phẩm.");
+                }
+
+                int targetQuantity;
+                try
+                {
+                    targetQuantity = checked(product.StockQuantity + request.Quantity);
+                }
+                catch (OverflowException exception)
+                {
+                    throw new BusinessException(
+                        "inventory_stock_in_quantity_invalid",
+                        "Số lượng nhập kho vượt quá giới hạn tồn kho cho phép.",
+                        exception);
+                }
+
+                var occurredAt = UtcNow;
+                var inventoryMutation = DomainRuleGuard.AsBusiness(
+                    () => product.AdjustStockTo(targetQuantity));
+                _inventoryRepository.AddTransaction(
+                    DomainRuleGuard.AsBusiness(() =>
+                        InventoryTransaction.Create(
+                            Guid.NewGuid(),
+                            product.Id,
+                            (Guid?)null,
+                            actorUserId,
+                            Domain.Enums.InventoryTransactionType.StockIn,
+                            inventoryMutation,
+                            reason,
+                            occurredAt,
+                            reference)));
+                _audit.Write(
+                    "inventory.stock_in",
+                    "Product",
+                    product.Id.ToString(),
+                    actorUserId,
+                    new Dictionary<string, object?>
+                    {
+                        ["quantityChange"] = inventoryMutation.QuantityChange,
+                        ["stockBalance"] = inventoryMutation.BalanceAfter,
+                        ["reference"] = reference
+                    });
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "inventory_version_conflict",
+                    "Tồn kho đã được thay đổi bởi yêu cầu khác. Vui lòng tải lại sản phẩm.",
+                    ex);
+            }
+            catch (Exception ex) when (_consistency.IsDeadlock(ex))
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+
+                throw CatalogueConcurrencyConflict(ex);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+
+                throw;
+            }
+
+            return await GetByIdAsync(id, cancellationToken);
+        }
+
+        public async Task<ProductResponse> UpdateLowStockThresholdAsync(
+            Guid id,
+            UpdateLowStockThresholdRequest request,
+            byte[] expectedRowVersion,
+            Guid? actorUserId = null,
+            CancellationToken cancellationToken = default)
+        {
+            if (expectedRowVersion is not { Length: > 0 })
+            {
+                throw new BusinessException(
+                    "inventory_version_invalid",
+                    "Phiên bản tồn kho không hợp lệ.");
+            }
+
+            await using var transaction = await _consistency.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+
+            try
+            {
+                var product = await LoadProductForUpdateAsync(id, cancellationToken)
+                    ?? throw new NotFoundException($"Không tìm thấy sản phẩm với Id '{id}'.");
+                if (!product.RowVersion.AsSpan().SequenceEqual(expectedRowVersion))
+                {
+                    throw new ConflictException(
+                        "inventory_version_conflict",
+                        "Tồn kho đã được thay đổi bởi yêu cầu khác. Vui lòng tải lại sản phẩm.");
+                }
+
+                var previousThreshold = product.LowStockThreshold;
+                var changed = DomainRuleGuard.AsBusiness(() =>
+                    product.SetLowStockThreshold(request.Threshold));
+                if (changed)
+                {
+                    _audit.Write(
+                        "inventory.low_stock_threshold.update",
+                        "Product",
+                        product.Id.ToString(),
+                        actorUserId,
+                        new Dictionary<string, object?>
+                        {
+                            ["previousThreshold"] = previousThreshold,
+                            ["threshold"] = product.LowStockThreshold
+                        });
+                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch (Exception ex) when (_consistency.IsConcurrencyConflict(ex))
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+
+                throw new ConflictException(
+                    "inventory_version_conflict",
+                    "Tồn kho đã được thay đổi bởi yêu cầu khác. Vui lòng tải lại sản phẩm.",
+                    ex);
+            }
+            catch (Exception ex) when (_consistency.IsDeadlock(ex))
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+
+                throw CatalogueConcurrencyConflict(ex);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
                 throw;
             }
 
@@ -468,6 +650,36 @@ namespace ECommerceBackend.Application.Services
             }
 
             return normalizedReason;
+        }
+
+        private static string NormalizeStockInReason(string reason)
+        {
+            var normalizedReason = reason?.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedReason)
+                || normalizedReason.Length > 500)
+            {
+                throw new BusinessException(
+                    "inventory_stock_in_reason_invalid",
+                    "Lý do nhập kho phải có từ 1 đến 500 ký tự.");
+            }
+
+            return normalizedReason;
+        }
+
+        private static string? NormalizeInventoryReference(string? reference)
+        {
+            if (string.IsNullOrWhiteSpace(reference))
+                return null;
+
+            var normalizedReference = reference.Trim();
+            if (normalizedReference.Length > 200)
+            {
+                throw new BusinessException(
+                    "inventory_reference_invalid",
+                    "Mã tham chiếu tồn kho không được vượt quá 200 ký tự.");
+            }
+
+            return normalizedReference;
         }
 
         private async Task<Category?> LoadCategoryForUpdateAsync(

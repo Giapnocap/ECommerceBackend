@@ -130,6 +130,59 @@ public class ReportServiceTests
     }
 
     [Fact]
+    public async Task GetSalesSummaryAsync_SubtractsSucceededPartialRefundSnapshot()
+    {
+        await using var context = TestAppDbContext.Create();
+        var from = new DateTime(2026, 7, 12, 0, 0, 0, DateTimeKind.Utc);
+        var to = from.AddDays(1);
+        var user = CreateUser("partial_refund_customer");
+        var order = CreateOrder(
+            user.Id,
+            from.AddHours(1),
+            OrderStatus.Delivered,
+            100m);
+        var payment = CreatePayment(
+            order,
+            PaymentStatus.Paid,
+            from.AddHours(2));
+        var refundedAt = from.AddHours(3);
+        payment.RecordRefund(25m, refundedAt);
+        var refund = PaymentRefund.Create(
+            Guid.NewGuid(),
+            payment.Id,
+            user.Id,
+            "partial-refund-report",
+            25m,
+            payment.Currency,
+            25m,
+            order.BaseCurrency,
+            refundedAt.AddMinutes(-1));
+        refund.StartProcessing(
+            refundedAt.AddMinutes(-1),
+            refundedAt.AddMinutes(1));
+        refund.Complete("re_partial_report", refundedAt);
+
+        context.AddRange(user, order, payment, refund);
+        await context.SaveChangesAsync();
+
+        var result = await new ReportService(
+            new ReportReadRepository(context)).GetSalesSummaryAsync(
+                new SalesSummaryQuery
+                {
+                    From = from,
+                    To = to
+                });
+
+        Assert.Equal(100m, result.GrossPaidAmount);
+        Assert.Equal(25m, result.RefundedAmount);
+        Assert.Equal(75m, result.NetRevenue);
+        Assert.Equal(
+            1,
+            result.PaymentsByStatus.Single(item =>
+                item.Status == nameof(PaymentStatus.PartiallyRefunded)).Count);
+    }
+
+    [Fact]
     public async Task GetSalesSummaryAsync_RejectsUnsafeReadBoundsOutsideHttpValidation()
     {
         await using var context = TestAppDbContext.Create();
@@ -259,6 +312,7 @@ public class ReportServiceTests
             ProductId = productId,
             ProductNameSnapshot = productName,
             UnitPrice = unitPrice,
+            BaseUnitPrice = unitPrice,
             Quantity = quantity
         };
 

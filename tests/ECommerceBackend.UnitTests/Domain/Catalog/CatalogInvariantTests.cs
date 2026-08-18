@@ -81,6 +81,29 @@ public sealed class CatalogInvariantTests
     }
 
     [Fact]
+    public void Product_LowStockThreshold_IsBoundedAndIdempotent()
+    {
+        var product = Product.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Product",
+            10m,
+            1,
+            string.Empty,
+            DateTime.UtcNow);
+
+        Assert.Equal(10, product.LowStockThreshold);
+        Assert.True(product.SetLowStockThreshold(5));
+        Assert.False(product.SetLowStockThreshold(5));
+        Assert.Equal(5, product.LowStockThreshold);
+
+        var exception = Assert.Throws<DomainRuleViolationException>(() =>
+            product.SetLowStockThreshold(-1));
+        Assert.Equal("product_low_stock_threshold_invalid", exception.Code);
+        Assert.Equal(5, product.LowStockThreshold);
+    }
+
+    [Fact]
     public void Category_HierarchyRulesRejectSelfChildAndThirdLevel()
     {
         var parent = Category.Create(Guid.NewGuid(), "Parent", null);
@@ -135,6 +158,7 @@ public sealed class CatalogInvariantTests
         AssertSetterIsNotPublic<Product>(nameof(Product.CategoryId));
         AssertSetterIsNotPublic<Product>(nameof(Product.Price));
         AssertSetterIsNotPublic<Product>(nameof(Product.StockQuantity));
+        AssertSetterIsNotPublic<Product>(nameof(Product.LowStockThreshold));
         AssertSetterIsNotPublic<Product>(nameof(Product.IsDeleted));
         AssertSetterIsNotPublic<Category>(nameof(Category.NormalizedName));
         AssertSetterIsNotPublic<Category>(nameof(Category.ParentId));

@@ -57,6 +57,7 @@ public static class ResponseMappings
             Name = product.Name,
             Price = product.Price,
             StockQuantity = product.StockQuantity,
+            LowStockThreshold = product.LowStockThreshold,
             Description = product.Description,
             CategoryId = product.CategoryId,
             CategoryName = product.Category?.Name ?? string.Empty,
@@ -108,6 +109,14 @@ public static class ResponseMappings
             TaxAmount = order.TaxAmount,
             TotalAmount = order.TotalAmount,
             Currency = order.Currency,
+            BaseSubtotalAmount = order.BaseSubtotalAmount,
+            BaseDiscountAmount = order.BaseDiscountAmount,
+            BaseShippingFee = order.BaseShippingFee,
+            BaseTaxAmount = order.BaseTaxAmount,
+            BaseTotalAmount = order.BaseTotalAmount,
+            BaseCurrency = order.BaseCurrency,
+            ExchangeRate = order.ExchangeRate,
+            ExchangeRateCapturedAt = order.ExchangeRateCapturedAt,
             ShippingMethod = order.ShippingMethod.ToString(),
             PromotionCode = order.PromotionCodeSnapshot,
             Status = order.Status.ToString(),
@@ -177,7 +186,8 @@ public static class ResponseMappings
             ProductId = detail.ProductId,
             ProductName = detail.ProductNameSnapshot,
             Quantity = detail.Quantity,
-            UnitPrice = detail.UnitPrice
+            UnitPrice = detail.UnitPrice,
+            BaseUnitPrice = detail.BaseUnitPrice
         };
 
     public static PaymentResponse ToResponse(this Payment payment)
@@ -187,8 +197,11 @@ public static class ResponseMappings
             Method = payment.Method.ToString(),
             Status = payment.Status.ToString(),
             Amount = payment.Amount,
+            Currency = payment.Currency,
+            RefundedAmount = payment.RefundedAmount,
             Provider = payment.Provider,
             ProviderTransactionId = payment.ProviderTransactionId,
+            ExternalCreatedAt = payment.ExternalCreatedAt,
             CreatedAt = payment.CreatedAt,
             PaidAt = payment.PaidAt,
             StatusHistory = payment.StatusHistory.Select(ToResponse).ToArray()

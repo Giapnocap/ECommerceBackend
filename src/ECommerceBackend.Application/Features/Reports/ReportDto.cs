@@ -1,3 +1,5 @@
+using ECommerceBackend.Domain.Common;
+
 namespace ECommerceBackend.Application.DTOs
 {
     public sealed class SalesSummaryQuery
@@ -13,6 +15,7 @@ namespace ECommerceBackend.Application.DTOs
         public string Status { get; set; } = string.Empty;
         public int Count { get; set; }
         public decimal Amount { get; set; }
+        public string Currency { get; set; } = CurrencyCatalog.BaseCurrency;
     }
 
     public sealed class TopSellingProductResponse
@@ -21,12 +24,14 @@ namespace ECommerceBackend.Application.DTOs
         public string ProductName { get; set; } = string.Empty;
         public long QuantitySold { get; set; }
         public decimal Revenue { get; set; }
+        public string Currency { get; set; } = CurrencyCatalog.BaseCurrency;
     }
 
     public sealed class SalesSummaryResponse
     {
         public DateTime From { get; set; }
         public DateTime To { get; set; }
+        public string Currency { get; set; } = CurrencyCatalog.BaseCurrency;
         public int TotalOrders { get; set; }
         public int DeliveredOrders { get; set; }
         public int CancelledOrders { get; set; }

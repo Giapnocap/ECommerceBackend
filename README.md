@@ -17,15 +17,23 @@ local; frontend và hạ tầng cloud không thuộc phạm vi triển khai.
 - [Điểm kỹ thuật nổi bật](#điểm-kỹ-thuật-nổi-bật)
 - [Công nghệ](#công-nghệ)
 - [Chức năng chính](#chức-năng-chính)
+- [Administrative Capabilities](#administrative-capabilities)
 - [Kiến trúc](#kiến-trúc)
+- [Authentication Security](#authentication-security)
+- [Payment Architecture](#payment-architecture)
+- [Payment Flow](#payment-flow)
+- [Webhook Processing](#webhook-processing)
+- [Refund Flow](#refund-flow)
+- [Multi-Currency Architecture](#multi-currency-architecture)
 - [Phân quyền](#phân-quyền)
 - [Phiên bản API](#phiên-bản-api)
 - [Bằng chứng chất lượng](#bằng-chứng-chất-lượng)
 - [Quick Start với Docker](#quick-start-với-docker)
 - [Chạy local không Docker](#chạy-local-không-docker)
 - [Kiểm thử API](#kiểm-thử-api)
-- [Chạy test](#chạy-test)
+- [Testing](#testing)
 - [Đóng gói release](#đóng-gói-release)
+- [Known Limitations](#known-limitations)
 - [Bảo mật cấu hình](#bảo-mật-cấu-hình)
 
 ## Điểm Kỹ Thuật Nổi Bật
@@ -35,6 +43,9 @@ local; frontend và hạ tầng cloud không thuộc phạm vi triển khai.
 - Row version, unique constraints và SQL locks bảo vệ các luồng có race condition.
 - Order lưu snapshot người nhận; order detail lưu snapshot tên và giá để bảo toàn lịch sử.
 - Payment webhook xác thực HMAC, event ID và payload trước khi thay đổi trạng thái.
+- Stripe PaymentIntent/refund chạy ngoài SQL transaction, sau đó được hoàn tất bằng transaction ngắn và idempotent.
+- Tiền tệ dùng value object `Money`; order, line item và refund lưu snapshot VND để báo cáo không cộng sai các loại tiền.
+- Payment reconciliation tự phục hồi giao dịch ngoài cổng thanh toán nhưng chưa được cập nhật vào database.
 - Transactional outbox ghi cùng transaction với business data, có retry, dead-letter và redrive.
 - Mọi thay đổi tồn kho đều sinh inventory ledger entry kèm số dư sau giao dịch.
 - Correlation ID liên kết `ProblemDetails`, request log và audit event.
@@ -52,7 +63,7 @@ local; frontend và hạ tầng cloud không thuộc phạm vi triển khai.
 
 ## Chức Năng Chính
 
-- Đăng ký, đăng nhập, refresh-token rotation, phát hiện token reuse và thu hồi phiên.
+- Đăng ký, xác minh email, đăng nhập, quản lý phiên, refresh-token rotation, phát hiện token reuse và thu hồi phiên.
 - Quản lý người dùng và phân vai trò `Admin`, `Staff`, `Customer`.
 - CRUD danh mục, sản phẩm và ảnh sản phẩm.
 - Tìm kiếm, lọc, sắp xếp và phân trang sản phẩm.
@@ -61,10 +72,30 @@ local; frontend và hạ tầng cloud không thuộc phạm vi triển khai.
 - Vận đơn một-một lưu đơn vị vận chuyển, mã theo dõi, thời điểm xuất giao và giao thành công.
 - Quy trình trả hàng gồm Customer yêu cầu, Staff duyệt/từ chối, nhận kiểm hàng, hoàn kho và hoàn tiền.
 - Giữ/hoàn tồn kho có inventory ledger riêng cho hủy đơn và nhận hàng hoàn.
-- Payment state machine, COD, ghi nhận hoàn tiền thủ công và HMAC webhook chống replay.
+- Payment state machine, COD, Stripe PaymentIntent, hoàn tiền toàn phần/một phần và webhook chống replay.
+- Checkout đa tiền tệ có snapshot tỷ giá; adapter CurrencyAPI có cache, stale fallback và timeout.
 - Transactional outbox, retry, dead-letter và redrive.
 - Báo cáo doanh thu, trạng thái đơn, sản phẩm bán chạy và tồn kho thấp.
 - Audit trail cho các thao tác đặc quyền và đối soát file upload.
+
+## Administrative Capabilities
+
+Các capability quản trị tái sử dụng policy, transaction, locking, ledger và audit hiện có; không tạo một luồng ghi dữ liệu song song.
+Route `/api/v1/...` tương đương với các route không version dưới đây.
+
+| Capability | Endpoint chính | Quyền |
+|---|---|---|
+| Dashboard vận hành | `GET /api/admin/dashboard/*` | `view_reports` |
+| Quản lý tồn kho | `GET /api/admin/inventory`, stock-in, adjustment, history | `manage_products` |
+| Quản lý khách hàng | `GET /api/admin/customers/*`, lock/unlock | `manage_users` |
+| Báo cáo | `GET /api/admin/reports/revenue|orders|products|customers|returns` | `view_reports` |
+| Nhật ký audit | `GET /api/operations/audit-events` và `/{id}` | role `Admin` |
+| Analytics promotion | `GET /api/admin/promotions/analytics` và `/{id}/analytics` | `manage_products` |
+
+- Dashboard và report dùng projection, `AsNoTracking` và aggregate trong database; các list đều có giới hạn/pagination phù hợp.
+- Revenue report xác định gross theo `Payment.PaidAt`; refund online lấy từ `PaymentRefund.BaseAmount`, refund COD lấy từ history `ManualRefund`, full refund ngoài hệ thống có fallback webhook/reconciliation chống đếm đôi; net bằng gross trừ refund.
+- Promotion analytics dùng `PromotionRedemption` và snapshot order: gross là subtotal, net là subtotal trừ discount; không gán doanh thu đã thu hoặc hoàn tiền cho promotion khi schema chưa lưu quan hệ đó.
+- Audit query hỗ trợ actor/action/resource/resource-id/thời gian. Password, token, secret, API key và credential được redaction khi ghi và khi trả API.
 
 ## Kiến Trúc
 
@@ -188,6 +219,69 @@ Outbox row được ghi cùng transaction với dữ liệu nghiệp vụ. Worke
 lease trong database cho phép khởi động lại và nhiều worker cạnh tranh an toàn. Delivery qua SMTP
 là at-least-once nên consumer nhận `Message-ID` xác định để hỗ trợ chống trùng.
 
+## Authentication Security
+
+- Password được băm bằng BCrypt; đăng nhập có lockout theo số lần thất bại và không tiết lộ tài khoản có tồn tại hay không.
+- Access token chứa `session_id`; phiên bị khóa hoặc thu hồi không tiếp tục sử dụng được dù JWT chưa hết hạn.
+- Refresh token chỉ lưu SHA-256 hash, được rotate theo token family và thu hồi cả family khi phát hiện reuse.
+- Người dùng có thể xem, thu hồi một phiên hoặc đăng xuất toàn bộ thiết bị.
+- Email verification và password reset dùng token ngẫu nhiên một lần, chỉ lưu hash, có thời hạn và gửi qua transactional outbox.
+- Endpoint đặc quyền dùng permission policy; audit metadata được redaction trước khi lưu và trước khi trả API.
+
+## Payment Architecture
+
+`IPaymentGateway` tách Application khỏi Stripe SDK/HTTP contract. `StripePaymentGateway` chịu trách nhiệm tạo và
+đọc PaymentIntent, tạo refund, chuyển đổi minor units theo từng currency, timeout và ánh xạ lỗi provider.
+`IPaymentProvider` xử lý webhook; resolver chọn provider theo route mà không đưa Stripe type vào Application.
+
+```mermaid
+flowchart LR
+    API[Payment API] --> UseCase[Payment use cases]
+    UseCase --> Repository[(Payment repository)]
+    UseCase --> Gateway[IPaymentGateway]
+    Gateway --> Stripe[Stripe API]
+    Webhook[Stripe webhook] --> Provider[IPaymentProvider]
+    Provider --> WebhookUseCase[PaymentWebhookService]
+    WebhookUseCase --> Repository
+    Reconcile[Reconciliation worker] --> Gateway
+    Reconcile --> Repository
+```
+
+Stripe và CurrencyAPI mặc định tắt. Secret chỉ được cấp qua environment variable/secret store; repository không
+chứa API key thật.
+
+## Payment Flow
+
+1. Checkout tạo order và payment nội bộ bằng `Idempotency-Key` trong transaction.
+2. Initialize payment chiếm lease/idempotency record trong transaction ngắn rồi commit.
+3. API gọi Stripe ngoài SQL transaction, vì network I/O không được giữ database lock.
+4. Kết quả PaymentIntent được ghi lại bằng transaction thứ hai; retry cùng key trả lại cùng payment.
+5. Reconciliation worker truy vấn các payment stale ở trạng thái active và áp dụng transition hợp lệ nếu webhook bị trễ/mất.
+
+## Webhook Processing
+
+- Endpoint Stripe đọc raw request body và xác minh `Stripe-Signature` trong tolerance window cấu hình.
+- Provider event ID có unique constraint để chống replay; payload được giới hạn kích thước và không lưu raw body mặc định.
+- Payment ID, provider transaction ID, amount và currency phải khớp snapshot nội bộ trước khi đổi trạng thái.
+- Event và status history được ghi trong cùng transaction. Duplicate delivery trả thành công nhưng không tạo side effect lần hai.
+
+## Refund Flow
+
+Refund online dùng reference làm idempotency key. Use case khóa order/payment, giữ trước số tiền có thể hoàn và commit;
+sau đó gọi Stripe ngoài transaction rồi hoàn tất payment, return request, order history, outbox và audit trong transaction mới.
+Hệ thống hỗ trợ refund một phần và toàn phần, không cho tổng refund vượt payment amount. Mỗi `PaymentRefund` lưu cả
+amount/currency gốc và `BaseAmount`/`BaseCurrency`; lần refund cuối nhận phần base còn lại để không phát sinh sai số cộng dồn.
+Refund COD là thao tác ghi nhận thủ công sau khi hàng hoàn đã được nhận, dùng status history nguồn `ManualRefund`.
+
+## Multi-Currency Architecture
+
+- `CurrencyCatalog` hiện định nghĩa VND (0 chữ số thập phân), USD và EUR (2 chữ số); `Money` kiểm tra scale và overflow.
+- VND là base currency. Quote/checkout lấy tỷ giá trước khi mở transaction và lưu `ExchangeRate`, thời điểm lấy tỷ giá,
+  base/display subtotal, discount, shipping, tax, total cùng `OrderDetail.BaseUnitPrice`.
+- CurrencyAPI adapter dùng timeout, cache theo cặp tiền, single-flight chống gọi trùng và stale fallback có giới hạn.
+- Dashboard, customer analytics và report chỉ tổng hợp base snapshots VND; API trả rõ currency của số liệu.
+- Refund luôn gửi đúng currency của payment gốc và dùng snapshot tỷ giá order, không gọi tỷ giá hiện tại.
+
 Tài liệu thiết kế:
 
 - [Kiến trúc và business invariants](docs/ARCHITECTURE.md)
@@ -195,7 +289,6 @@ Tài liệu thiết kế:
 - [Sequence các luồng quan trọng](docs/SEQUENCES.md)
 - [Hiệu năng và quyết định scale](docs/PERFORMANCE.md)
 - [Giới hạn hệ thống](docs/LIMITATIONS.md)
-- [Báo cáo hoàn thiện và kiểm chứng](COMPLETION_REPORT.md)
 
 ## Phân Quyền
 
@@ -248,6 +341,14 @@ Các số liệu trên là baseline kiểm thử local/CI, không phải cam k�
 `0ae568f` đã đạt cả ba job trong [GitHub Actions run 31299357392](https://github.com/Giapnocap/ECommerceBackend/actions/runs/31299357392):
 Docker Compose smoke, build/format/migration/coverage/release package và SQL Server integration/recovery.
 Workflow [`Backend CI`](.github/workflows/ci.yml) tiếp tục kiểm tra lại các gate này sau mỗi lần push.
+
+Vòng Full Upgrade được kiểm chứng local ngày `18/08/2026`: Release build `0` warning/error, format gate,
+EF Core migration drift, unit `279/279`, integration không-SQL `333/333` và SQL Server integration
+`24/24` đều đạt; coverage line `82,67%`, branch `65,51%`, recovery `1/1` và release-package smoke cũng đạt.
+Docker image build thành công; migration container exit `0`, SQL Server healthy và
+live/readiness đều HTTP `200` trên stack tách biệt. Performance và remote CI chưa được chạy lại cho
+working tree này; các số liệu tương ứng trong bảng trên vẫn là baseline của commit
+`0ae568f`. GitHub Actions cần chạy lại sau commit/push kế tiếp.
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
 [Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng
@@ -407,7 +508,7 @@ API trả `201 Created` cùng `OrderResponse`. Client thực tế nên gọi `/a
 gửi `expectedTotalAmount` bằng `totalAmount` vừa nhận để phát hiện việc giá thay đổi giữa lúc báo giá
 và checkout. Gửi lại cùng `Idempotency-Key` và cùng nội dung sẽ nhận lại order đã tạo thay vì ghi trùng.
 
-## Chạy Test
+## Testing
 
 Unit tests thuần Domain/Application:
 
@@ -504,6 +605,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\VerifyReleasePacka
 
 Workflow `Backend Release` có thể chạy thủ công để kiểm tra trước, hoặc tự chạy khi push tag dạng
 `v*`; package đã xác minh được lưu dưới dạng GitHub Actions artifact.
+
+## Known Limitations
+
+- Stripe và CurrencyAPI mặc định tắt; môi trường local/CI dùng adapter deterministic, không thay thế kiểm thử sandbox thật.
+- FX cache đang dùng `IMemoryCache`, phù hợp một API instance. Khi scale ngang cần distributed cache hoặc chấp nhận mỗi instance có cache riêng.
+- Reconciliation hiện xử lý payment stale; refund ở trạng thái provider `pending` được retry idempotent khi gọi lại API nhưng chưa có refund reconciliation worker riêng.
+- Partial refund tạo trực tiếp ngoài API (ví dụ Stripe Dashboard) cập nhật payment qua webhook nhưng chưa có delta ledger đủ để phân bổ chính xác vào báo cáo theo kỳ; luồng vận hành chuẩn phải khởi tạo refund qua API.
+- Hệ thống chỉ có một base currency VND. Việc đổi base currency sau khi đã có dữ liệu cần migration/backfill có kiểm soát.
+- SMTP outbox có delivery semantics at-least-once; bên nhận nên deduplicate theo `Message-ID`.
+- Docker Compose là môi trường local/portfolio, chưa phải cấu hình production HA, autoscaling hay secret management.
+- Số liệu performance và coverage là baseline trên test fixture, không phải cam kết SLA production.
 
 ## Bảo Mật Cấu Hình
 

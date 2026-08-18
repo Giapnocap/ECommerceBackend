@@ -70,6 +70,12 @@ namespace ECommerceBackend.Application.Services
                     await _consistency.LockPaymentByOrderIdAsync(
                         order.Id,
                         cancellationToken);
+                if (payment?.HasActiveExternalTransaction == true)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    transactionCompleted = true;
+                    return false;
+                }
                 var statusChange = DomainRuleGuard.AsConflict(() =>
                     order.Cancel(
                         asOf,

@@ -7,7 +7,10 @@ namespace ECommerceBackend.Application.Common
         public int MaxFailedLoginAttempts { get; set; } = 5;
         public int LockoutMinutes { get; set; } = 15;
         public int PasswordResetTokenMinutes { get; set; } = 30;
+        public int EmailVerificationTokenMinutes { get; set; } = 1440;
         public string PasswordResetUrl { get; set; } =
             "http://localhost:3000/reset-password";
+        public string EmailVerificationUrl { get; set; } =
+            "http://localhost:3000/verify-email";
     }
 }

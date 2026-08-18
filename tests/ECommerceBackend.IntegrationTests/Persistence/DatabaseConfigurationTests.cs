@@ -132,6 +132,21 @@ public sealed class DatabaseConfigurationTests
         Assert.Equal(20, recipientPhone.GetMaxLength());
     }
 
+    [Fact]
+    public void InventoryManagementMigration_IsDiscoverableAndReferenceIsBounded()
+    {
+        using var context = new AppDbContextDesignTimeFactory()
+            .CreateDbContext([]);
+        var inventoryTransaction = context.Model
+            .FindEntityType(typeof(InventoryTransaction))!;
+        var reference = inventoryTransaction.FindProperty(nameof(InventoryTransaction.Reference))!;
+
+        Assert.Equal(200, reference.GetMaxLength());
+        Assert.Contains(
+            "20260818143000_AddInventoryManagementReferences",
+            context.Database.GetMigrations());
+    }
+
     private static void AssertIndex(
         AppDbContext context,
         Type entityType,
