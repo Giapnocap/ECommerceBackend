@@ -5,7 +5,7 @@
 | Mục | Giá trị |
 |---|---|
 | Audit baseline commit | `b8a14616d37dd4e9a7fed541ce0a2a5fb148fad0` trên branch `main` |
-| Audit source | Baseline trên cộng với recovery test và tài liệu trong working tree hiện tại |
+| Audit source | Release-candidate code/test commit `5af8feb2d307af39550b67e9124926a7a70b039c` trên branch `main` |
 | Audit date | 2026-08-20 |
 | Local environment | Windows `10.0.22621`, .NET `8.0.25`, 12 logical processors |
 | Database verification | SQL Server 2022 Linux container, Docker Engine `29.7.2` |
@@ -33,7 +33,7 @@ Status được dùng trong báo cáo: `VERIFIED`, `IMPLEMENTED_NOT_EXTERNAL_VER
 | FX provider | Cache, single-flight, timeout, stale bound và USD/EUR snapshot được test | IMPLEMENTED_NOT_EXTERNAL_VERIFIED | CurrencyAPI adapter tests pass | Không có API key/quota thật | Chạy CurrencyAPI staging |
 | SMTP | Token lifecycle, outbox và SMTP config/TLS validation có sẵn | IMPLEMENTED_NOT_EXTERNAL_VERIFIED | Auth/outbox/config tests pass | Không có SMTP credential và inbox thật | Gửi verify/reset mail staging |
 | Staging HTTPS | Template, host/CORS/proxy/TLS validation đã chuẩn bị | BLOCKED_EXTERNAL | `appsettings.Staging.example.json` và startup tests | Chưa có host, DNS, TLS, trusted proxy | Provision staging và chạy smoke |
-| CI của release candidate | Ba job của Backend CI đã đạt | VERIFIED | [GitHub Actions run 32372618005](https://github.com/Giapnocap/ECommerceBackend/actions/runs/32372618005) cho baseline `b8a1461` | Working-tree audit delta chưa push | Chạy lại CI sau commit tiếp theo |
+| CI của release candidate | Ba job của Backend CI đã đạt | VERIFIED | [GitHub Actions run 32379122754](https://github.com/Giapnocap/ECommerceBackend/actions/runs/32379122754) cho commit `5af8feb` | Không | Duy trì CI gate sau mỗi push |
 | `v1.0.0` | Chưa tạo tag | BLOCKED_EXTERNAL | Không có production/external verification đầy đủ | Các mục trên còn block | Chỉ tag sau khi mọi gate bắt buộc xanh |
 
 ## Build và test
