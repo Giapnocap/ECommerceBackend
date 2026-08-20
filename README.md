@@ -326,35 +326,29 @@ Các endpoint quản trị sử dụng permission policies. Riêng operations re
 | Hiệu năng | Budget SQL Server cho catalog, dashboard/report, login/refresh, session và checkout 50 dòng |
 | Release | ZIP có manifest, SHA-256, migration artifact và smoke test health endpoint |
 
-Baseline backend được xác minh local và trên CI đến ngày `09/08/2026`:
+Release candidate được xác minh local ngày `20/08/2026` và trên GitHub CI:
 
 | Kiểm tra | Kết quả |
 |---|---:|
 | Release build | Đạt, 0 lỗi và 0 cảnh báo |
-| Unit tests | 227/227 đạt |
-| API/EF Core integration tests | 278/278 đạt |
-| SQL Server integration/recovery tests | 24/24 đạt |
+| Unit tests | 279/279 đạt |
+| API/EF Core integration tests | 346/346 đạt |
+| SQL Server integration tests | 25/25 đạt |
+| SQL Server recovery test | 1/1 đạt |
 | SQL Server performance test | 1/1 đạt |
-| Line coverage | 83,31% |
-| Branch coverage | 67,04% |
+| Line coverage | 82,86% |
+| Branch coverage | 66,24% |
 | EF Core model/migration drift | Không phát hiện |
 | Secret scan và NuGet vulnerability audit | Đạt |
 | Release checksum và startup smoke test | Đạt |
 | Docker build/Compose smoke | Đạt local và CI; SQL Server healthy, migration exit 0, live/readiness HTTP 200 |
 
-Các số liệu trên là baseline kiểm thử local/CI, không phải cam kết hiệu năng production. Commit code
-`0ae568f` đã đạt cả ba job trong [GitHub Actions run 31299357392](https://github.com/Giapnocap/ECommerceBackend/actions/runs/31299357392):
-Docker Compose smoke, build/format/migration/coverage/release package và SQL Server integration/recovery.
-Workflow [`Backend CI`](.github/workflows/ci.yml) tiếp tục kiểm tra lại các gate này sau mỗi lần push.
-
-Vòng production-readiness được kiểm chứng local ngày `20/08/2026`: Release build `0` warning/error,
-format gate, EF Core migration drift, unit `279/279`, integration không-SQL `346/346`, SQL Server
-integration `25/25`, recovery `1/1` và performance `1/1` đều đạt; coverage line `82,86%`, branch
-`66,24%`, release-package checksum/startup smoke cũng đạt. Docker image build thành công; migration
-container exit `0`, API chạy non-root, SQL Server healthy, live/readiness HTTP `200` và ba volume
-SQL/upload/Data Protection giữ dữ liệu qua restart trên stack tách biệt. Remote CI chưa thể xác minh
-cho working tree chưa commit; GitHub Actions phải chạy lại sau commit/push kế tiếp. Trạng thái và các
-blocker external được ghi tại [production readiness report](PRODUCTION_READINESS_REPORT.md).
+Commit `6c04359` đã đạt cả ba job trong
+[Backend CI run 32372049844](https://github.com/Giapnocap/ECommerceBackend/actions/runs/32372049844):
+Docker Compose smoke, build/format/migration/coverage/release package và SQL Server
+integration/recovery. Các số liệu là baseline kiểm thử local/CI, không phải cam kết hiệu năng
+production. Trạng thái và các blocker external được ghi tại
+[production readiness report](PRODUCTION_READINESS_REPORT.md).
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
 [Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng

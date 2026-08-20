@@ -5,7 +5,7 @@
 | Mục | Giá trị |
 |---|---|
 | Audit baseline commit | `2f6afd92b59c9dbeb9b16b486bafc39ec9b9fbb1` |
-| Audit source | Baseline commit + local working tree chưa commit |
+| Audit source | Release-candidate source commit `6c04359632bf4fc5518ef3a715c7c34b1acaafd3` |
 | Audit date | 2026-08-20 |
 | Local environment | Windows `10.0.22621`, .NET `8.0.25`, 12 logical processors |
 | Database verification | SQL Server 2022 Linux container, Docker Engine `29.7.2` |
@@ -31,7 +31,7 @@ Status được dùng trong báo cáo: `VERIFIED`, `IMPLEMENTED_NOT_EXTERNAL_VER
 | FX provider | Cache, single-flight, timeout, stale bound và USD/EUR snapshot được test | IMPLEMENTED_NOT_EXTERNAL_VERIFIED | CurrencyAPI adapter tests pass | Không có API key/quota thật | Chạy CurrencyAPI staging |
 | SMTP | Token lifecycle, outbox và SMTP config/TLS validation có sẵn | IMPLEMENTED_NOT_EXTERNAL_VERIFIED | Auth/outbox/config tests pass | Không có SMTP credential và inbox thật | Gửi verify/reset mail staging |
 | Staging HTTPS | Template, host/CORS/proxy/TLS validation đã chuẩn bị | BLOCKED_EXTERNAL | `appsettings.Staging.example.json` và startup tests | Chưa có host, DNS, TLS, trusted proxy | Provision staging và chạy smoke |
-| CI của thay đổi hiện tại | Workflow đã định nghĩa đầy đủ | BLOCKED_EXTERNAL | `.github/workflows/ci.yml` | Working tree chưa commit/push nên chưa có run cho source hiện tại | Commit, push và xác nhận GitHub Actions |
+| CI của release candidate | Ba job của Backend CI đã đạt | VERIFIED | [GitHub Actions run 32372049844](https://github.com/Giapnocap/ECommerceBackend/actions/runs/32372049844) cho commit `6c04359` | Không | Duy trì CI gate sau mỗi push |
 | `v1.0.0` | Chưa tạo tag | BLOCKED_EXTERNAL | Không có production/external verification đầy đủ | Các mục trên còn block | Chỉ tag sau khi mọi gate bắt buộc xanh |
 
 ## Build và test
@@ -107,7 +107,7 @@ p50, p99, throughput, concurrency và giới hạn phép đo nằm trong `docs/P
 ## Security findings
 
 - Không có package direct/transitive bị NuGet Advisory báo vulnerable từ source hiện tại.
-- Không có high-confidence secret trong repository working tree; scan lịch sử audit không phát hiện
+- Không có high-confidence secret trong source release candidate; scan lịch sử audit không phát hiện
   credential phù hợp mẫu high-confidence.
 - Staging/Production từ chối JWT placeholder, auth URL HTTP, generic webhook secret yếu, SQL/host
   config không an toàn, Data Protection path tương đối và SMTP không TLS.
@@ -132,7 +132,7 @@ Chi tiết và trigger nâng cấp nằm tại `docs/LIMITATIONS.md`.
 
 ## External actions required
 
-- [ ] Commit/push working tree và xác nhận toàn bộ GitHub Actions của đúng SHA xanh.
+- [x] Commit/push source release candidate và xác nhận Backend CI của đúng SHA xanh.
 - [ ] Provision staging host, trusted reverse proxy, DNS và TLS certificate.
 - [ ] Thiết lập staging secret store cho SQL, JWT và Data Protection volume.
 - [ ] Cung cấp Stripe test secret/publishable key/webhook secret; chạy success, replay, invalid
@@ -151,8 +151,8 @@ Không ghi secret hoặc provider payload nhạy cảm vào issue/report khi ho�
 **Release Candidate: YES.** Source, data consistency, local recoverability, regression, performance
 baseline, release artifact và Docker topology đã có bằng chứng đạt.
 
-**Production Verified: NO.** Staging HTTPS, CI của working tree hiện tại, Stripe/CurrencyAPI/SMTP
-E2E, collector alerts và backup operation thật chưa được xác minh.
+**Production Verified: NO.** Staging HTTPS, Stripe/CurrencyAPI/SMTP E2E, collector alerts và backup
+operation thật chưa được xác minh.
 
 **Tag `v1.0.0`: NOT CREATED.** Chỉ tạo tag sau khi tất cả external actions bắt buộc đạt trên cùng
 commit SHA và báo cáo được cập nhật bằng ID/bằng chứng không chứa secret.
