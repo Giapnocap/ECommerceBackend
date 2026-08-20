@@ -273,6 +273,65 @@ public sealed class PricingAndPromotionTests
     }
 
     [Fact]
+    public async Task Checkout_FxChangeKeepsOldOrderSnapshotAndAppliesNewRateToNewOrder()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedCheckoutAsync(context);
+        var rates = new Dictionary<(string Base, string Quote), decimal>
+        {
+            [("VND", "USD")] = 0.00004m
+        };
+        var options = PricingOptions();
+        options.SupportedCurrencies = ["VND", "USD"];
+        var service = TestServiceFactory.CreateOrderService(
+            context,
+            new FixedTimeProvider(Now),
+            pricingOptions: options,
+            exchangeRateProvider: new TestExchangeRateProvider(
+                new FixedTimeProvider(Now),
+                rates));
+
+        var first = await service.PlaceOrderAsync(
+            fixture.User.Id,
+            new PlaceOrderRequest
+            {
+                ShippingAddress = "1 Snapshot Street",
+                PaymentMethod = PaymentMethod.CashOnDelivery,
+                ShippingMethod = ShippingMethod.Standard,
+                Currency = "USD"
+            },
+            "fx-snapshot-first");
+
+        await AddCartItemAsync(context, fixture.Cart.Id, fixture.Product.Id);
+        rates[("VND", "USD")] = 0.00005m;
+
+        var second = await service.PlaceOrderAsync(
+            fixture.User.Id,
+            new PlaceOrderRequest
+            {
+                ShippingAddress = "2 Snapshot Street",
+                PaymentMethod = PaymentMethod.CashOnDelivery,
+                ShippingMethod = ShippingMethod.Standard,
+                Currency = "USD"
+            },
+            "fx-snapshot-second");
+
+        context.ChangeTracker.Clear();
+        var orders = await context.Orders
+            .Where(order => order.Id == first.Id || order.Id == second.Id)
+            .OrderBy(order => order.OrderDate)
+            .ThenBy(order => order.Id)
+            .ToListAsync();
+        var firstStored = Assert.Single(orders, order => order.Id == first.Id);
+        var secondStored = Assert.Single(orders, order => order.Id == second.Id);
+
+        Assert.Equal(0.00004m, firstStored.ExchangeRate);
+        Assert.Equal(first.TotalAmount, firstStored.TotalAmount);
+        Assert.Equal(0.00005m, secondStored.ExchangeRate);
+        Assert.NotEqual(firstStored.TotalAmount, secondStored.TotalAmount);
+    }
+
+    [Fact]
     public async Task PromotionService_KeepsCodeImmutableAndRejectsLimitBelowUsage()
     {
         await using var context = TestAppDbContext.Create();

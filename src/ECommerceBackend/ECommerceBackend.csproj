@@ -38,7 +38,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="appsettings.Development.json;appsettings.Local.json;appsettings.Local.example.json;appsettings.Production.example.json">
+    <Content Update="appsettings.Development.json;appsettings.Local.json;appsettings.Local.example.json;appsettings.Staging.example.json;appsettings.Production.example.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>

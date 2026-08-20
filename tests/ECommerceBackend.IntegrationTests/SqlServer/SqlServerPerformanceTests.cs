@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using ECommerceBackend.Application.Common;
@@ -34,14 +35,22 @@ public sealed class SqlServerPerformanceTests
     private const int CheckoutLineCount = Cart.MaximumLineItems;
     private const int CatalogRequestCount = 40;
     private const int RepresentativeShapeRequestCount = 20;
+    private const int ManagementRequestCount = 20;
+    private const int AuthRequestCount = 20;
+    private const int AuthWarmupRequestCount = 4;
     private const int SessionRequestCount = 200;
     private const int CheckoutRequestCount = 12;
+    private const string PerformancePassword = "Customer@123";
     private const string KeywordCatalogPath =
         "/api/products/summaries?keyword=Product%2019&page=1&pageSize=50";
     private const string ImageHeavyCatalogPath =
         "/api/products/summaries?page=1&pageSize=100";
     private const string OrderHistoryPath =
         "/api/orders/my/summaries?page=1&pageSize=50";
+    private const string DashboardPath =
+        "/api/admin/dashboard/summary?lowStockThreshold=10";
+    private const string RevenueReportPath =
+        "/api/admin/reports/revenue?groupBy=day";
 
     [Fact]
     [Trait("Category", "SqlServerPerformance")]
@@ -121,6 +130,78 @@ public sealed class SqlServerPerformanceTests
                 concurrency: 4,
                 timeout.Token);
 
+            var administrator = await RegisterAdminAsync(
+                factory.Services,
+                timeout.Token);
+            var dashboard = await MeasureGetAsync(
+                client,
+                DashboardPath,
+                administrator.AccessToken,
+                warmupCount: 4,
+                requestCount: ManagementRequestCount,
+                concurrency: 4,
+                timeout.Token);
+            var revenueReport = await MeasureGetAsync(
+                client,
+                RevenueReportPath,
+                administrator.AccessToken,
+                warmupCount: 4,
+                requestCount: ManagementRequestCount,
+                concurrency: 4,
+                timeout.Token);
+
+            var loginUsers = await RegisterManyAsync(
+                factory.Services,
+                "login",
+                AuthWarmupRequestCount + AuthRequestCount,
+                timeout.Token);
+            var login = await MeasurePostAsync(
+                client,
+                "/api/auth/login",
+                loginUsers
+                    .Take(AuthWarmupRequestCount)
+                    .Select(user => new LoginRequest
+                    {
+                        UserName = user.UserName,
+                        Password = PerformancePassword
+                    })
+                    .ToArray(),
+                loginUsers
+                    .Skip(AuthWarmupRequestCount)
+                    .Select(user => new LoginRequest
+                    {
+                        UserName = user.UserName,
+                        Password = PerformancePassword
+                    })
+                    .ToArray(),
+                concurrency: 4,
+                timeout.Token);
+
+            var refreshUsers = await RegisterManyAsync(
+                factory.Services,
+                "refresh",
+                AuthWarmupRequestCount + AuthRequestCount,
+                timeout.Token);
+            var refresh = await MeasurePostAsync(
+                client,
+                "/api/auth/refresh",
+                refreshUsers
+                    .Take(AuthWarmupRequestCount)
+                    .Select(user => new RefreshTokenRequest
+                    {
+                        RefreshToken = user.RefreshToken
+                    })
+                    .ToArray(),
+                refreshUsers
+                    .Skip(AuthWarmupRequestCount)
+                    .Select(user => new RefreshTokenRequest
+                    {
+                        RefreshToken = user.RefreshToken
+                    })
+                    .ToArray(),
+                concurrency: 4,
+                timeout.Token);
+
             var customer = await RegisterAsync(factory.Services, "session", timeout.Token);
             var session = await MeasureGetAsync(
                 client,
@@ -169,6 +250,7 @@ public sealed class SqlServerPerformanceTests
             await WriteResultsAsync(
                 new PerformanceReport(
                     DateTimeOffset.UtcNow,
+                    PerformanceEnvironment.Current(),
                     CatalogProductCount,
                     ImageHeavyProductCount,
                     ImagesPerProduct,
@@ -179,6 +261,10 @@ public sealed class SqlServerPerformanceTests
                     keywordCatalog.ToResult(),
                     imageHeavyCatalog.ToResult(),
                     orderHistory.ToResult(),
+                    dashboard.ToResult(),
+                    revenueReport.ToResult(),
+                    login.ToResult(),
+                    refresh.ToResult(),
                     session.ToResult(),
                     checkout.ToResult()),
                 timeout.Token);
@@ -199,6 +285,22 @@ public sealed class SqlServerPerformanceTests
                 $"Order history p95 {orderHistory.P95Milliseconds:F1} ms exceeded " +
                 $"{budgets.OrderHistoryP95Milliseconds:F1} ms.");
             Assert.True(
+                dashboard.P95Milliseconds <= budgets.DashboardP95Milliseconds,
+                $"Dashboard p95 {dashboard.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.DashboardP95Milliseconds:F1} ms.");
+            Assert.True(
+                revenueReport.P95Milliseconds <= budgets.ReportP95Milliseconds,
+                $"Report p95 {revenueReport.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.ReportP95Milliseconds:F1} ms.");
+            Assert.True(
+                login.P95Milliseconds <= budgets.LoginP95Milliseconds,
+                $"Login p95 {login.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.LoginP95Milliseconds:F1} ms.");
+            Assert.True(
+                refresh.P95Milliseconds <= budgets.RefreshP95Milliseconds,
+                $"Refresh p95 {refresh.P95Milliseconds:F1} ms exceeded " +
+                $"{budgets.RefreshP95Milliseconds:F1} ms.");
+            Assert.True(
                 session.P95Milliseconds <= budgets.SessionP95Milliseconds,
                 $"Session validation p95 {session.P95Milliseconds:F1} ms exceeded " +
                 $"{budgets.SessionP95Milliseconds:F1} ms.");
@@ -214,6 +316,14 @@ public sealed class SqlServerPerformanceTests
                 checkout.ThroughputPerSecond >= budgets.CheckoutMinimumThroughput,
                 $"Checkout throughput {checkout.ThroughputPerSecond:F1} req/s was below " +
                 $"{budgets.CheckoutMinimumThroughput:F1} req/s.");
+            Assert.True(
+                login.ThroughputPerSecond >= budgets.LoginMinimumThroughput,
+                $"Login throughput {login.ThroughputPerSecond:F1} req/s was below " +
+                $"{budgets.LoginMinimumThroughput:F1} req/s.");
+            Assert.True(
+                refresh.ThroughputPerSecond >= budgets.RefreshMinimumThroughput,
+                $"Refresh throughput {refresh.ThroughputPerSecond:F1} req/s was below " +
+                $"{budgets.RefreshMinimumThroughput:F1} req/s.");
         }
         finally
         {
@@ -234,8 +344,54 @@ public sealed class SqlServerPerformanceTests
             {
                 UserName = $"{prefix}_{suffix}",
                 Email = $"{prefix}_{suffix}@example.com",
-                Password = "Customer@123",
+                Password = PerformancePassword,
                 FullName = "Performance Customer"
+            },
+            cancellationToken);
+    }
+
+    private static async Task<IReadOnlyList<AuthResponse>> RegisterManyAsync(
+        IServiceProvider services,
+        string prefix,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        var users = new List<AuthResponse>(count);
+        for (var index = 0; index < count; index++)
+        {
+            users.Add(await RegisterAsync(
+                services,
+                $"{prefix}{index}",
+                cancellationToken));
+        }
+
+        return users;
+    }
+
+    private static async Task<AuthResponse> RegisterAdminAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        var registered = await RegisterAsync(services, "admin", cancellationToken);
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var user = await context.Users
+                .Include(candidate => candidate.UserRoles)
+                .SingleAsync(candidate => candidate.Id == registered.UserId, cancellationToken);
+            var role = await context.Roles
+                .SingleAsync(candidate => candidate.Name == RoleNames.Admin, cancellationToken);
+            user.ChangeRole(role);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        await using var loginScope = services.CreateAsyncScope();
+        var authService = loginScope.ServiceProvider.GetRequiredService<IAuthService>();
+        return await authService.LoginAsync(
+            new LoginRequest
+            {
+                UserName = registered.UserName,
+                Password = PerformancePassword
             },
             cancellationToken);
     }
@@ -420,7 +576,8 @@ public sealed class SqlServerPerformanceTests
                     ProductId = productId,
                     ProductNameSnapshot = "Performance History Product",
                     Quantity = 1,
-                    UnitPrice = 100_000m
+                    UnitPrice = 100_000m,
+                    BaseUnitPrice = 100_000m
                 });
                 orders.Add(order);
             }
@@ -626,6 +783,55 @@ public sealed class SqlServerPerformanceTests
         return measurement;
     }
 
+    private static async Task<Measurement> MeasurePostAsync<TRequest>(
+        HttpClient client,
+        string path,
+        IReadOnlyList<TRequest> warmupRequests,
+        IReadOnlyList<TRequest> measuredRequests,
+        int concurrency,
+        CancellationToken cancellationToken)
+    {
+        static async Task<HttpStatusCode> SendAsync(
+            HttpClient httpClient,
+            string requestPath,
+            TRequest payload,
+            CancellationToken requestCancellationToken)
+        {
+            using var response = await httpClient.PostAsJsonAsync(
+                requestPath,
+                payload,
+                requestCancellationToken);
+            return response.StatusCode;
+        }
+
+        var warmup = await MeasureAsync(
+            warmupRequests.Count,
+            concurrency,
+            (index, requestCancellationToken) => SendAsync(
+                client,
+                path,
+                warmupRequests[index],
+                requestCancellationToken),
+            cancellationToken);
+        Assert.All(
+            warmup.StatusCodes,
+            status => Assert.Equal(HttpStatusCode.OK, status));
+
+        var measurement = await MeasureAsync(
+            measuredRequests.Count,
+            concurrency,
+            (index, requestCancellationToken) => SendAsync(
+                client,
+                path,
+                measuredRequests[index],
+                requestCancellationToken),
+            cancellationToken);
+        Assert.All(
+            measurement.StatusCodes,
+            status => Assert.Equal(HttpStatusCode.OK, status));
+        return measurement;
+    }
+
     private static async Task<Measurement> MeasureAsync(
         int requestCount,
         int concurrency,
@@ -656,11 +862,20 @@ public sealed class SqlServerPerformanceTests
             .Select(sample => sample.ElapsedMilliseconds)
             .Order()
             .ToArray();
-        var p95Index = Math.Max(0, (int)Math.Ceiling(ordered.Length * 0.95) - 1);
         return new Measurement(
-            ordered[p95Index],
+            GetPercentile(ordered, 0.50),
+            GetPercentile(ordered, 0.95),
+            GetPercentile(ordered, 0.99),
             requestCount / total.Elapsed.TotalSeconds,
             samples.Select(sample => sample.StatusCode).ToArray());
+    }
+
+    private static double GetPercentile(IReadOnlyList<double> ordered, double percentile)
+    {
+        var index = Math.Max(
+            0,
+            (int)Math.Ceiling(ordered.Count * percentile) - 1);
+        return ordered[index];
     }
 
     private static async Task WriteResultsAsync(
@@ -685,16 +900,24 @@ public sealed class SqlServerPerformanceTests
     }
 
     private sealed record Measurement(
+        double P50Milliseconds,
         double P95Milliseconds,
+        double P99Milliseconds,
         double ThroughputPerSecond,
         IReadOnlyList<HttpStatusCode> StatusCodes)
     {
         public PerformanceResult ToResult()
-            => new(P95Milliseconds, ThroughputPerSecond, StatusCodes.Count);
+            => new(
+                P50Milliseconds,
+                P95Milliseconds,
+                P99Milliseconds,
+                ThroughputPerSecond,
+                StatusCodes.Count);
     }
 
     private sealed record PerformanceReport(
         DateTimeOffset MeasuredAt,
+        PerformanceEnvironment Environment,
         int CatalogProductCount,
         int ImageHeavyProductCount,
         int ImagesPerProduct,
@@ -705,11 +928,29 @@ public sealed class SqlServerPerformanceTests
         PerformanceResult KeywordCatalog,
         PerformanceResult ImageHeavyCatalog,
         PerformanceResult OrderHistory,
+        PerformanceResult Dashboard,
+        PerformanceResult RevenueReport,
+        PerformanceResult Login,
+        PerformanceResult Refresh,
         PerformanceResult SessionValidation,
         PerformanceResult Checkout);
 
+    private sealed record PerformanceEnvironment(
+        string OperatingSystem,
+        string Framework,
+        int ProcessorCount)
+    {
+        public static PerformanceEnvironment Current()
+            => new(
+                RuntimeInformation.OSDescription,
+                RuntimeInformation.FrameworkDescription,
+                Environment.ProcessorCount);
+    }
+
     private sealed record PerformanceResult(
+        double P50Milliseconds,
         double P95Milliseconds,
+        double P99Milliseconds,
         double ThroughputPerSecond,
         int RequestCount);
 
@@ -718,8 +959,14 @@ public sealed class SqlServerPerformanceTests
         double KeywordCatalogP95Milliseconds,
         double ImageHeavyCatalogP95Milliseconds,
         double OrderHistoryP95Milliseconds,
+        double DashboardP95Milliseconds,
+        double ReportP95Milliseconds,
+        double LoginP95Milliseconds,
+        double RefreshP95Milliseconds,
         double SessionP95Milliseconds,
         double CheckoutP95Milliseconds,
+        double LoginMinimumThroughput,
+        double RefreshMinimumThroughput,
         double SessionMinimumThroughput,
         double CheckoutMinimumThroughput)
     {
@@ -729,8 +976,14 @@ public sealed class SqlServerPerformanceTests
                 ReadPositiveDouble("PERFORMANCE_KEYWORD_CATALOG_P95_MS", 750),
                 ReadPositiveDouble("PERFORMANCE_IMAGE_HEAVY_CATALOG_P95_MS", 750),
                 ReadPositiveDouble("PERFORMANCE_ORDER_HISTORY_P95_MS", 750),
+                ReadPositiveDouble("PERFORMANCE_DASHBOARD_P95_MS", 1_000),
+                ReadPositiveDouble("PERFORMANCE_REPORT_P95_MS", 1_500),
+                ReadPositiveDouble("PERFORMANCE_LOGIN_P95_MS", 1_000),
+                ReadPositiveDouble("PERFORMANCE_REFRESH_P95_MS", 1_000),
                 ReadPositiveDouble("PERFORMANCE_SESSION_P95_MS", 500),
                 ReadPositiveDouble("PERFORMANCE_CHECKOUT_P95_MS", 2_000),
+                ReadPositiveDouble("PERFORMANCE_LOGIN_MIN_RPS", 5),
+                ReadPositiveDouble("PERFORMANCE_REFRESH_MIN_RPS", 5),
                 ReadPositiveDouble("PERFORMANCE_SESSION_MIN_RPS", 20),
                 ReadPositiveDouble("PERFORMANCE_CHECKOUT_MIN_RPS", 3));
 
@@ -792,6 +1045,8 @@ internal sealed class SqlServerPerformanceApiFactory : WebApplicationFactory<Pro
                 ["Outbox:Enabled"] = "false",
                 ["OrderLifecycle:ExpirationEnabled"] = "false",
                 ["Notifications:Smtp:Enabled"] = "false",
+                ["RateLimiting:Auth:PermitLimit"] = "1000",
+                ["RateLimiting:Refresh:PermitLimit"] = "1000",
                 ["Serilog:MinimumLevel:Default"] = "Warning"
             });
         });

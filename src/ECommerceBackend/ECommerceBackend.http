@@ -16,6 +16,7 @@
 @ProductImageId =
 @CartItemId =
 @OrderId =
+@OnlineOrderId =
 @PromotionId =
 @UserId =
 @IdempotencyKey = checkout-demo-001
@@ -293,6 +294,12 @@ Idempotency-Key: {{IdempotencyKey}}
 
 ### My orders
 GET {{ApiBase}}/orders/my?page=1&pageSize=10
+Accept: application/json
+Authorization: Bearer {{CustomerToken}}
+
+### Initialize online payment for an order placed with paymentMethod = 1
+# Requires Payments:Stripe:Enabled=true and Stripe test credentials.
+POST {{ApiBase}}/payments/orders/{{OnlineOrderId}}/initialize
 Accept: application/json
 Authorization: Bearer {{CustomerToken}}
 

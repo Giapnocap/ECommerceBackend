@@ -54,12 +54,15 @@ public sealed class CurrencyApiExchangeRateProviderTests
             timeProvider,
             cacheMinutes: 1,
             maxStaleMinutes: 5);
-        _ = await provider.GetRateAsync("VND", "EUR");
+        var fresh = await provider.GetRateAsync("VND", "EUR");
         timeProvider.Advance(TimeSpan.FromMinutes(2));
 
         var stale = await provider.GetRateAsync("VND", "EUR");
 
+        Assert.Equal("EUR", fresh.QuoteCurrency);
+        Assert.Equal(0.00003520m, fresh.Rate);
         Assert.True(stale.IsStale);
+        Assert.Equal(fresh.Rate, stale.Rate);
         Assert.Equal(2, handler.CallCount);
     }
 

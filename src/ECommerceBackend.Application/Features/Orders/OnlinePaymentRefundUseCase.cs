@@ -250,7 +250,7 @@ namespace ECommerceBackend.Application.Services
                 {
                     throw new ConflictException(
                         "refund_base_amount_exceeds_available",
-                        "Sá»‘ tiá»n hoÃ n quy Ä‘á»•i vÆ°á»£t quÃ¡ sá»‘ tiá»n cÃ²n cÃ³ thá»ƒ hoÃ n.");
+                        "Số tiền hoàn quy đổi vượt quá số tiền còn có thể hoàn.");
                 }
 
                 var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
@@ -371,7 +371,7 @@ namespace ECommerceBackend.Application.Services
                     {
                         throw new ConflictException(
                             "refund_provider_state_conflict",
-                            "Sá»‘ tiá»n hoÃ n tá»« webhook khÃ´ng khá»›p vá»›i yÃªu cáº§u Ä‘ang hoÃ n táº¥t.");
+                            "Số tiền hoàn từ webhook không khớp với yêu cầu đang hoàn tất.");
                     }
 
                     DomainRuleGuard.AsConflict(() =>
@@ -585,7 +585,7 @@ namespace ECommerceBackend.Application.Services
             {
                 throw new DomainRuleViolationException(
                     "refund_exchange_rate_invalid",
-                    "Tá»· giÃ¡ Ä‘Æ¡n hÃ ng khÃ´ng há»£p lá»‡ Ä‘á»ƒ hoÃ n tiá»n.");
+                    "Tỷ giá đơn hàng không hợp lệ để hoàn tiền.");
             }
 
             return Money.Round(

@@ -90,6 +90,43 @@ public sealed class PaymentReliabilityTests
     }
 
     [Fact]
+    public async Task Reconciliation_ProviderMismatchFailsWithoutMutationAndRemainsRetryable()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedCardOrderAsync(context, returned: false);
+        fixture.Payment.AttachProviderTransaction(
+            "stripe",
+            "pi_reconcile_mismatch",
+            PaymentStatus.Processing,
+            fixture.Order.OrderDate.AddMinutes(1));
+        await context.SaveChangesAsync();
+        var gateway = new RecordingGateway(context)
+        {
+            PaymentStatusResult = new GatewayPaymentStatusResult(
+                "pi_reconcile_mismatch",
+                99,
+                "VND",
+                PaymentStatus.Paid)
+        };
+        var useCase = CreateReconciliation(context, gateway);
+
+        var first = await useCase.ExecuteBatchAsync();
+        var retry = await useCase.ExecuteBatchAsync();
+
+        Assert.Equal(new PaymentReconciliationBatchResult(1, 0, 1), first);
+        Assert.Equal(new PaymentReconciliationBatchResult(1, 0, 1), retry);
+        Assert.All(gateway.ObservedActiveTransactions, Assert.False);
+        var payment = await context.Payments.SingleAsync();
+        Assert.Equal(PaymentStatus.Processing, payment.Status);
+        Assert.Null(payment.LastReconciledAt);
+        Assert.Empty(await context.PaymentStatusHistories
+            .Where(history =>
+                history.Source == PaymentStatusChangeSource.Reconciliation)
+            .ToListAsync());
+        Assert.Empty(await context.OutboxMessages.ToListAsync());
+    }
+
+    [Fact]
     public async Task OnlineRefund_IsIdempotentAndNeverExceedsPaidAmount()
     {
         await using var context = TestAppDbContext.Create();

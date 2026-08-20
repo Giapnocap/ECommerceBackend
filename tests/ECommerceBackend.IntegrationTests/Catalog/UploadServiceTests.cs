@@ -1,7 +1,10 @@
 using ECommerceBackend.Application.Interfaces;
+using ECommerceBackend.Application.Exceptions;
 using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Infrastructure.Storage;
 using ECommerceBackend.Tests.Support;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace ECommerceBackend.Tests;
 
@@ -60,6 +63,104 @@ public sealed class UploadServiceTests
             Assert.True(remaining.IsMain);
             Assert.False(File.Exists(ToPhysicalPath(root, second.ImageUrl)));
             Assert.True(File.Exists(ToPhysicalPath(root, remaining.ImageUrl)));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Upload_RejectsUnsafeMetadataContentAndSizeWithoutWritingFile()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "ECommerceBackend.Tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            await using var context = TestAppDbContext.Create();
+            var category = new Category { Id = Guid.NewGuid(), Name = "Unsafe Images" };
+            var product = new Product
+            {
+                Id = Guid.NewGuid(),
+                CategoryId = category.Id,
+                Name = "Unsafe Image Product",
+                Price = 10m,
+                StockQuantity = 1
+            };
+            context.AddRange(category, product);
+            await context.SaveChangesAsync();
+            var service = TestServiceFactory.CreateUploadService(
+                context,
+                new TestWebHostEnvironment(root));
+
+            await Assert.ThrowsAsync<BusinessException>(() =>
+                service.UploadProductImageAsync(
+                    product.Id,
+                    new InMemoryUploadFile(
+                        "image.svg",
+                        "image/svg+xml",
+                        "<svg/>"u8.ToArray()),
+                    false));
+            await Assert.ThrowsAsync<BusinessException>(() =>
+                service.UploadProductImageAsync(
+                    product.Id,
+                    new InMemoryUploadFile(
+                        "image.jpg",
+                        "image/png",
+                        [0xFF, 0xD8, 0xFF]),
+                    false));
+            await Assert.ThrowsAsync<BusinessException>(() =>
+                service.UploadProductImageAsync(
+                    product.Id,
+                    new InMemoryUploadFile(
+                        "image.png",
+                        "image/png",
+                        "not-a-png"u8.ToArray()),
+                    false));
+            await Assert.ThrowsAsync<BusinessException>(() =>
+                service.UploadProductImageAsync(
+                    product.Id,
+                    new InMemoryUploadFile(
+                        "large.png",
+                        "image/png",
+                        new byte[5 * 1024 * 1024 + 1]),
+                    false));
+
+            Assert.Empty(await context.ProductImages.ToListAsync());
+            var uploadPath = Path.Combine(root, "Uploads", "products");
+            Assert.False(Directory.Exists(uploadPath));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LocalStorage_RejectsPathTraversalFileName()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "ECommerceBackend.Tests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            var storage = new LocalProductImageStorage(
+                new TestWebHostEnvironment(root),
+                NullLogger<LocalProductImageStorage>.Instance);
+            await using var content = new MemoryStream([1, 2, 3]);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                storage.SaveAsync("../outside.png", content));
+            Assert.False(File.Exists(Path.Combine(root, "outside.png")));
         }
         finally
         {

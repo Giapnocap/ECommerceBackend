@@ -48,7 +48,7 @@ namespace ECommerceBackend.API.Extensions
                 .Bind(configuration.GetSection(JwtOptions.SectionName))
                 .Validate(
                     options => IsValidJwtOptions(options, environment),
-                    "Jwt config is invalid or contains a production placeholder secret.")
+                    "Jwt config is invalid or contains a Staging/Production placeholder secret.")
                 .ValidateOnStart();
 
             services.AddOptions<AuthSecurityOptions>()
@@ -67,7 +67,7 @@ namespace ECommerceBackend.API.Extensions
                 .Bind(configuration.GetSection(DataProtectionStorageOptions.SectionName))
                 .Validate(
                     options => IsValidDataProtectionOptions(options, environment),
-                    "Production requires a non-empty application name and an absolute DataProtection keys path.")
+                    "Staging/Production requires a non-empty application name and an absolute DataProtection keys path.")
                 .ValidateOnStart();
 
             services.AddOptions<ProductionSecurityOptions>(ProductionSecurityOptions.OptionsName)
@@ -75,9 +75,9 @@ namespace ECommerceBackend.API.Extensions
                 {
                     options.ConnectionString = configuration.GetConnectionString("Default") ?? string.Empty;
                     options.AllowedHosts = configuration["AllowedHosts"] ?? string.Empty;
-                    options.IsProduction = environment.IsProduction();
+                    options.IsProduction = IsProductionLikeEnvironment(environment);
                 })
-                .Validate(IsValidProductionSecurityOptions, "Production database TLS or AllowedHosts config is insecure.")
+                .Validate(IsValidProductionSecurityOptions, "Staging/Production database TLS or AllowedHosts config is insecure.")
                 .ValidateOnStart();
 
             services.AddOptions<CorsOptions>()
@@ -101,7 +101,7 @@ namespace ECommerceBackend.API.Extensions
                     options => IsValidPaymentWebhookOptions(
                         options,
                         environment),
-                    "Generic HMAC payment webhook config is invalid or enabled in Production.")
+                    "Generic HMAC payment webhook config is invalid or enabled in Staging/Production.")
                 .ValidateOnStart();
 
             services.AddOptions<StripePaymentOptions>()
@@ -230,7 +230,12 @@ namespace ECommerceBackend.API.Extensions
             JwtOptions options,
             IWebHostEnvironment environment)
             => HasUsableJwtOptions(options)
-                && (!environment.IsProduction() || !LooksLikePlaceholder(options.Key));
+                && (!IsProductionLikeEnvironment(environment)
+                    || !LooksLikePlaceholder(options.Key));
+
+        private static bool IsProductionLikeEnvironment(
+            IWebHostEnvironment environment)
+            => environment.IsStaging() || environment.IsProduction();
 
         private static bool HasUsableJwtOptions(JwtOptions options)
         {
@@ -277,7 +282,7 @@ namespace ECommerceBackend.API.Extensions
                 return false;
             }
 
-            return !environment.IsProduction()
+            return !IsProductionLikeEnvironment(environment)
                 || (resetUrl.Scheme == "https"
                     && verificationUrl.Scheme == "https"
                     && !string.Equals(
@@ -389,7 +394,7 @@ namespace ECommerceBackend.API.Extensions
             PaymentWebhookOptions options,
             IWebHostEnvironment environment)
         {
-            if (environment.IsProduction() && options.Enabled)
+            if (IsProductionLikeEnvironment(environment) && options.Enabled)
                 return false;
 
             if (string.IsNullOrWhiteSpace(options.ProviderCode)
@@ -511,7 +516,7 @@ namespace ECommerceBackend.API.Extensions
                 return false;
             }
 
-            return !environment.IsProduction()
+            return !IsProductionLikeEnvironment(environment)
                 || !string.IsNullOrWhiteSpace(options.KeysPath)
                     && Path.IsPathFullyQualified(options.KeysPath.Trim());
         }
@@ -650,8 +655,11 @@ namespace ECommerceBackend.API.Extensions
                 || options.Port is < 1 or > 65535
                 || string.IsNullOrWhiteSpace(options.FromAddress)
                 || string.IsNullOrWhiteSpace(options.FromName)
+                || IsProductionLikeEnvironment(environment)
+                    && !options.EnableSsl
                 || (!string.IsNullOrWhiteSpace(options.UserName)
-                    && string.IsNullOrWhiteSpace(options.Password)))
+                    && (string.IsNullOrWhiteSpace(options.Password)
+                        || LooksLikePlaceholder(options.Password))))
             {
                 return false;
             }

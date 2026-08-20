@@ -10,6 +10,7 @@ erDiagram
         uniqueidentifier Id PK
         nvarchar UserName UK
         nvarchar Email UK
+        datetime2 EmailVerifiedAt
         int TokenVersion
         rowversion RowVersion
     }
@@ -42,6 +43,13 @@ erDiagram
         nvarchar TokenHash UK
         datetime2 ExpiresAt
     }
+    EMAIL_VERIFICATION_TOKENS {
+        uniqueidentifier Id PK
+        uniqueidentifier UserId FK
+        nvarchar TokenHash UK
+        datetime2 ExpiresAt
+        datetime2 UsedAt
+    }
     CATEGORIES {
         uniqueidentifier Id PK
         uniqueidentifier ParentId FK
@@ -53,6 +61,7 @@ erDiagram
         uniqueidentifier CategoryId FK
         decimal Price
         int StockQuantity
+        int LowStockThreshold
         bit IsDeleted
         rowversion RowVersion
     }
@@ -85,8 +94,20 @@ erDiagram
         nvarchar RecipientPhone
         nvarchar ShippingAddress
         nvarchar Currency
+        nvarchar BaseCurrency
+        decimal ExchangeRate
+        datetime2 ExchangeRateCapturedAt
         int Status
+        decimal SubtotalAmount
+        decimal DiscountAmount
+        decimal ShippingFee
+        decimal TaxAmount
         decimal TotalAmount
+        decimal BaseSubtotalAmount
+        decimal BaseDiscountAmount
+        decimal BaseShippingFee
+        decimal BaseTaxAmount
+        decimal BaseTotalAmount
         datetime2 ExpiresAt
         rowversion RowVersion
     }
@@ -96,6 +117,7 @@ erDiagram
         uniqueidentifier ProductId FK
         nvarchar ProductNameSnapshot
         decimal UnitPrice
+        decimal BaseUnitPrice
         int Quantity
     }
     ORDER_STATUS_HISTORIES {
@@ -153,7 +175,30 @@ erDiagram
         int Method
         int Status
         decimal Amount
+        nvarchar Currency
+        decimal RefundedAmount
+        nvarchar Provider
+        nvarchar ProviderTransactionId
+        nvarchar ExternalCreationIdempotencyKey UK
+        datetime2 ExternalCreationLeaseUntil
+        datetime2 LastProviderEventAt
+        datetime2 LastReconciledAt
         datetime2 PaidAt
+        rowversion RowVersion
+    }
+    PAYMENT_REFUNDS {
+        uniqueidentifier Id PK
+        uniqueidentifier PaymentId FK
+        uniqueidentifier RequestedByUserId FK
+        nvarchar IdempotencyKey
+        decimal Amount
+        nvarchar Currency
+        decimal BaseAmount
+        nvarchar BaseCurrency
+        int Status
+        nvarchar ProviderRefundId UK
+        int AttemptCount
+        datetime2 ProcessingLeaseUntil
         rowversion RowVersion
     }
     PAYMENT_STATUS_HISTORIES {
@@ -201,6 +246,7 @@ erDiagram
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : contains
     USERS ||--o{ REFRESH_TOKENS : sessions
     USERS ||--o{ PASSWORD_RESET_TOKENS : resets
+    USERS ||--o{ EMAIL_VERIFICATION_TOKENS : verifies
     USERS ||--o{ ORDERS : places
     USERS ||--o{ PROMOTION_REDEMPTIONS : redeems
     CATEGORIES o|--o{ CATEGORIES : parent
@@ -218,6 +264,8 @@ erDiagram
     PROMOTIONS ||--o{ PROMOTION_REDEMPTIONS : limits
     ORDERS ||--o| PROMOTION_REDEMPTIONS : consumes
     ORDERS ||--|| PAYMENTS : payment
+    USERS ||--o{ PAYMENT_REFUNDS : requests
+    PAYMENTS ||--o{ PAYMENT_REFUNDS : refunds
     PAYMENTS ||--o{ PAYMENT_STATUS_HISTORIES : records
     PAYMENTS ||--o{ PAYMENT_WEBHOOK_EVENTS : receives
     PRODUCTS ||--o{ INVENTORY_TRANSACTIONS : ledger

@@ -5,15 +5,22 @@ following boundaries are intentional and visible in the design.
 
 ## Current Scope
 
-- Checkout supports cash on delivery only. The generic signed webhook demonstrates a provider
-  contract in Development/Testing and startup validation rejects enabling it in Production; it is
-  not a complete integration with a real payment gateway.
+- Checkout supports cash on delivery and Stripe PaymentIntent card payments. Stripe is disabled
+  by default and the repository's deterministic adapters do not replace a real Stripe Test Mode
+  verification with valid credentials and a reachable webhook endpoint.
+- VND is the reporting base currency; VND, USD and EUR are supported display/payment currencies.
+  Changing the base currency for existing data requires a controlled migration and backfill.
+- Payment reconciliation repairs stale active payments. Provider-pending refunds are retried
+  idempotently through the refund API, but there is no separate refund reconciliation worker.
+- Refunds initiated directly in a provider dashboard are accepted through verified webhooks, but
+  partial external refunds do not carry enough local allocation data for exact period reporting.
+  The supported operational path starts refunds through this API.
 - Checkout supports configurable shipping/tax rules and bounded promotion codes. It does not
   calculate carrier-specific live rates, stack multiple promotions or model jurisdictional tax.
 - Shipment records and return processing are internal workflows. Carrier label creation, live
   tracking synchronization, product variants and multi-warehouse inventory are outside the domain.
-- Email verification is not required for sign-in. Password reset, lockout and session revocation
-  are implemented.
+- Email verification and password reset use hashed, expiring, single-use tokens delivered through
+  the transactional outbox. Email verification is recorded but is not required for sign-in.
 
 ## Deployment Boundaries
 
@@ -26,6 +33,8 @@ following boundaries are intentional and visible in the design.
   adding Redis.
 - SMTP delivery is at-least-once. A crash after SMTP accepts a message but before the database
   commit can send a duplicate with the same deterministic `Message-ID`.
+- FX caching is process-local. Multiple API replicas either need a distributed cache or must accept
+  that each instance keeps its own bounded cache and stale fallback window.
 
 ## Operational Boundaries
 

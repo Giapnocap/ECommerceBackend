@@ -153,9 +153,11 @@ ReturnRequested -> ReturnApproved -> Returned -> Refunded
         |
         +-> Delivered (rejected)
 
-Payment: Pending -> Paid -> Refunded
-            |------> Failed
-            +------> Cancelled
+Payment: Pending <-> RequiresAction <-> Processing
+            |              |               |
+            +--------------+---------------> Paid -> PartiallyRefunded -> Refunded
+            |              |
+            +--------------+---------------> Failed / Cancelled
 
 COD reaches Paid when the order is Delivered and Cancelled when the order is Cancelled.
 ```
@@ -180,8 +182,11 @@ still reject a generic transition when a dedicated shipment, return or refund co
 
 | Current payment | Accepted next state | Retry behavior |
 | --- | --- | --- |
-| `Pending` | `Paid`, `Failed`, `Cancelled` | A new event for the current state is audited without another outcome |
-| `Paid` | `Refunded` | The capture time is retained and refund time cannot precede it |
+| `Pending` | `RequiresAction`, `Processing`, `Paid`, `Failed`, `Cancelled` | Create/reconcile/webhook retries are idempotent |
+| `RequiresAction` | `Pending`, `Processing`, `Paid`, `Failed`, `Cancelled` | A later provider observation may move the payment forward or back to pending |
+| `Processing` | `Pending`, `RequiresAction`, `Paid`, `Failed`, `Cancelled` | Reconciliation repairs a missed provider event under a lease |
+| `Paid` | `PartiallyRefunded`, `Refunded` | Refund amount and original currency are validated before transition |
+| `PartiallyRefunded` | `Refunded` | Cumulative refund cannot exceed the paid amount |
 | `Failed` | None | Terminal |
 | `Cancelled` | None | Terminal |
 | `Refunded` | None | Terminal; another provider event is audited without another notification |
@@ -211,11 +216,12 @@ number. A delivery failure keeps stock reserved; staff can retry the same shipme
 Customer return requests are bounded by `Returns:ReturnWindowDays`; Staff approves or rejects them.
 Stock is restored only when approved goods are physically received and inspected.
 
-`POST /api/v1/orders/{id}/refund` records a completed offline COD refund only after the order is
-`Returned`, the return request is `Received` and the payment is `Paid`. The request requires the external receipt/reference. Replaying
-the same reference is idempotent; a different reference returns `409` instead of rewriting financial
-history. Return acceptance and refund recording are intentionally separate because receiving the
-item does not prove that money has already been returned.
+`POST /api/v1/orders/{id}/refund` selects the refund path from the original payment method. COD
+records an already-completed external refund after the return has been received. Card payments
+reserve a `PaymentRefund`, commit, call Stripe outside the SQL transaction, then complete the
+payment, return request, order histories, audit and outbox in a second short transaction. The
+reference is an idempotency key; partial and full refunds preserve original and VND base snapshots,
+and cumulative refund cannot exceed the captured amount.
 
 Pending COD orders expire after the configured hold period. The expiration worker selects a bounded
 batch by `(Status, ExpiresAt, Id)`, then locks each order and rechecks its state inside a transaction.
@@ -237,24 +243,24 @@ HMAC adapter verifies `HMAC_SHA256(secret, eventId + "." + rawBody)` from
 different content returns `409`. A replay returns the result stored for the original event,
 even if the payment has since moved to another state.
 
-The generic HMAC adapter is a Development/Testing contract sample. Options validation fails
-application startup when `PaymentWebhooks:GenericHmac:Enabled=true` in Production. A production
-gateway requires a provider-specific adapter and complete checkout, reconciliation and refund
-lifecycle rather than enabling this sample.
+The generic HMAC adapter remains a Development/Testing contract sample and is rejected in
+Production. Stripe has a provider-specific adapter for PaymentIntent creation/query, refunds and
+signed webhooks. Stripe is disabled unless its test credentials and webhook secret are supplied;
+deterministic tests prove the contract but are not evidence of an external sandbox run.
 
 Webhook processing retains the SHA-256 payload hash by default, not the raw body. Set
 `PaymentWebhooks:GenericHmac:RetainRawPayload=true` only for a time-bounded investigation after
 confirming that the provider payload contains no data that should be minimized.
 
-Payment transitions are `Pending -> Paid/Failed/Cancelled` and `Paid -> Refunded`. Every
-accepted event is audited; a new event that leaves the payment in the same state does not add
-another status-history row or notification. The generic adapter processes provider payments
-that already have a provider transaction ID. It does not create a remote checkout session;
-remote gateway I/O must be orchestrated after the inventory transaction commits.
+Provider transitions include `RequiresAction`, `Processing`, `Paid`, `Failed`, `Cancelled`,
+`PartiallyRefunded` and `Refunded`. Every accepted event is audited; a replay or an event that
+leaves the payment in the same state does not add another status-history row or notification.
+Remote gateway I/O is always performed outside inventory/order SQL transactions.
 
-`paid` and `refunded` events must include `amount`, and it must exactly match the expected
-payment amount. Provider occurrence timestamps cannot predate payment creation, refunds cannot
-predate payment capture, and timestamps beyond the configured future-clock tolerance are rejected.
+Capture events must match the server-side amount and currency. Refund events must use the original
+payment currency and cannot push cumulative refund above the captured amount. Provider occurrence
+timestamps cannot predate payment creation, refunds cannot predate payment capture, and timestamps
+beyond the configured future-clock tolerance are rejected.
 Order lifecycle updates and payment webhooks both lock `Order -> Payment`; cancellation then locks
 products in stable GUID order. This prevents cancellation and capture from committing an invalid
 `Cancelled` order with a `Paid` payment.
@@ -365,10 +371,9 @@ are single-use and are serialized per user. Completing a reset increments the us
 and revokes every refresh-token family.
 
 Password-reset notifications use a Data Protection protected outbox payload so the raw reset
-token is not stored as readable JSON. Email verification is not an enforced sign-in condition:
-the existing user schema has no verified-email lifecycle, and enabling it without enrollment and
-migration rules would lock out existing accounts and break current clients. It should be introduced
-only as a separately versioned product requirement.
+token is not stored as readable JSON. Email verification has its own hashed, expiring, single-use
+token and records `User.EmailVerifiedAt`. It is intentionally not an enforced sign-in condition;
+making it mandatory requires an explicit enrollment and compatibility policy for existing users.
 
 ## Operations
 
@@ -428,8 +433,10 @@ are rethrown because replacing a partially written response would corrupt the HT
 - SQL command timeout is configured through `Database:CommandTimeoutSeconds`. EF Core retry is not
   enabled globally because checkout, order lifecycle and webhooks own explicit transactions and
   locks; retries must wrap each complete business operation before they are introduced.
-- COD is the only checkout method currently enabled. The generic HMAC webhook is provider
-  neutral; a real gateway still needs its own Infrastructure adapter and credential mapping.
+- COD is always available. Stripe card checkout is available only when the provider is enabled and
+  supplied through external configuration; the generic HMAC provider stays Development/Testing-only.
+- Currency snapshots support VND, USD and EUR with VND as the reporting base. The CurrencyAPI
+  adapter uses timeout, process-local cache, single-flight and a bounded stale fallback.
 - Shipping fee, discount and tax are calculated from configured server-side rules; live carrier
   pricing and jurisdiction-specific tax remain outside the current scope.
 - Payment adapters are validated before persistence: provider codes must be route-safe, checkout

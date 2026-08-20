@@ -427,6 +427,48 @@ public class PaymentAndOutboxTests
     }
 
     [Fact]
+    public async Task PaymentWebhook_RejectsMismatchedCurrencyWithoutMutation()
+    {
+        await using var context = TestAppDbContext.Create();
+        var (payment, _) = await SeedPaymentAsync(
+            context,
+            "verified-test",
+            "txn-currency-mismatch");
+        var service = new PaymentWebhookService(
+            new PaymentRepository(context),
+            context,
+            new EfDataConsistencyService(context),
+            new PaymentProviderResolver(
+            [
+                new VerifiedWebhookProvider(new VerifiedPaymentWebhook(
+                    "txn-currency-mismatch",
+                    PaymentStatus.Paid,
+                    payment.CreatedAt.AddMinutes(1),
+                    100m,
+                    "USD"))
+            ]),
+            new OutboxWriter(new OutboxRepository(context)),
+            PaymentOptions());
+        const string payload = "{}";
+
+        var exception = await Assert.ThrowsAsync<Application.Exceptions.ConflictException>(() =>
+            service.HandleAsync(
+                "verified-test",
+                new PaymentWebhookRequest(
+                    "evt-currency-mismatch",
+                    "verified-by-test-provider",
+                    payload)));
+
+        Assert.Equal("payment_currency_mismatch", exception.Code);
+        Assert.Equal(
+            PaymentStatus.Pending,
+            (await context.Payments.FindAsync(payment.Id))!.Status);
+        Assert.Empty(await context.PaymentWebhookEvents.ToListAsync());
+        Assert.Single(await context.PaymentStatusHistories.ToListAsync());
+        Assert.Empty(await context.OutboxMessages.ToListAsync());
+    }
+
+    [Fact]
     public async Task PaymentWebhook_RejectsOccurrenceTooFarInFutureWithoutMutation()
     {
         await using var context = TestAppDbContext.Create();
@@ -966,5 +1008,22 @@ public class PaymentAndOutboxTests
             PaymentWebhookRequest request,
             CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class VerifiedWebhookProvider(
+        VerifiedPaymentWebhook webhook) : IPaymentProvider
+    {
+        public string Code => "verified-test";
+        public PaymentMethod? CheckoutMethod => null;
+        public bool SupportsWebhooks => true;
+
+        public PaymentInitializationResult Initialize(
+            PaymentInitializationRequest request)
+            => throw new NotSupportedException();
+
+        public Task<VerifiedPaymentWebhook> VerifyWebhookAsync(
+            PaymentWebhookRequest request,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(webhook);
     }
 }

@@ -287,8 +287,13 @@ Tài liệu thiết kế:
 - [Kiến trúc và business invariants](docs/ARCHITECTURE.md)
 - [Database ERD](docs/ERD.md)
 - [Sequence các luồng quan trọng](docs/SEQUENCES.md)
+- [Monitoring và cảnh báo](docs/MONITORING.md)
+- [Kịch bản demo backend](docs/DEMO.md)
+- [Runbook vận hành](docs/RUNBOOK.md)
+- [Báo cáo production readiness](PRODUCTION_READINESS_REPORT.md)
 - [Hiệu năng và quyết định scale](docs/PERFORMANCE.md)
 - [Giới hạn hệ thống](docs/LIMITATIONS.md)
+- [Báo cáo capability đã triển khai](FULL_UPGRADE_REPORT.md)
 
 ## Phân Quyền
 
@@ -318,7 +323,7 @@ Các endpoint quản trị sử dụng permission policies. Riêng operations re
 | Tính đúng dữ liệu | SQL Server integration test cho transaction, lock, idempotency và concurrency |
 | Migration | Kiểm tra model drift, script nâng cấp/rollback, backup và restore drill |
 | Coverage | CI chặn khi line coverage dưới 80% hoặc branch coverage dưới 60% |
-| Hiệu năng | Budget SQL Server cho catalog, dữ liệu nhiều ảnh, lịch sử đơn, session và checkout 50 dòng |
+| Hiệu năng | Budget SQL Server cho catalog, dashboard/report, login/refresh, session và checkout 50 dòng |
 | Release | ZIP có manifest, SHA-256, migration artifact và smoke test health endpoint |
 
 Baseline backend được xác minh local và trên CI đến ngày `09/08/2026`:
@@ -342,13 +347,14 @@ Các số liệu trên là baseline kiểm thử local/CI, không phải cam k�
 Docker Compose smoke, build/format/migration/coverage/release package và SQL Server integration/recovery.
 Workflow [`Backend CI`](.github/workflows/ci.yml) tiếp tục kiểm tra lại các gate này sau mỗi lần push.
 
-Vòng Full Upgrade được kiểm chứng local ngày `18/08/2026`: Release build `0` warning/error, format gate,
-EF Core migration drift, unit `279/279`, integration không-SQL `333/333` và SQL Server integration
-`24/24` đều đạt; coverage line `82,67%`, branch `65,51%`, recovery `1/1` và release-package smoke cũng đạt.
-Docker image build thành công; migration container exit `0`, SQL Server healthy và
-live/readiness đều HTTP `200` trên stack tách biệt. Performance và remote CI chưa được chạy lại cho
-working tree này; các số liệu tương ứng trong bảng trên vẫn là baseline của commit
-`0ae568f`. GitHub Actions cần chạy lại sau commit/push kế tiếp.
+Vòng production-readiness được kiểm chứng local ngày `20/08/2026`: Release build `0` warning/error,
+format gate, EF Core migration drift, unit `279/279`, integration không-SQL `346/346`, SQL Server
+integration `25/25`, recovery `1/1` và performance `1/1` đều đạt; coverage line `82,86%`, branch
+`66,24%`, release-package checksum/startup smoke cũng đạt. Docker image build thành công; migration
+container exit `0`, API chạy non-root, SQL Server healthy, live/readiness HTTP `200` và ba volume
+SQL/upload/Data Protection giữ dữ liệu qua restart trên stack tách biệt. Remote CI chưa thể xác minh
+cho working tree chưa commit; GitHub Actions phải chạy lại sau commit/push kế tiếp. Trạng thái và các
+blocker external được ghi tại [production readiness report](PRODUCTION_READINESS_REPORT.md).
 
 Chi tiết và giới hạn của các kết quả đo được ghi tại
 [Hiệu năng và quyết định scale](docs/PERFORMANCE.md) cùng
@@ -388,6 +394,27 @@ trường bằng `docker compose down`. Lệnh `docker compose down -v` xóa c�
 Để tạo Admin local lần đầu, điền nhóm `ADMIN_BOOTSTRAP_*` trong `.env`, đặt
 `ADMIN_BOOTSTRAP_ENABLED=true` và khởi động API. Sau khi tài khoản được tạo, đặt lại `false` rồi chạy
 `docker compose up -d --force-recreate api`. Không commit file `.env`.
+
+### Chuẩn Bị Staging
+
+`src/ECommerceBackend/appsettings.Staging.example.json` là template fail-closed: file không chứa
+credential và ứng dụng sẽ từ chối khởi động cho đến khi deployment cấp đủ cấu hình. Sao chép thành
+`appsettings.Staging.json` chỉ trên máy/host triển khai, hoặc ánh xạ trực tiếp các giá trị sau từ
+secret store và environment:
+
+- `ConnectionStrings__Default`: SQL Server có `Encrypt=True;TrustServerCertificate=False`.
+- `Jwt__Key`, `Jwt__Audience`, `AllowedHosts` và `Cors__AllowedOrigins__0`.
+- `AuthSecurity__PasswordResetUrl` và `AuthSecurity__EmailVerificationUrl` dùng public HTTPS.
+- `ReverseProxy__KnownProxies__0` hoặc `ReverseProxy__KnownNetworks__0` đúng trust boundary.
+- `Payments__Stripe__SecretKey`, `Payments__Stripe__PublishableKey` và
+  `Payments__Stripe__WebhookSecret` cho Stripe Test Mode.
+- `Pricing__ExchangeRates__ApiKey` và cấu hình SMTP trong `Notifications__Smtp`.
+- `DataProtection__KeysPath` là đường dẫn tuyệt đối trên persistent storage.
+
+Đặt `ASPNETCORE_ENVIRONMENT=Staging`. Staging và Production cùng fail-fast với JWT placeholder,
+SQL không TLS, localhost CORS/AllowedHosts, auth URL HTTP, generic HMAC webhook và Data Protection
+path tương đối. TLS được kết thúc tại reverse proxy tin cậy; proxy phải gửi
+`X-Forwarded-For`/`X-Forwarded-Proto`. Repository không hardcode domain hoặc credential staging.
 
 ## Chạy Local Không Docker
 

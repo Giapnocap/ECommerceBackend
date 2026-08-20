@@ -43,6 +43,17 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void StagingJwtPlaceholder_FailsValidation()
+    {
+        using var provider = CreateProvider(
+            "replace-with-at-least-32-bytes-from-a-secret-store",
+            Environments.Staging);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<JwtOptions>>().Value);
+    }
+
+    [Fact]
     public void EnabledAdminBootstrap_WithPlaceholderPassword_FailsValidation()
     {
         var values = new Dictionary<string, string?>
@@ -85,6 +96,19 @@ public sealed class JwtConfigurationValidationTests
         using var provider = CreateProvider(
             new string('a', JwtOptions.MinimumKeyBytes),
             Environments.Production,
+            values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<PaymentWebhookOptions>>().Value);
+    }
+
+    [Fact]
+    public void StagingEnabledGenericHmacWebhook_WithStrongSecret_FailsValidation()
+    {
+        var values = EnabledGenericHmacWebhookValues();
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Staging,
             values);
 
         Assert.Throws<OptionsValidationException>(() =>
@@ -139,6 +163,37 @@ public sealed class JwtConfigurationValidationTests
             values);
 
         Assert.False(provider.GetRequiredService<IOptions<SmtpOptions>>().Value.Enabled);
+    }
+
+    [Theory]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    public void ProductionLikeSmtp_RequiresTls(string environmentName)
+    {
+        var values = EnabledSmtpValues();
+        values["Notifications:Smtp:EnableSsl"] = "false";
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            environmentName,
+            values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<SmtpOptions>>().Value);
+    }
+
+    [Fact]
+    public void EnabledSmtp_WithPlaceholderPassword_FailsValidation()
+    {
+        var values = EnabledSmtpValues();
+        values["Notifications:Smtp:UserName"] = "smtp-user";
+        values["Notifications:Smtp:Password"] =
+            "replace-with-smtp-password";
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            additionalValues: values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<SmtpOptions>>().Value);
     }
 
     [Fact]
@@ -393,6 +448,23 @@ public sealed class JwtConfigurationValidationTests
     }
 
     [Fact]
+    public void StagingPasswordResetUrl_MustUsePublicHttps()
+    {
+        var values = new Dictionary<string, string?>
+        {
+            ["AuthSecurity:PasswordResetUrl"] = "http://localhost:3000/reset-password",
+            ["AuthSecurity:EmailVerificationUrl"] = "https://staging-shop.example.com/verify-email"
+        };
+        using var provider = CreateProvider(
+            new string('a', JwtOptions.MinimumKeyBytes),
+            Environments.Staging,
+            values);
+
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<AuthSecurityOptions>>().Value);
+    }
+
+    [Fact]
     public void ProductionPasswordResetUrl_AcceptsPublicHttpsWithoutQuery()
     {
         var values = new Dictionary<string, string?>
@@ -464,6 +536,19 @@ public sealed class JwtConfigurationValidationTests
             ["PaymentWebhooks:GenericHmac:Secret"] = new string(
                 's',
                 PaymentWebhookOptions.MinimumSecretBytes)
+        };
+
+    private static Dictionary<string, string?> EnabledSmtpValues()
+        => new()
+        {
+            ["Outbox:Enabled"] = "true",
+            ["Notifications:Smtp:Enabled"] = "true",
+            ["Notifications:Smtp:Host"] = "smtp.example.com",
+            ["Notifications:Smtp:Port"] = "587",
+            ["Notifications:Smtp:EnableSsl"] = "true",
+            ["Notifications:Smtp:FromAddress"] = "no-reply@example.com",
+            ["Notifications:Smtp:FromName"] = "ECommerceBackend",
+            ["Notifications:Smtp:TimeoutSeconds"] = "30"
         };
 
     private sealed class TestWebHostEnvironment : IWebHostEnvironment

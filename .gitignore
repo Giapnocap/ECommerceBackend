@@ -5,6 +5,8 @@ logs/
 Uploads/
 DataProtectionKeys/
 appsettings.Local.json
+appsettings.Staging.json
+appsettings.Production.json
 *.csproj.user
 *.user
 *.suo

@@ -44,6 +44,10 @@ seeds representative shapes: 20,000 products, 100 image-heavy products with 20 i
 | Keyword catalog summary | 20 requests, concurrency 4 | p95 <= 750 ms |
 | Image-heavy catalog summary | 20 requests, concurrency 4 | p95 <= 750 ms |
 | Customer order-history summary | 20 requests, concurrency 4 | p95 <= 750 ms |
+| Admin dashboard summary | 20 requests, concurrency 4 | p95 <= 1,000 ms |
+| Revenue report | 20 requests, concurrency 4 | p95 <= 1,500 ms |
+| Login, tài khoản độc lập | 20 requests, concurrency 4 | p95 <= 1,000 ms, >= 5 req/s |
+| Refresh, token độc lập | 20 requests, concurrency 4 | p95 <= 1,000 ms, >= 5 req/s |
 | Session validation | 200 requests, concurrency 16 | p95 <= 500 ms, >= 20 req/s |
 | 50-line COD checkout | 12 independent checkouts, concurrency 12 | p95 <= 2,000 ms, >= 3 req/s |
 
@@ -62,6 +66,32 @@ The final Windows SQL Server verification on 2026-08-06 measured catalog p95 `37
 summary `406.5 ms`, image-heavy summary `128.8 ms`, order-history summary `38.6 ms`, session
 validation `13.4 ms` and 50-line checkout `228.2 ms`. Every path remained within its configured
 budget. This is another local regression sample, not a production capacity estimate.
+
+## Local Docker Baseline 2026-08-20
+
+The latest run used .NET `8.0.25` on Windows `10.0.22621` with 12 logical processors and SQL Server
+2022 in a local Docker container. The dataset contained 20,000 products, 2,000 product images,
+5,000 historical orders and 50 independent lines per checkout. API and SQL Server shared one
+developer machine, so the result excludes representative network, ingress and production resource
+contention.
+
+| Path | Concurrency | p50 | p95 | p99 | Throughput |
+|---|---:|---:|---:|---:|---:|
+| Catalog | 8 | 31.2 ms | 41.2 ms | 44.1 ms | 236.9 req/s |
+| Keyword catalog summary | 4 | 206.1 ms | 240.9 ms | 245.8 ms | 18.8 req/s |
+| Image-heavy catalog summary | 4 | 49.6 ms | 58.3 ms | 61.7 ms | 78.6 req/s |
+| Customer order-history summary | 4 | 14.1 ms | 26.9 ms | 28.0 ms | 236.1 req/s |
+| Admin dashboard summary | 4 | 32.6 ms | 36.5 ms | 36.5 ms | 123.4 req/s |
+| Revenue report | 4 | 19.0 ms | 25.2 ms | 25.2 ms | 205.3 req/s |
+| Login | 4 | 127.8 ms | 134.3 ms | 135.2 ms | 31.0 req/s |
+| Refresh | 4 | 11.9 ms | 13.8 ms | 17.9 ms | 309.2 req/s |
+| Session validation | 16 | 4.9 ms | 20.1 ms | 25.7 ms | 2,009.4 req/s |
+| 50-line COD checkout | 12 | 225.7 ms | 229.6 ms | 229.6 ms | 52.2 req/s |
+
+All configured regression budgets passed. Login and refresh used independent accounts/tokens; the
+performance factory raised only its local auth/refresh permit limits to avoid measuring HTTP rate
+limiter rejection. Production rate-limit behavior remains covered by functional tests. These are
+single-run local regression values, not a load test, capacity forecast or SLA.
 
 Run the suite with `scripts/RunPerformanceTests.ps1`. The weekly/manual GitHub workflow uploads
 `performance-results.json` for comparison.

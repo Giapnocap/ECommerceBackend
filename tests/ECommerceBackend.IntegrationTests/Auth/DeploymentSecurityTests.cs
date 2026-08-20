@@ -84,6 +84,54 @@ public sealed class DeploymentSecurityTests
     }
 
     [Fact]
+    public void StagingSecurity_RejectsInsecureDatabaseAndRelativeKeyPath()
+    {
+        using var provider = CreateProvider(
+            Environments.Staging,
+            new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Default"] = "Server=sql;Database=shop;Encrypt=False;TrustServerCertificate=True;",
+                ["AllowedHosts"] = "localhost",
+                ["DataProtection:KeysPath"] = "DataProtectionKeys"
+            });
+
+        var security = provider
+            .GetRequiredService<IOptionsMonitor<ProductionSecurityOptions>>();
+        Assert.Throws<OptionsValidationException>(() =>
+            security.Get(ProductionSecurityOptions.OptionsName));
+        Assert.Throws<OptionsValidationException>(() =>
+            provider.GetRequiredService<IOptions<DataProtectionStorageOptions>>().Value);
+    }
+
+    [Fact]
+    public void StagingSecurity_AcceptsExplicitTlsHostAndPersistentKeyPath()
+    {
+        var keysPath = Path.Combine(
+            Path.GetTempPath(),
+            "ECommerceBackend.Tests.Staging.Keys");
+        using var provider = CreateProvider(
+            Environments.Staging,
+            new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:Default"] = "Server=staging-sql.example.com;Database=shop;User Id=app;Password=secret;Encrypt=True;TrustServerCertificate=False;",
+                ["AllowedHosts"] = "staging-api.example.com",
+                ["DataProtection:ApplicationName"] = "ECommerceBackend.Staging.Tests",
+                ["DataProtection:KeysPath"] = keysPath
+            });
+
+        var security = provider
+            .GetRequiredService<IOptionsMonitor<ProductionSecurityOptions>>()
+            .Get(ProductionSecurityOptions.OptionsName);
+        var dataProtection = provider
+            .GetRequiredService<IOptions<DataProtectionStorageOptions>>()
+            .Value;
+
+        Assert.True(security.IsProduction);
+        Assert.Equal("staging-api.example.com", security.AllowedHosts);
+        Assert.Equal(keysPath, dataProtection.KeysPath);
+    }
+
+    [Fact]
     public void ReverseProxy_WhenEnabledWithoutTrustBoundary_FailsValidation()
     {
         using var provider = CreateProvider(
