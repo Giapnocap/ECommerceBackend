@@ -1,6 +1,6 @@
 # ECommerceBackend Full Upgrade Report
 
-Audit baseline: `2f6afd92b59c9dbeb9b16b486bafc39ec9b9fbb1`
+Audit baseline: `b8a14616d37dd4e9a7fed541ce0a2a5fb148fad0` on `main`
 Audit date: 2026-08-20
 Target runtime: .NET 8, ASP.NET Core Web API, EF Core and SQL Server
 
@@ -138,7 +138,8 @@ The repository contains:
 - API/application integration tests for auth, authorization, checkout, payment, refund, outbox,
   reporting and operations;
 - deterministic Stripe gateway/webhook and CurrencyAPI adapter tests;
-- SQL Server tests for locking, concurrency, constraints, migrations, backup/restore and performance;
+- SQL Server tests for locking, concurrency, constraints, migrations, critical business-data
+  backup/restore and performance;
 - architecture, OpenAPI compatibility, deployment security and observability contract tests;
 - CI workflows for restore audit, formatting, Release build, migrations, coverage and SQL tests;
 - Docker smoke, migration artifact, recovery, performance and release packaging scripts.

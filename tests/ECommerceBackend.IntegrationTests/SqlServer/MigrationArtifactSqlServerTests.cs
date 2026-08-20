@@ -1,6 +1,9 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using ECommerceBackend.Domain.Entities;
+using ECommerceBackend.Domain.Enums;
+using ECommerceBackend.Domain.Policies;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Tests.Support;
 using Microsoft.Data.SqlClient;
@@ -197,18 +200,26 @@ public sealed class MigrationArtifactSqlServerTests
             await CreateDatabaseAsync(connectionString, databaseName);
             databaseCreated = true;
             await ExecuteScriptAsync(connectionString, forwardScript);
-            await CreateRecoveryMarkerAsync(connectionString, marker);
+            var fixture = await CreateCriticalRecoveryFixtureAsync(
+                connectionString,
+                marker);
             await BackupAndVerifyAsync(connectionString, databaseName, backupPath);
 
             await ExecuteScriptAsync(connectionString, rollbackScript);
-            await DeleteRecoveryMarkerAsync(connectionString, marker);
+            await DeleteCriticalRecoveryDataAsync(
+                connectionString,
+                fixture);
             Assert.False(await HasMigrationAsync(connectionString, manifest.LatestMigration));
-            Assert.False(await HasRecoveryMarkerAsync(connectionString, marker));
+            await AssertCriticalRecoveryDataMissingAsync(
+                connectionString,
+                fixture);
 
             await RestoreDatabaseAsync(connectionString, databaseName, backupPath);
             Assert.True(await HasMigrationAsync(connectionString, manifest.LatestMigration));
-            Assert.True(await HasRecoveryMarkerAsync(connectionString, marker));
             Assert.Equal(RetentionIndexes.Length, await CountIndexesAsync(connectionString));
+            await AssertCriticalRecoveryDataAsync(
+                connectionString,
+                fixture);
         }
         finally
         {
@@ -364,10 +375,132 @@ public sealed class MigrationArtifactSqlServerTests
         SqlConnection.ClearAllPools();
     }
 
-    private static async Task CreateRecoveryMarkerAsync(
+    private static async Task<RecoveryFixture> CreateCriticalRecoveryFixtureAsync(
         string connectionString,
         Guid marker)
     {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        var occurredAt = DateTime.UtcNow.AddMinutes(-1);
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            UserName = $"recovery_{Guid.NewGuid():N}"[..32],
+            Email = $"recovery_{Guid.NewGuid():N}@example.com",
+            PasswordHash = "recovery-test-hash",
+            FullName = "Recovery Verification User",
+            CreatedAt = occurredAt
+        };
+        user.NormalizedUserName = user.UserName.ToUpperInvariant();
+        user.NormalizedEmail = user.Email.ToUpperInvariant();
+
+        var category = Category.Create(
+            Guid.NewGuid(),
+            $"Recovery {Guid.NewGuid():N}"[..36],
+            parent: null);
+        var product = Product.Create(
+            Guid.NewGuid(),
+            category.Id,
+            "Recovery Snapshot Product",
+            250_000m,
+            4,
+            "Critical backup and restore fixture",
+            occurredAt);
+        var order = Order.Create(
+            Guid.NewGuid(),
+            user.Id,
+            $"ORD-{Guid.NewGuid():N}"[..32],
+            Guid.NewGuid().ToString("N"),
+            new string('A', 64),
+            promotionId: null,
+            promotionCodeSnapshot: null,
+            ShippingMethod.Standard,
+            "USD",
+            occurredAt,
+            "1 Recovery Verification Street",
+            note: null);
+        order.SetRecipient("Recovery Verification User", "0900000000");
+        var baseAmounts = OrderPricingPolicy.CalculateAmounts(
+            250_000m,
+            0m,
+            0m,
+            0m);
+        var displayAmounts = OrderPricingPolicy.CalculateAmounts(
+            10m,
+            0m,
+            0m,
+            0m);
+        const decimal exchangeRate = 0.00004m;
+        order.SetPricingSnapshot(
+            "VND",
+            exchangeRate,
+            occurredAt,
+            baseAmounts,
+            displayAmounts);
+
+        var payment = Payment.Create(
+            Guid.NewGuid(),
+            order.Id,
+            PaymentMethod.Card,
+            displayAmounts.Total,
+            "stripe",
+            $"pi_recovery_{Guid.NewGuid():N}",
+            occurredAt,
+            order.Currency);
+        var detail = OrderDetail.Create(
+            Guid.NewGuid(),
+            order.Id,
+            product.Id,
+            product.Name,
+            1,
+            displayAmounts.Subtotal,
+            baseAmounts.Subtotal);
+        var inventoryTransaction = InventoryTransaction.Create(
+            Guid.NewGuid(),
+            product.Id,
+            order.Id,
+            user.Id,
+            InventoryTransactionType.OrderPlaced,
+            new InventoryMutation(-1, product.StockQuantity),
+            "Recovery verification reservation",
+            occurredAt,
+            order.OrderNumber);
+        var outboxMessage = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            Type = "recovery.verification",
+            Payload = "{\"scope\":\"critical-data\"}",
+            OccurredAt = occurredAt,
+            NextAttemptAt = occurredAt
+        };
+        var auditEvent = new AuditEvent
+        {
+            Id = Guid.NewGuid(),
+            ActorUserId = user.Id,
+            Action = "RecoveryVerificationCreated",
+            EntityType = nameof(Order),
+            EntityId = order.Id.ToString("D"),
+            CorrelationId = $"recovery-{marker:N}",
+            MetadataJson = "{\"currency\":\"USD\",\"baseCurrency\":\"VND\"}",
+            CreatedAt = occurredAt
+        };
+
+        await using (var context = new AppDbContext(options))
+        {
+            context.AddRange(
+                user,
+                category,
+                product,
+                order,
+                detail,
+                payment,
+                inventoryTransaction,
+                outboxMessage,
+                auditEvent);
+            await context.SaveChangesAsync();
+        }
+
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
@@ -383,21 +516,136 @@ public sealed class MigrationArtifactSqlServerTests
             """;
         command.Parameters.AddWithValue("@marker", marker);
         await command.ExecuteNonQueryAsync();
+
+        return new RecoveryFixture(
+            marker,
+            user.Id,
+            category.Id,
+            product.Id,
+            order.Id,
+            detail.Id,
+            payment.Id,
+            inventoryTransaction.Id,
+            outboxMessage.Id,
+            auditEvent.Id,
+            exchangeRate);
     }
 
-    private static async Task DeleteRecoveryMarkerAsync(
+    private static async Task DeleteCriticalRecoveryDataAsync(
         string connectionString,
-        Guid marker)
+        RecoveryFixture fixture)
     {
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            DELETE FROM [RecoveryMarkers]
-            WHERE [Id] = @marker;
+            DELETE FROM [InventoryTransactions] WHERE [Id] = @inventoryTransactionId;
+            DELETE FROM [Payments] WHERE [Id] = @paymentId;
+            DELETE FROM [OrderDetails] WHERE [Id] = @orderDetailId;
+            DELETE FROM [Orders] WHERE [Id] = @orderId;
+            DELETE FROM [Products] WHERE [Id] = @productId;
+            DELETE FROM [Categories] WHERE [Id] = @categoryId;
+            DELETE FROM [OutboxMessages] WHERE [Id] = @outboxMessageId;
+            DELETE FROM [AuditEvents] WHERE [Id] = @auditEventId;
+            DELETE FROM [Users] WHERE [Id] = @userId;
+            DELETE FROM [RecoveryMarkers] WHERE [Id] = @marker;
             """;
-        command.Parameters.AddWithValue("@marker", marker);
+        command.Parameters.AddWithValue(
+            "@inventoryTransactionId",
+            fixture.InventoryTransactionId);
+        command.Parameters.AddWithValue("@paymentId", fixture.PaymentId);
+        command.Parameters.AddWithValue("@orderDetailId", fixture.OrderDetailId);
+        command.Parameters.AddWithValue("@orderId", fixture.OrderId);
+        command.Parameters.AddWithValue("@productId", fixture.ProductId);
+        command.Parameters.AddWithValue("@categoryId", fixture.CategoryId);
+        command.Parameters.AddWithValue("@outboxMessageId", fixture.OutboxMessageId);
+        command.Parameters.AddWithValue("@auditEventId", fixture.AuditEventId);
+        command.Parameters.AddWithValue("@userId", fixture.UserId);
+        command.Parameters.AddWithValue("@marker", fixture.Marker);
         await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task AssertCriticalRecoveryDataMissingAsync(
+        string connectionString,
+        RecoveryFixture fixture)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        await using var context = new AppDbContext(options);
+
+        Assert.False(await context.Users.AnyAsync(item => item.Id == fixture.UserId));
+        Assert.False(await context.Orders.AnyAsync(item => item.Id == fixture.OrderId));
+        Assert.False(await context.Payments.AnyAsync(item => item.Id == fixture.PaymentId));
+        Assert.False(await context.InventoryTransactions.AnyAsync(
+            item => item.Id == fixture.InventoryTransactionId));
+        Assert.False(await context.OutboxMessages.AnyAsync(
+            item => item.Id == fixture.OutboxMessageId));
+        Assert.False(await context.AuditEvents.AnyAsync(
+            item => item.Id == fixture.AuditEventId));
+        Assert.False(await HasRecoveryMarkerAsync(connectionString, fixture.Marker));
+    }
+
+    private static async Task AssertCriticalRecoveryDataAsync(
+        string connectionString,
+        RecoveryFixture fixture)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer(connectionString)
+            .Options;
+        await using var context = new AppDbContext(options);
+
+        var user = await context.Users
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.UserId);
+        Assert.Equal("Recovery Verification User", user.FullName);
+
+        var order = await context.Orders
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.OrderId);
+        Assert.Equal("USD", order.Currency);
+        Assert.Equal("VND", order.BaseCurrency);
+        Assert.Equal(fixture.ExchangeRate, order.ExchangeRate);
+        Assert.Equal(10m, order.TotalAmount);
+        Assert.Equal(250_000m, order.BaseTotalAmount);
+
+        var detail = await context.OrderDetails
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.OrderDetailId);
+        Assert.Equal(10m, detail.UnitPrice);
+        Assert.Equal(250_000m, detail.BaseUnitPrice);
+
+        var payment = await context.Payments
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.PaymentId);
+        Assert.Equal("USD", payment.Currency);
+        Assert.Equal(10m, payment.Amount);
+        Assert.Equal("stripe", payment.Provider);
+
+        var product = await context.Products
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.ProductId);
+        Assert.Equal(4, product.StockQuantity);
+
+        var inventoryTransaction = await context.InventoryTransactions
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.InventoryTransactionId);
+        Assert.Equal(-1, inventoryTransaction.QuantityChange);
+        Assert.Equal(4, inventoryTransaction.BalanceAfter);
+        Assert.Equal(fixture.OrderId, inventoryTransaction.OrderId);
+
+        var outboxMessage = await context.OutboxMessages
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.OutboxMessageId);
+        Assert.Equal("recovery.verification", outboxMessage.Type);
+
+        var auditEvent = await context.AuditEvents
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == fixture.AuditEventId);
+        Assert.Equal("RecoveryVerificationCreated", auditEvent.Action);
+        Assert.Equal(fixture.OrderId.ToString("D"), auditEvent.EntityId);
+
+        Assert.True(await HasRecoveryMarkerAsync(connectionString, fixture.Marker));
     }
 
     private static async Task<bool> HasRecoveryMarkerAsync(
@@ -512,4 +760,17 @@ public sealed class MigrationArtifactSqlServerTests
         public string File { get; init; } = string.Empty;
         public string Sha256 { get; init; } = string.Empty;
     }
+
+    private sealed record RecoveryFixture(
+        Guid Marker,
+        Guid UserId,
+        Guid CategoryId,
+        Guid ProductId,
+        Guid OrderId,
+        Guid OrderDetailId,
+        Guid PaymentId,
+        Guid InventoryTransactionId,
+        Guid OutboxMessageId,
+        Guid AuditEventId,
+        decimal ExchangeRate);
 }

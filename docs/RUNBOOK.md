@@ -145,14 +145,16 @@ bản sao phục hồi thảm họa.
 
 1. Restore vào server/database cô lập, không ghi đè production.
 2. Chạy `DBCC CHECKDB` theo quy trình DBA.
-3. Xác minh latest migration và marker business đã chọn trước backup.
+3. Xác minh latest migration và tập dữ liệu nghiệp vụ đại diện đã chọn trước backup, tối thiểu gồm
+   order/payment, inventory ledger, outbox, audit và money snapshot.
 4. Khởi động API cô lập bằng bản release tương ứng.
 5. Kiểm tra login, product, order detail, payment/refund history và inventory ledger.
 6. Ghi thời gian restore thực tế, data loss window và sai lệch so với RPO/RTO.
 7. Xóa dữ liệu drill theo chính sách sau khi lưu bằng chứng.
 
-Repository có test `SqlServerRecoveryIntegration` cho backup/restore schema + committed marker; test
-này không thay thế restore drill của backup production.
+Repository có test `SqlServerRecoveryIntegration` cho backup/restore latest schema cùng dữ liệu
+User, Order, Payment, InventoryTransaction, OutboxMessage, AuditEvent và money snapshot; test này
+không thay thế restore drill của backup production.
 
 ## 8. Health và monitoring
 

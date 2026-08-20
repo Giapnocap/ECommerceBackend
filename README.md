@@ -582,7 +582,8 @@ Kết quả được ghi tại `PerformanceResults/performance-results.json`. Wo
 CI còn chạy recovery drill với thư mục backup nằm trong SQL Server container. Khi chạy thủ công,
 đặt `ECOMMERCE_TEST_SQL_BACKUP_DIRECTORY` thành thư mục mà tài khoản dịch vụ SQL Server có quyền
 ghi, sau đó dùng filter `Category=SqlServerRecoveryIntegration`. Recovery drill tạo database
-riêng, kiểm tra checksum backup, thay đổi schema/dữ liệu, restore và xác minh dữ liệu đã phục hồi.
+riêng, kiểm tra checksum backup, thay đổi schema/dữ liệu, restore và xác minh latest migration cùng
+User, Order, Payment, inventory ledger, outbox, audit và snapshot tiền tệ đã phục hồi.
 
 Trước khi nâng cấp production: kiểm tra checksum artifact, tạo full backup, restore thử vào
 SQL Server cô lập, áp dụng `migrate-up.sql` trong maintenance window và chạy smoke test. Chỉ dùng

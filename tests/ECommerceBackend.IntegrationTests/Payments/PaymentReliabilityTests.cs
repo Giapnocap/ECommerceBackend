@@ -54,6 +54,55 @@ public sealed class PaymentReliabilityTests
     }
 
     [Fact]
+    public async Task ExternalCreation_RequestInterruptedAfterProviderSuccess_RetriesWithSameIdempotencyKey()
+    {
+        await using var context = TestAppDbContext.Create();
+        var fixture = await SeedCardOrderAsync(context, returned: false);
+        var clock = new MutableTimeProvider(Now);
+        using var interruptedRequest = new CancellationTokenSource();
+        var gateway = new RecordingGateway(context)
+        {
+            CreationResult = new GatewayPaymentCreationResult(
+                "pi_interrupted_001",
+                "pi_interrupted_001_secret",
+                PaymentStatus.RequiresAction),
+            AfterCreate = callCount =>
+            {
+                if (callCount == 1)
+                    interruptedRequest.Cancel();
+            }
+        };
+        var useCase = CreateExternalCreation(context, gateway, clock);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            useCase.ExecuteAsync(
+                fixture.Order.Id,
+                fixture.Customer.Id,
+                canProcessOrders: false,
+                interruptedRequest.Token));
+
+        context.ChangeTracker.Clear();
+        var interruptedPayment = await context.Payments.SingleAsync();
+        Assert.Null(interruptedPayment.ProviderTransactionId);
+        Assert.NotNull(interruptedPayment.ExternalCreationLeaseUntil);
+
+        clock.Advance(TimeSpan.FromSeconds(121));
+        var recovered = await useCase.ExecuteAsync(
+            fixture.Order.Id,
+            fixture.Customer.Id,
+            canProcessOrders: false);
+
+        Assert.Equal("pi_interrupted_001", recovered.ProviderPaymentId);
+        Assert.Equal(2, gateway.CreateCalls);
+        Assert.Single(gateway.CreationIdempotencyKeys.Distinct(StringComparer.Ordinal));
+        Assert.All(gateway.ObservedActiveTransactions, Assert.False);
+        var payment = await context.Payments.SingleAsync();
+        Assert.Equal("pi_interrupted_001", payment.ProviderTransactionId);
+        Assert.Equal(PaymentStatus.RequiresAction, payment.Status);
+        Assert.Null(payment.ExternalCreationLeaseUntil);
+    }
+
+    [Fact]
     public async Task Reconciliation_RecoversSucceededPaymentWhenWebhookWasMissed()
     {
         await using var context = TestAppDbContext.Create();
@@ -289,14 +338,15 @@ public sealed class PaymentReliabilityTests
 
     private static ExternalPaymentCreationUseCase CreateExternalCreation(
         Infrastructure.Data.AppDbContext context,
-        IPaymentGateway gateway)
+        IPaymentGateway gateway,
+        TimeProvider? timeProvider = null)
         => new(
             gateway,
             new PaymentRepository(context),
             TestServiceFactory.Consistency(context),
             context,
             NullAuditWriter.Instance,
-            new FixedTimeProvider(Now),
+            timeProvider ?? new FixedTimeProvider(Now),
             Options.Create(StripeOptions()));
 
     private static OnlinePaymentRefundUseCase CreateOnlineRefund(
@@ -449,8 +499,10 @@ public sealed class PaymentReliabilityTests
         public int CreateCalls { get; private set; }
         public int RefundCalls { get; private set; }
         public List<bool> ObservedActiveTransactions { get; } = [];
+        public List<string> CreationIdempotencyKeys { get; } = [];
         public GatewayPaymentCreationResult CreationResult { get; set; } =
             new("pi_default", "pi_default_secret", PaymentStatus.Pending);
+        public Action<int>? AfterCreate { get; set; }
         public GatewayRefundResult? RefundResult { get; set; }
         public GatewayRefundRequest? LastRefundRequest { get; private set; }
         public GatewayPaymentStatusResult? PaymentStatusResult { get; set; }
@@ -461,8 +513,10 @@ public sealed class PaymentReliabilityTests
             CancellationToken cancellationToken = default)
         {
             CreateCalls++;
+            CreationIdempotencyKeys.Add(request.IdempotencyKey);
             ObservedActiveTransactions.Add(
                 context.Database.CurrentTransaction != null);
+            AfterCreate?.Invoke(CreateCalls);
             return Task.FromResult(CreationResult);
         }
 
@@ -503,5 +557,14 @@ public sealed class PaymentReliabilityTests
                     "VND",
                     PaymentStatus.Processing));
         }
+    }
+
+    private sealed class MutableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow.ToUniversalTime();
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Advance(TimeSpan value) => _utcNow = _utcNow.Add(value);
     }
 }

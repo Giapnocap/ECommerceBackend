@@ -77,21 +77,25 @@ contention.
 
 | Path | Concurrency | p50 | p95 | p99 | Throughput |
 |---|---:|---:|---:|---:|---:|
-| Catalog | 8 | 31.2 ms | 41.2 ms | 44.1 ms | 236.9 req/s |
-| Keyword catalog summary | 4 | 206.1 ms | 240.9 ms | 245.8 ms | 18.8 req/s |
-| Image-heavy catalog summary | 4 | 49.6 ms | 58.3 ms | 61.7 ms | 78.6 req/s |
-| Customer order-history summary | 4 | 14.1 ms | 26.9 ms | 28.0 ms | 236.1 req/s |
-| Admin dashboard summary | 4 | 32.6 ms | 36.5 ms | 36.5 ms | 123.4 req/s |
-| Revenue report | 4 | 19.0 ms | 25.2 ms | 25.2 ms | 205.3 req/s |
-| Login | 4 | 127.8 ms | 134.3 ms | 135.2 ms | 31.0 req/s |
-| Refresh | 4 | 11.9 ms | 13.8 ms | 17.9 ms | 309.2 req/s |
-| Session validation | 16 | 4.9 ms | 20.1 ms | 25.7 ms | 2,009.4 req/s |
-| 50-line COD checkout | 12 | 225.7 ms | 229.6 ms | 229.6 ms | 52.2 req/s |
+| Catalog | 8 | 31.8 ms | 44.2 ms | 52.6 ms | 213.6 req/s |
+| Keyword catalog summary | 4 | 239.3 ms | 265.6 ms | 266.0 ms | 16.4 req/s |
+| Image-heavy catalog summary | 4 | 54.5 ms | 72.1 ms | 77.0 ms | 65.2 req/s |
+| Customer order-history summary | 4 | 17.2 ms | 30.7 ms | 33.9 ms | 188.3 req/s |
+| Admin dashboard summary | 4 | 39.8 ms | 64.7 ms | 64.7 ms | 92.2 req/s |
+| Revenue report | 4 | 23.5 ms | 28.1 ms | 29.0 ms | 160.4 req/s |
+| Login | 4 | 203.0 ms | 320.9 ms | 324.1 ms | 17.7 req/s |
+| Refresh | 4 | 11.7 ms | 16.0 ms | 16.1 ms | 302.9 req/s |
+| Session validation | 16 | 5.2 ms | 16.0 ms | 61.5 ms | 1,787.1 req/s |
+| 50-line COD checkout | 12 | 327.9 ms | 366.0 ms | 366.0 ms | 32.7 req/s |
 
 All configured regression budgets passed. Login and refresh used independent accounts/tokens; the
 performance factory raised only its local auth/refresh permit limits to avoid measuring HTTP rate
 limiter rejection. Production rate-limit behavior remains covered by functional tests. These are
 single-run local regression values, not a load test, capacity forecast or SLA.
+
+All measured requests completed successfully, so the observed application error rate was `0%`.
+CPU utilization, process memory and per-query SQL duration were not captured by this harness; the
+environment metadata and latency/throughput figures above must not be used to infer those values.
 
 Run the suite with `scripts/RunPerformanceTests.ps1`. The weekly/manual GitHub workflow uploads
 `performance-results.json` for comparison.
