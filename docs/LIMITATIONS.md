@@ -1,57 +1,57 @@
-# System Boundaries
+# Ranh giới và giới hạn hệ thống
 
-This is a portfolio-ready backend release, not a claim of unlimited production scale. The
-following boundaries are intentional and visible in the design.
+Đây là backend release phù hợp cho portfolio, không phải tuyên bố hệ thống có khả năng mở rộng vô
+hạn trong production. Các ranh giới sau là chủ ý và được thể hiện trong thiết kế.
 
-## Current Scope
+## Phạm vi hiện tại
 
-- Checkout supports cash on delivery and Stripe PaymentIntent card payments. Stripe is disabled
-  by default and the repository's deterministic adapters do not replace a real Stripe Test Mode
-  verification with valid credentials and a reachable webhook endpoint.
-- VND is the reporting base currency; VND, USD and EUR are supported display/payment currencies.
-  Changing the base currency for existing data requires a controlled migration and backfill.
-- Payment reconciliation repairs stale active payments. Provider-pending refunds are retried
-  idempotently through the refund API, but there is no separate refund reconciliation worker.
-- Refunds initiated directly in a provider dashboard are accepted through verified webhooks, but
-  partial external refunds do not carry enough local allocation data for exact period reporting.
-  The supported operational path starts refunds through this API.
-- Checkout supports configurable shipping/tax rules and bounded promotion codes. It does not
-  calculate carrier-specific live rates, stack multiple promotions or model jurisdictional tax.
-- Shipment records and return processing are internal workflows. Carrier label creation, live
-  tracking synchronization, product variants and multi-warehouse inventory are outside the domain.
-- Email verification and password reset use hashed, expiring, single-use tokens delivered through
-  the transactional outbox. Email verification is recorded but is not required for sign-in.
+- Checkout hỗ trợ COD và Stripe PaymentIntent. Stripe bị tắt mặc định; deterministic adapter trong
+  repository không thay thế một lần xác minh Stripe Test Mode thật bằng credential hợp lệ và
+  Webhook endpoint có thể truy cập.
+- VND là reporting base currency; VND, USD và EUR là display/payment currency được hỗ trợ. Đổi base
+  currency cho dữ liệu hiện có cần migration và backfill có kiểm soát.
+- Payment reconciliation phục hồi active payment bị stale. Provider-pending refund được retry
+  idempotent qua refund API, nhưng chưa có refund reconciliation worker riêng.
+- Refund được tạo trực tiếp trong provider dashboard được chấp nhận qua verified Webhook, nhưng
+  partial external refund không có đủ local allocation data để báo cáo chính xác theo kỳ. Luồng vận
+  hành được hỗ trợ là khởi tạo refund qua API này.
+- Checkout hỗ trợ shipping/tax rule cấu hình được và promotion code có giới hạn. Hệ thống không tính
+  live rate theo carrier, không stack nhiều promotion và không mô hình hóa jurisdictional tax.
+- Shipment record và return processing là workflow nội bộ. Carrier label creation, live tracking
+  synchronization, product variant và multi-warehouse inventory nằm ngoài domain hiện tại.
+- Email verification và password reset dùng token hash có thời hạn, dùng một lần, được gửi qua
+  Transactional Outbox. Email verification được ghi nhận nhưng không bắt buộc để sign-in.
 
-## Deployment Boundaries
+## Ranh giới triển khai
 
-- One API instance and one SQL Server database are the supported topology.
-- Product images use local disk. Horizontal API scaling requires object storage or a shared
-  durable volume. Readiness verifies that the current process can create, flush and remove a probe
-  file; it does not prove shared durability, backup coverage or sufficient future disk capacity.
-- Rate limiting is in process. Multiple API replicas require a distributed limiter.
-- Session validation reads SQL Server on protected requests. Current load tests do not justify
-  adding Redis.
-- SMTP delivery is at-least-once. A crash after SMTP accepts a message but before the database
-  commit can send a duplicate with the same deterministic `Message-ID`.
-- FX caching is process-local. Multiple API replicas either need a distributed cache or must accept
-  that each instance keeps its own bounded cache and stale fallback window.
+- Topology được hỗ trợ là một API instance và một SQL Server database.
+- Product image dùng local disk. Horizontal API scaling cần object storage hoặc shared durable
+  volume. Readiness xác minh process hiện tại có thể tạo, flush và xóa probe file; nó không chứng
+  minh shared durability, backup coverage hoặc future disk capacity.
+- Rate limiting chạy trong process. Nhiều API replica cần distributed limiter.
+- Session validation đọc SQL Server trên protected request. Load test hiện tại chưa chứng minh nhu
+  cầu thêm Redis.
+- SMTP delivery là at-least-once. Crash sau khi SMTP nhận message nhưng trước database commit có thể
+  gửi trùng với cùng `Message-ID` xác định.
+- FX cache chạy trong process. Nhiều API replica cần distributed cache hoặc phải chấp nhận mỗi
+  instance có cache và stale fallback window riêng.
 
-## Operational Boundaries
+## Ranh giới vận hành
 
-- CI configuration, packaging, migration rollback and backup/restore drills are implemented.
-  Actual cloud deployment, DNS, certificates and managed-secret integration depend on the target
-  environment and are not claimed by this repository.
-- `rollback-last.sql` is suitable only while the last migration remains data-compatible. Restore
-  the verified database backup when a migration has transformed or removed production data.
-- Performance numbers are regression baselines from a local/CI topology, not production capacity
-  estimates. Re-evaluate indexes and infrastructure with production telemetry and network latency.
+- CI configuration, packaging, migration rollback và backup/restore drill đã được hiện thực. Cloud
+  deployment, DNS, certificate và managed-secret integration thật phụ thuộc môi trường mục tiêu và
+  không được repository tuyên bố là đã xác minh.
+- `rollback-last.sql` chỉ phù hợp khi migration cuối vẫn data-compatible. Phải phục hồi verified
+  database backup nếu migration đã biến đổi hoặc xóa production data.
+- Số liệu performance là regression baseline từ topology local/CI, không phải production capacity
+  estimate. Index và infrastructure cần được đánh giá lại bằng production telemetry và network
+  latency.
 
-## Compatibility
+## Tương thích
 
-- OpenAPI v1 is snapshot-tested. `/api/v1` is the canonical route and `/api` remains a
-  backward-compatible alias that assumes v1.
-- A breaking request or response change requires a new API version; the v1 DTO and error-code
-  contracts remain stable.
-- Order and payment status names are public API values; renaming them is backward incompatible.
-- Historical order details and immutable ledgers must not be reconstructed from current catalog
-  values.
+- OpenAPI v1 được snapshot test. `/api/v1` là route chuẩn; `/api` là backward-compatible alias mặc
+  định dùng v1.
+- Thay đổi request hoặc response gây breaking change cần API version mới; DTO và error-code contract
+  v1 tiếp tục ổn định.
+- Tên order/payment status là public API value; đổi tên sẽ phá backward compatibility.
+- Historical order detail và immutable ledger không được tái dựng từ catalog value hiện tại.

@@ -1,8 +1,8 @@
-# Database ERD
+# Sơ đồ quan hệ dữ liệu
 
-The database keeps current operational state and immutable histories in the same SQL Server
-database. Orders preserve recipient contact, while order details preserve product name and price
-snapshots; inventory and payment histories remain auditable after profile or catalog data changes.
+Database lưu current operational state và immutable history trong cùng SQL Server. Order giữ thông
+tin người nhận, còn order detail giữ snapshot tên và giá sản phẩm; inventory/payment history vẫn có
+thể audit sau khi profile hoặc catalog data thay đổi.
 
 ```mermaid
 erDiagram
@@ -272,6 +272,6 @@ erDiagram
     ORDERS o|--o{ INVENTORY_TRANSACTIONS : causes
 ```
 
-Filtered unique indexes enforce active category names and one main image per product. Additional
-unique constraints protect cart lines, order idempotency, webhook event identity and inventory
-movement identity. See `AppDbContext` and the EF migrations for the complete physical schema.
+Filtered unique index bảo vệ tên category đang hoạt động và một main image trên mỗi product. Các
+unique constraint khác bảo vệ cart line, order Idempotency, Webhook event identity và inventory
+movement identity. Xem `AppDbContext` cùng EF Core migration để biết physical schema đầy đủ.

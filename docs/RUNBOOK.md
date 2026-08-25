@@ -1,10 +1,10 @@
-# Runbook vận hành ECommerceBackend
+# Hướng dẫn vận hành ECommerceBackend
 
 Runbook này áp dụng cho topology được hỗ trợ hiện tại: một API instance, một SQL Server và storage
 bền vững cho ảnh sản phẩm/Data Protection keys. Multi-instance cần xử lý các giới hạn trong
 `docs/LIMITATIONS.md` trước khi triển khai.
 
-## 1. Trách nhiệm trước production
+## 1. Trách nhiệm trước môi trường production
 
 Owner vận hành phải chốt và ghi vào hệ thống quản lý sự cố:
 
@@ -37,7 +37,7 @@ có secret trong source/publish directory.
 Dùng `appsettings.Staging.example.json` hoặc `appsettings.Production.example.json` làm schema tham
 chiếu. Cả hai template cố ý không chứa credential dùng được.
 
-## 3. Pre-deployment checklist
+## 3. Danh sách kiểm tra trước triển khai
 
 1. Working tree/release commit đã được review; CI của đúng commit xanh.
 2. `dotnet restore` không có advisory mức bị chặn.
@@ -73,9 +73,9 @@ không tương thích với binary đang chạy.
 Lưu ZIP, file SHA-256, release manifest và migration manifest cùng release. Không tái sử dụng output
 directory cũ.
 
-## 5. Quy trình deploy
+## 5. Quy trình triển khai
 
-### 5.1 Backup và migration
+### 5.1 Sao lưu và migration
 
 1. Dừng job ghi dữ liệu ngoài API nếu có; giữ API version cũ phục vụ cho đến khi chiến lược
    compatibility cho phép chuyển.
@@ -94,7 +94,7 @@ sqlcmd -S <server> -d <database> -E -C -b -f 65001 `
 Compose local/CI dùng service `migrate` riêng và chỉ khởi động `api` khi migration exit 0. API không
 được xem là công cụ thay thế cho quy trình backup/rollback production.
 
-### 5.2 Deploy API
+### 5.2 Triển khai API
 
 1. Đặt secret/config qua deployment platform.
 2. Mount volume upload, Data Protection keys và log với quyền ghi cho user non-root.
@@ -106,16 +106,16 @@ Compose local/CI dùng service `migrate` riêng và chỉ khởi động `api` k
 7. Theo dõi ít nhất error rate, SQL latency, worker health, outbox backlog và payment failure trong
    cửa sổ theo chính sách deploy của đội.
 
-## 6. Rollback
+## 6. Quay lui
 
-### 6.1 Rollback API
+### 6.1 Quay lui API
 
 1. Loại instance lỗi khỏi traffic.
 2. Giữ log, correlation ID và release manifest của bản lỗi.
 3. Deploy lại image/artifact trước đó với cùng config schema tương thích.
 4. Kiểm tra live/ready và smoke trước khi nhận traffic.
 
-### 6.2 Rollback database
+### 6.2 Quay lui database
 
 `rollback-last.sql` chỉ lùi đúng migration cuối được ghi trong manifest. Trước khi chạy:
 
@@ -129,9 +129,9 @@ Migration snapshot người nhận cố ý từ chối rollback khi có dữ li�
 schema không an toàn, phục hồi full backup/point-in-time vào database mới rồi chuyển connection
 string; không ép xóa dữ liệu để script chạy.
 
-## 7. Backup và restore
+## 7. Sao lưu và phục hồi
 
-### Backup tối thiểu
+### Yêu cầu sao lưu tối thiểu
 
 - SQL Server: full backup và transaction-log backup theo RPO đã chốt.
 - Product upload volume: snapshot/copy nhất quán.
@@ -141,7 +141,7 @@ string; không ép xóa dữ liệu để script chạy.
 Log ứng dụng không thay thế database backup. Backup lưu trên cùng host/volume không được tính là
 bản sao phục hồi thảm họa.
 
-### Restore drill
+### Diễn tập phục hồi
 
 1. Restore vào server/database cô lập, không ghi đè production.
 2. Chạy `DBCC CHECKDB` theo quy trình DBA.
@@ -156,7 +156,7 @@ Repository có test `SqlServerRecoveryIntegration` cho backup/restore latest sch
 User, Order, Payment, InventoryTransaction, OutboxMessage, AuditEvent và money snapshot; test này
 không thay thế restore drill của backup production.
 
-## 8. Health và monitoring
+## 8. Health và giám sát
 
 - `/health/live`: tiến trình API.
 - `/health/ready`: SQL Server, storage và worker bắt buộc.
@@ -166,9 +166,9 @@ không thay thế restore drill của backup production.
 Khi readiness lỗi, xem tên check trước khi restart. Restart liên tục không sửa được credential sai,
 SQL blocking, storage read-only, outbox backlog hoặc provider outage.
 
-## 9. Playbook sự cố
+## 9. Quy trình xử lý sự cố
 
-### Database unavailable/slow
+### Database không khả dụng hoặc phản hồi chậm
 
 1. Loại API khỏi traffic nếu readiness fail.
 2. Kiểm tra connectivity, certificate, login, disk, blocking, deadlock và SQL resource pressure.
@@ -176,7 +176,7 @@ SQL blocking, storage read-only, outbox backlog hoặc provider outage.
 4. Không tăng command timeout trước khi xác định query/blocking.
 5. Sau phục hồi, kiểm tra order/payment/inventory invariant và worker backlog.
 
-### Outbox backlog/dead letter
+### Outbox tồn đọng hoặc có dead letter
 
 1. Xem `/health/details`, `outbox.backlog.*` và SMTP/provider error.
 2. Sửa credential/connectivity/template trước.
@@ -186,7 +186,7 @@ SQL blocking, storage read-only, outbox backlog hoặc provider outage.
 
 Không redrive hàng loạt khi chưa xác minh downstream chấp nhận `Message-ID` lặp.
 
-### Stripe webhook/reconciliation
+### Stripe Webhook hoặc reconciliation
 
 1. Kiểm tra endpoint HTTPS, Stripe delivery log và timestamp/signature rejection.
 2. Không sửa raw body hoặc `Stripe-Signature` tại proxy.
@@ -195,7 +195,7 @@ Không redrive hàng loạt khi chưa xác minh downstream chấp nhận `Messag
 5. Nếu webhook bị lỡ, theo dõi reconciliation health/counter và payment stale batch.
 6. Đối chiếu Stripe Dashboard với payment, status history và audit trước khi can thiệp.
 
-### Refund stuck/failed
+### Refund bị treo hoặc thất bại
 
 1. Tra refund idempotency key, provider refund ID, status, attempt count và failure code.
 2. Kiểm tra tổng completed + pending refund không vượt payment amount.
@@ -204,14 +204,14 @@ Không redrive hàng loạt khi chưa xác minh downstream chấp nhận `Messag
 4. Reconciliation hiện không tự sửa provider-pending refund; xử lý theo Stripe Dashboard và bằng
    chứng audit.
 
-### FX provider unavailable
+### FX provider không khả dụng
 
 1. Kiểm tra timeout/credential/quota của CurrencyAPI.
 2. Xác minh tuổi cache so với `CacheMinutes` và `MaxStaleMinutes`.
 3. Không tự nhập rate giả để tiếp tục checkout.
 4. VND vẫn dùng rate 1; có thể tạm bỏ USD/EUR khỏi supported currencies bằng change được review.
 
-### Upload/storage
+### Upload hoặc storage
 
 1. Kiểm tra readiness, mount, permission, free space và inode.
 2. Không xóa file trực tiếp trước khi đối chiếu DB.
@@ -219,14 +219,14 @@ Không redrive hàng loạt khi chưa xác minh downstream chấp nhận `Messag
    period và danh sách orphan.
 4. Restore upload volume nếu file business bị mất; DB restore riêng không khôi phục ảnh.
 
-### Auth/JWT incident
+### Sự cố Auth/JWT
 
 1. Phân biệt credential stuffing, token reuse, clock skew và JWT key mismatch.
 2. Khóa account/thu hồi session bằng API quản trị; không xóa refresh row tùy tiện.
 3. Nếu JWT key lộ, rotate theo mục 10 và chấp nhận toàn bộ access token cũ mất hiệu lực.
 4. Tìm audit/login outcome nhưng không log password/token.
 
-## 10. Rotation secret
+## 10. Xoay vòng secret
 
 ### JWT signing key
 
@@ -248,7 +248,7 @@ Không redrive hàng loạt khi chưa xác minh downstream chấp nhận `Messag
 Webhook secret rotation cần phối hợp Stripe endpoint; không đổi secret trong app trước khi provider
 phát chữ ký bằng secret mới.
 
-## 11. Data retention và vận hành định kỳ
+## 11. Lưu giữ dữ liệu và vận hành định kỳ
 
 - Luôn chạy `POST /api/v1/operations/data-retention` với `applyChanges=false` trước.
 - Batch size và retention days phải qua review; không dùng retention để xử lý incident tức thời.
@@ -257,7 +257,7 @@ phát chữ ký bằng secret mới.
   vận hành.
 - Chạy restore drill, dependency audit và performance regression theo chu kỳ release/rủi ro.
 
-## 12. Bằng chứng sau deploy
+## 12. Bằng chứng sau triển khai
 
 Lưu cùng release ticket:
 

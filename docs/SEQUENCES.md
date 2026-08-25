@@ -1,6 +1,6 @@
-# Critical Sequences
+# Sơ đồ tuần tự các luồng quan trọng
 
-## Login And Session Validation
+## Đăng nhập và xác minh phiên
 
 ```mermaid
 sequenceDiagram
@@ -12,24 +12,24 @@ sequenceDiagram
 
     Client->>API: POST /api/v1/auth/login
     API->>Auth: ExecuteAsync(credentials)
-    Auth->>DB: Lock user and load roles/permissions
-    Auth->>Auth: Constant-work BCrypt verification
-    Auth->>DB: Insert hashed refresh token family
-    Auth->>JWT: Create access token with session/version claims
+    Auth->>DB: Khóa user, tải role và permission
+    Auth->>Auth: Xác minh BCrypt với constant work
+    Auth->>DB: Thêm Refresh Token family đã hash
+    Auth->>JWT: Tạo Access Token có session/version claim
     Auth->>DB: Commit
-    API-->>Client: Access token + refresh token
+    API-->>Client: Access Token + Refresh Token
 
     Client->>API: GET protected endpoint + Bearer token
-    API->>JWT: Validate signature, issuer, audience, expiry
-    API->>DB: Check user token version and active token family
-    alt Session active
+    API->>JWT: Xác minh signature, issuer, audience, expiry
+    API->>DB: Kiểm tra user token version và active token family
+    alt Phiên còn hoạt động
         API-->>Client: Protected response
-    else Revoked, expired or reused
+    else Bị thu hồi, hết hạn hoặc reuse
         API-->>Client: 401 ProblemDetails
     end
 ```
 
-## Idempotent Checkout And Online Payment
+## Checkout idempotent và thanh toán online
 
 ```mermaid
 sequenceDiagram
@@ -45,39 +45,39 @@ sequenceDiagram
 
     Customer->>API: POST /api/v1/orders + Idempotency-Key
     API->>Checkout: PlaceOrderAsync
-    Checkout->>DB: Begin transaction
-    Checkout->>DB: Check key, lock cart, recheck key
-    Checkout->>DB: Lock products in stable ID order
-    Checkout->>DB: Lock promotion and count customer redemptions
-    Checkout->>Pricing: Recalculate discount, shipping, tax and total
-    Pricing->>Rules: Validate promotion, price, stock and order totals
-    Checkout->>Rules: Reserve inventory
-    Checkout->>DB: Insert order snapshots, promotion redemption, payment, histories, ledger
-    Checkout->>DB: Clear cart and append outbox message
+    Checkout->>DB: Bắt đầu Transaction
+    Checkout->>DB: Kiểm tra key, khóa cart, kiểm tra lại key
+    Checkout->>DB: Khóa product theo thứ tự ID ổn định
+    Checkout->>DB: Khóa promotion và đếm redemption của Customer
+    Checkout->>Pricing: Tính lại discount, shipping, tax và total
+    Pricing->>Rules: Xác minh promotion, giá, stock và order total
+    Checkout->>Rules: Giữ tồn kho
+    Checkout->>DB: Thêm snapshot, redemption, payment, history và ledger
+    Checkout->>DB: Xóa cart và thêm Outbox message
     Checkout->>DB: Commit
     Checkout-->>API: OrderResponse
     API-->>Customer: 201 Created
-    alt Card payment
+    alt Thanh toán thẻ
         Customer->>API: POST /payments/orders/{orderId}/initialize
         API->>DB: Claim external-creation lease + commit
-        API->>Stripe: Create PaymentIntent outside SQL transaction
-        Stripe-->>API: Provider ID, status and client secret
-        API->>DB: Attach provider ID/status + commit
+        API->>Stripe: Tạo PaymentIntent ngoài SQL Transaction
+        Stripe-->>API: Provider ID, status và client secret
+        API->>DB: Gắn provider ID/status + commit
         Stripe->>Webhook: Signed payment event
-        Webhook->>Webhook: Verify signature, amount, currency and event ID
-        Webhook->>DB: Lock order/payment, apply state + audit/outbox + commit
+        Webhook->>Webhook: Xác minh signature, amount, currency và event ID
+        Webhook->>DB: Khóa order/payment, áp dụng state + audit/Outbox + commit
     end
-    Outbox->>DB: Claim committed message
-    Outbox-->>Customer: Notification (at-least-once)
+    Outbox->>DB: Claim message đã commit
+    Outbox-->>Customer: Notification at-least-once
 ```
 
-Concurrent retries with the same user and key return the original order. Reusing the key with a
-different request returns `409`; unavailable stock rolls back the complete transaction. Stripe
-network I/O never runs while checkout or inventory locks are held. A missing webhook is repaired
-by the reconciliation worker querying a bounded batch of stale active PaymentIntents and locking
-each order/payment before applying the observed state.
+Retry đồng thời với cùng user và key trả order ban đầu. Dùng lại key với request khác trả `409`;
+stock không khả dụng rollback toàn bộ Transaction. Stripe network I/O không chạy khi checkout hoặc
+inventory lock đang được giữ. Webhook bị lỡ được reconciliation worker sửa bằng cách truy vấn batch
+PaymentIntent active bị stale có giới hạn và khóa từng order/payment trước khi áp dụng state quan
+sát được.
 
-## Delivery, Return And Refund
+## Giao hàng, trả hàng và hoàn tiền
 
 ```mermaid
 sequenceDiagram
@@ -96,49 +96,49 @@ sequenceDiagram
 
     Staff->>API: POST shipment/dispatch (carrier + tracking)
     API->>Dispatch: ExecuteAsync
-    Dispatch->>DB: Lock order and shipment
-    Dispatch->>DB: Insert shipment + Shipping history + commit
+    Dispatch->>DB: Khóa order và shipment
+    Dispatch->>DB: Thêm shipment + Shipping history + commit
 
     Staff->>API: POST shipment/deliver
     API->>Delivery: ExecuteAsync
-    Delivery->>DB: Lock order, shipment and payment
-    Delivery->>Rules: Delivered + collect COD
-    Delivery->>DB: Commit histories atomically
+    Delivery->>DB: Khóa order, shipment và payment
+    Delivery->>Rules: Delivered + thu COD
+    Delivery->>DB: Commit history atomically
 
     Customer->>API: POST return-request
     API->>ReturnRequest: ExecuteAsync
-    ReturnRequest->>DB: Verify owner, delivery time and return window
-    ReturnRequest->>DB: Insert request + ReturnRequested history
+    ReturnRequest->>DB: Xác minh owner, delivery time và return window
+    ReturnRequest->>DB: Thêm request + ReturnRequested history
     Staff->>API: POST return-request/review
     API->>ReturnReview: ExecuteAsync
-    ReturnReview->>DB: Approve or reject under order lock
+    ReturnReview->>DB: Duyệt hoặc từ chối dưới order lock
     Staff->>API: POST return-request/receive
     API->>ReturnReceipt: ExecuteAsync
-    ReturnReceipt->>DB: Lock products in stable order
-    ReturnReceipt->>Rules: Receive inspection and release stock once
-    ReturnReceipt->>DB: Append Returned history + ledger + commit
+    ReturnReceipt->>DB: Khóa product theo thứ tự ổn định
+    ReturnReceipt->>Rules: Kiểm nhận và hoàn stock một lần
+    ReturnReceipt->>DB: Thêm Returned history + ledger + commit
 
     Staff->>API: POST /api/v1/orders/{id}/refund + idempotency reference
     API->>Refund: ExecuteAsync
-    Refund->>DB: Lock order/payment/return request
-    Refund->>Rules: Require received return and Paid payment
+    Refund->>DB: Khóa order/payment/return request
+    Refund->>Rules: Yêu cầu đã nhận hàng trả và payment Paid
     alt COD
-        Refund->>DB: Record manual refund + histories + commit
+        Refund->>DB: Ghi manual refund + history + commit
     else Card
         Refund->>DB: Reserve PaymentRefund + commit
-        Refund->>Gateway: Create refund outside SQL transaction
+        Refund->>Gateway: Tạo refund ngoài SQL Transaction
         Gateway-->>Refund: Provider refund ID/status
-        Refund->>DB: Apply partial/full refund + histories/audit/outbox + commit
+        Refund->>DB: Áp dụng partial/full refund + history/audit/Outbox + commit
     end
-    API-->>Staff: Updated OrderResponse
+    API-->>Staff: OrderResponse đã cập nhật
 ```
 
-Receiving returned goods and refund are separate auditable actions. Replaying the same reference is
-idempotent; a reused reference with different content cannot overwrite financial history. Online
-refunds preserve payment currency and order base-currency snapshots, and the cumulative amount is
-bounded by the captured payment.
+Nhận hàng trả và refund là hai hành động có audit riêng. Replay cùng reference là idempotent; một
+reference được dùng lại với content khác không thể ghi đè financial history. Online refund giữ
+payment currency và order base-currency snapshot; cumulative amount bị giới hạn bởi captured
+payment.
 
-## Email Verification And Password Reset
+## Xác minh email và đặt lại mật khẩu
 
 ```mermaid
 sequenceDiagram
@@ -149,20 +149,20 @@ sequenceDiagram
     participant Outbox as Outbox Dispatcher
     participant SMTP as SMTP Provider
 
-    User->>API: Request verification/reset
-    API->>Auth: Normalize request without account disclosure
-    Auth->>DB: Store token hash + protected outbox payload atomically
-    Outbox->>DB: Claim committed message
-    Outbox->>SMTP: Send with deterministic Message-ID
-    User->>API: Submit raw one-time token
-    API->>Auth: Hash token, lock user/token, validate expiry and use
-    alt Password reset
-        Auth->>DB: Change BCrypt hash, increment token version, revoke sessions
-    else Email verification
-        Auth->>DB: Set EmailVerifiedAt and consume token
+    User->>API: Yêu cầu verification/reset
+    API->>Auth: Chuẩn hóa request, không tiết lộ account
+    Auth->>DB: Lưu token hash + protected Outbox payload atomically
+    Outbox->>DB: Claim message đã commit
+    Outbox->>SMTP: Gửi với Message-ID xác định
+    User->>API: Gửi raw one-time token
+    API->>Auth: Hash token, khóa user/token, kiểm tra expiry và usage
+    alt Đặt lại mật khẩu
+        Auth->>DB: Đổi BCrypt hash, tăng token version, thu hồi session
+    else Xác minh email
+        Auth->>DB: Gán EmailVerifiedAt và consume token
     end
     Auth->>DB: Commit
 ```
 
-Raw tokens are not stored as readable database values. Email verification is recorded but is not
-currently a prerequisite for login.
+Raw token không được lưu trong database ở dạng đọc được. Email verification được ghi nhận nhưng
+hiện chưa phải điều kiện để login.

@@ -1,4 +1,4 @@
-# Monitoring và cảnh báo
+# Giám sát và cảnh báo
 
 Tài liệu này mô tả các tín hiệu quan sát hiện có của backend. Các ngưỡng bên dưới là điểm khởi đầu
 cho staging; cần điều chỉnh theo lưu lượng thực tế trước khi dùng làm SLO hoặc SLA.
@@ -17,7 +17,7 @@ cho staging; cần điều chỉnh theo lưu lượng thực tế trước khi d
 Không có collector hoặc dashboard được đóng gói trong repository. Việc kết nối Prometheus,
 Grafana, Application Insights hay một nền tảng tương đương thuộc cấu hình môi trường triển khai.
 
-## Health endpoints
+## Các endpoint health
 
 | Endpoint | Phạm vi | Quyền truy cập | Cách dùng |
 |---|---|---|---|
@@ -30,7 +30,7 @@ Các readiness check hiện có: `database`, `product-image-storage`, `outbox`, 
 `payment-reconciliation` và `data-retention`. Timeout mỗi dependency được cấu hình bằng
 `HealthChecks:DependencyTimeoutSeconds`.
 
-## Metric ứng dụng
+## Metric của ứng dụng
 
 | Meter | Metric | Ý nghĩa |
 |---|---|---|
@@ -49,7 +49,7 @@ OpenTelemetry còn phát metric chuẩn của ASP.NET Core, `HttpClient` và .NE
 thể phụ thuộc phiên bản instrumentation; dashboard nên khám phá từ collector thay vì hard-code tên
 không thuộc contract của ứng dụng.
 
-## Baseline cảnh báo
+## Ngưỡng cảnh báo ban đầu
 
 | Tín hiệu | Điều kiện cảnh báo khởi điểm | Mức xử lý |
 |---|---|---|

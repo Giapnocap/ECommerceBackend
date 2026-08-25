@@ -88,7 +88,7 @@ live để demo.
 8. Với đơn đủ điều kiện, Staff tạo partial refund rồi full remaining refund; tổng refund không được
    vượt amount đã thanh toán.
 
-Expected: provider call nằm ngoài SQL transaction dài; DB finalize ngắn và idempotent; event sai
+Kết quả mong đợi: provider call nằm ngoài SQL Transaction dài; DB finalize ngắn và idempotent; event sai
 signature, amount, currency hoặc payment reference không làm đổi trạng thái.
 
 ## Đa tiền tệ

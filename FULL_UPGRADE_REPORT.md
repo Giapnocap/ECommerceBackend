@@ -1,19 +1,21 @@
-# ECommerceBackend Full Upgrade Report
+# Báo cáo các khả năng của ECommerceBackend
 
-Audit baseline: `b8a14616d37dd4e9a7fed541ce0a2a5fb148fad0` on `main`
-Audit date: 2026-08-20
-Target runtime: .NET 8, ASP.NET Core Web API, EF Core and SQL Server
+| Mục | Giá trị |
+| --- | --- |
+| Baseline audit | `b8a14616d37dd4e9a7fed541ce0a2a5fb148fad0` trên `main` |
+| Ngày audit | 2026-08-20 |
+| Runtime mục tiêu | .NET 8, ASP.NET Core Web API, EF Core và SQL Server |
 
-## Purpose
+## Mục đích
 
-This report describes capabilities implemented in the repository. It is not an operational
-verification report and does not claim that Stripe, CurrencyAPI, SMTP, TLS or a staging host have
-been tested with real external credentials. Those results belong in
+Báo cáo này mô tả các capability đã được hiện thực trong repository. Đây không phải báo cáo xác
+minh vận hành và không khẳng định Stripe, CurrencyAPI, SMTP, TLS hoặc staging host đã được kiểm tra
+bằng credential bên ngoài thật. Các kết quả đó được ghi riêng trong
 `PRODUCTION_READINESS_REPORT.md`.
 
-## Architecture
+## Kiến trúc
 
-The solution separates the HTTP host, application use cases, domain rules and infrastructure:
+Solution tách HTTP host, application use case, domain rule và infrastructure:
 
 ```text
 ECommerceBackend (API)
@@ -23,137 +25,137 @@ ECommerceBackend (API)
         -> Application + Domain
 ```
 
-- Controllers own HTTP contracts, authorization metadata and response status codes.
-- Application use cases orchestrate validation, transactions, repositories, provider ports,
-  audit and outbox writes.
-- Domain entities and policies protect status transitions, money, inventory and refund invariants.
-- Infrastructure implements EF Core repositories, SQL locking, Stripe/CurrencyAPI/SMTP adapters,
-  durable local image storage and hosted workers.
-- Unit tests cover domain rules; integration tests cover the assembled API and adapters; tagged
-  SQL Server tests cover relational constraints, locking, migrations, recovery and performance.
+- Controller sở hữu HTTP contract, authorization metadata và response status code.
+- Application use case điều phối validation, Transaction, repository, provider port, audit và
+  Outbox write.
+- Domain entity và policy bảo vệ state transition, money, inventory và refund invariant.
+- Infrastructure triển khai EF Core repository, SQL locking, Stripe/CurrencyAPI/SMTP adapter,
+  durable local image storage và hosted worker.
+- Unit test bao phủ domain rule; integration test bao phủ API và adapter đã ghép; SQL Server test
+  có tag bao phủ relational constraint, locking, migration, recovery và performance.
 
-## Business Flows
+## Các luồng nghiệp vụ
 
-### Authentication And Sessions
+### Xác thực và phiên đăng nhập
 
-- Registration and login use DTO validation and BCrypt password hashing.
-- Login performs equivalent BCrypt work for unknown users, supports lockout and returns a generic
-  unauthorized contract.
-- Access tokens contain session and token-version claims. Protected requests validate the active
-  SQL-backed session.
-- Refresh tokens are stored as SHA-256 hashes, rotate by family and trigger family revocation on
-  reuse.
-- Password reset and email verification use hashed, expiring, single-use tokens. Password reset
-  increments the token version and revokes existing sessions.
+- Registration và login dùng DTO validation cùng BCrypt password hashing.
+- Login thực hiện lượng BCrypt work tương đương cho username không tồn tại, hỗ trợ lockout và trả
+  unauthorized contract chung.
+- Access token chứa session và token-version claim. Protected request xác minh phiên SQL-backed còn
+  hoạt động.
+- Refresh Token được lưu dưới dạng SHA-256 hash, xoay vòng theo family và thu hồi family khi phát
+  hiện reuse.
+- Password reset và email verification dùng token hash có thời hạn, dùng một lần. Password reset
+  tăng token version và thu hồi phiên hiện có.
 
-### Catalog, Cart And Checkout
+### Catalog, cart và checkout
 
-- Catalog writes enforce active-category uniqueness, soft deletion and optimistic concurrency.
-- Cart writes serialize per cart and store a display snapshot; checkout always recalculates prices
-  from authoritative product and promotion data.
-- Checkout uses an idempotency key, locks the cart and products in stable order, snapshots recipient,
-  product, promotion and money data, reserves stock, appends ledger/history/outbox records and
-  commits once.
-- Concurrent retry returns one logical order; conflicting reuse returns `409`; failed validation
-  rolls the complete transaction back.
+- Catalog write bảo vệ tên category đang hoạt động không trùng, soft delete và optimistic
+  concurrency.
+- Cart write được serialize theo cart và lưu display snapshot; checkout luôn tính lại giá từ
+  product và promotion authoritative.
+- Checkout dùng Idempotency key, khóa cart và product theo thứ tự ổn định, snapshot người nhận,
+  product, promotion và money, giữ stock, ghi ledger/history/Outbox rồi commit một lần.
+- Retry đồng thời trả về một logical order; tái sử dụng key có xung đột trả `409`; validation thất
+  bại rollback toàn bộ Transaction.
 
-### Fulfillment, Return And Inventory
+### Giao hàng, trả hàng và tồn kho
 
-- Staff/Admin confirmation, shipment dispatch, delivery failure/retry and delivery are guarded by
-  explicit order state transitions.
-- Customers can request a return only for an owned, delivered order inside the configured window.
-- Staff review and receipt are separate actions. Stock is restored exactly once only after approved
-  goods are received.
-- Every stock mutation appends an inventory transaction with the balance after mutation.
-- Per-product low-stock thresholds support operational stock views and reports.
+- Staff/Admin confirmation, shipment dispatch, delivery failure/retry và delivery được bảo vệ bởi
+  order state transition tường minh.
+- Customer chỉ được yêu cầu trả một order thuộc sở hữu, đã giao và còn trong thời hạn cấu hình.
+- Staff review và receipt là hai hành động riêng. Stock chỉ được hoàn đúng một lần sau khi hàng đã
+  duyệt được nhận lại.
+- Mỗi stock mutation tạo một inventory transaction có số dư sau mutation.
+- Low-stock threshold theo từng product hỗ trợ màn hình vận hành và báo cáo.
 
-## Payment And Refund
+## Thanh toán và hoàn tiền
 
-- COD and Stripe card payment methods are exposed only when a complete provider is registered.
-- `IPaymentGateway` isolates application logic from Stripe HTTP contracts.
-- PaymentIntent creation uses an external-creation idempotency key and lease. Network I/O runs
-  outside SQL transactions, then provider state is attached in a short transaction.
-- Stripe webhooks verify signatures, timestamps, event identity, payment identity, amount and
-  currency. Duplicate events do not repeat state transitions or side effects.
-- The payment state machine supports `Pending`, `RequiresAction`, `Processing`, `Paid`, `Failed`,
-  `Cancelled`, `PartiallyRefunded` and `Refunded`.
-- The reconciliation worker selects a bounded batch of stale active payments, queries Stripe and
-  locks each order/payment before applying only valid, idempotent transitions when a webhook is
-  delayed or lost. The supported single-API topology does not require a distributed query lease.
-- Online refund calls the original provider path and supports partial/full refunds. A
-  `PaymentRefund` idempotency key, processing lease, row version and cumulative amount checks protect
-  retries and concurrency.
-- COD refund is an auditable manual recording after returned goods have been received.
+- COD và Stripe card chỉ được công bố khi checkout provider tương ứng đã đăng ký đầy đủ.
+- `IPaymentGateway` tách Application khỏi Stripe HTTP contract.
+- Tạo PaymentIntent dùng external-creation Idempotency key và lease. Network I/O chạy ngoài SQL
+  Transaction, sau đó provider state được gắn trong một Transaction ngắn.
+- Stripe Webhook xác minh chữ ký, timestamp, event identity, payment identity, amount và currency.
+  Event trùng không lặp state transition hoặc side effect.
+- Payment state machine hỗ trợ `Pending`, `RequiresAction`, `Processing`, `Paid`, `Failed`,
+  `Cancelled`, `PartiallyRefunded` và `Refunded`.
+- Reconciliation worker chọn batch payment active bị stale, truy vấn Stripe rồi khóa từng
+  order/payment trước khi áp dụng transition hợp lệ và idempotent khi Webhook đến chậm hoặc bị lỡ.
+  Topology một API hiện tại không cần distributed query lease.
+- Online refund đi theo provider gốc và hỗ trợ partial/full refund. `PaymentRefund` Idempotency key,
+  processing lease, Row Version và cumulative amount check bảo vệ retry và concurrency.
+- COD refund là ghi nhận thủ công có audit sau khi hàng trả đã được nhận.
 
-## Money And Currency
+## Tiền tệ
 
-- `Money` validates supported ISO codes, currency scale, rounding and overflow.
-- VND is the reporting base currency; VND, USD and EUR are supported transaction currencies.
-- Orders snapshot exchange rate, capture time and base/display totals; order lines snapshot base and
-  display unit prices.
-- Refunds preserve original payment currency and VND base amount. The final refund receives the
-  remaining base amount to avoid cumulative rounding drift.
-- CurrencyAPI integration has timeout, process-local cache, single-flight fetch and a bounded stale
-  fallback. Reports aggregate base snapshots rather than mixing currencies.
+- `Money` xác minh ISO code được hỗ trợ, currency scale, rounding và overflow.
+- VND là reporting base currency; VND, USD và EUR là transaction currency được hỗ trợ.
+- Order snapshot exchange rate, capture time và base/display total; order line snapshot base và
+  display unit price.
+- Refund giữ payment currency gốc và VND base amount. Refund cuối nhận phần base amount còn lại để
+  tránh cumulative rounding drift.
+- CurrencyAPI integration có timeout, process-local cache, single-flight fetch và stale fallback
+  có giới hạn. Report tổng hợp base snapshot thay vì cộng lẫn currency.
 
-## Reliability And Operations
+## Độ tin cậy và vận hành
 
-- Transactional outbox messages commit with business data, use bounded retries, leases,
-  dead-lettering and Admin redrive.
-- SMTP uses a deterministic RFC `Message-ID`; delivery is explicitly at-least-once.
-- Order expiration, payment reconciliation, outbox dispatch and data retention run as hosted
-  services with health/status signals.
-- Correlation IDs connect ProblemDetails, structured Serilog request logs, audit events and OpenTelemetry
-  activities.
-- Liveness, readiness and protected detailed-health endpoints cover process, SQL Server, storage and
-  required workers.
-- Docker Compose provides SQL migration ordering and persistent volumes for database files, uploads,
-  data-protection keys and logs.
+- Transactional Outbox message commit cùng business data, có retry giới hạn, lease, dead-letter và
+  Admin redrive.
+- SMTP dùng RFC `Message-ID` xác định; delivery được mô tả rõ là at-least-once.
+- Order expiration, payment reconciliation, Outbox dispatch và data retention chạy bằng hosted
+  service có health/status signal.
+- Correlation ID liên kết ProblemDetails, structured Serilog request log, audit event và
+  OpenTelemetry activity.
+- Liveness, readiness và protected detailed-health endpoint bao phủ process, SQL Server, storage
+  và worker bắt buộc.
+- Docker Compose cung cấp migration ordering cùng persistent volume cho database file, upload,
+  Data Protection key và log.
 
-## Security
+## Bảo mật
 
-- JWT issuer, audience, signing key and lifetime are strongly validated at startup.
-- Permission policies and resource-ownership checks protect privileged and customer-specific data.
-- API errors use bounded ProblemDetails contracts and do not expose stack traces outside Development.
-- Uploads validate extension, MIME type, file signature, size and generated path before persistence.
-- Security headers, CORS allowlists, HSTS, HTTPS redirection and forwarded-header processing are
-  configured at the API boundary.
-- Secrets are expected from environment variables or an external secret store and are absent from
-  committed runtime templates.
-- Audit metadata and API output redact password, token, secret, API-key and credential fields.
+- JWT issuer, audience, signing key và lifetime được validate chặt khi startup.
+- Permission policy và resource ownership check bảo vệ dữ liệu đặc quyền và dữ liệu riêng của
+  Customer.
+- API error dùng ProblemDetails contract có giới hạn và không trả stack trace ngoài Development.
+- Upload kiểm tra extension, MIME type, file signature, size và generated path trước persistence.
+- Security header, CORS allowlist, HSTS, HTTPS redirection và forwarded-header processing được cấu
+  hình tại API boundary.
+- Secret được lấy từ environment variable hoặc external secret store và không nằm trong runtime
+  template đã commit.
+- Audit metadata và API output che password, token, secret, API key và credential field.
 
-## Management And Reporting
+## Quản trị và báo cáo
 
-- Admin/Staff workflows cover products, categories, inventory, orders, shipments, returns and
-  account management according to permission policies.
-- Admin management includes customer lock/unlock, dashboard, revenue/order/product/customer/return
-  reports, promotion analytics, audit search, outbox dead-letter redrive and upload reconciliation.
-- Read models use database projections, `AsNoTracking`, bounded paging and base-currency aggregates.
+- Workflow Admin/Staff bao phủ product, category, inventory, order, shipment, return và account
+  management theo permission policy.
+- Admin management gồm customer lock/unlock, dashboard, revenue/order/product/customer/return
+  report, promotion analytics, audit search, Outbox dead-letter redrive và upload reconciliation.
+- Read model dùng database projection, `AsNoTracking`, paging có giới hạn và base-currency
+  aggregate.
 
-## Testing Assets
+## Tài sản kiểm thử
 
-The repository contains:
+Repository chứa:
 
-- domain unit tests for state machines, money and business invariants;
-- API/application integration tests for auth, authorization, checkout, payment, refund, outbox,
-  reporting and operations;
-- deterministic Stripe gateway/webhook and CurrencyAPI adapter tests;
-- SQL Server tests for locking, concurrency, constraints, migrations, critical business-data
-  backup/restore and performance;
-- architecture, OpenAPI compatibility, deployment security and observability contract tests;
-- CI workflows for restore audit, formatting, Release build, migrations, coverage and SQL tests;
-- Docker smoke, migration artifact, recovery, performance and release packaging scripts.
+- domain unit test cho state machine, money và business invariant;
+- API/application integration test cho auth, authorization, checkout, payment, refund, Outbox,
+  reporting và operations;
+- deterministic Stripe gateway/Webhook và CurrencyAPI adapter test;
+- SQL Server test cho locking, concurrency, constraint, migration, backup/restore dữ liệu nghiệp vụ
+  quan trọng và performance;
+- architecture, OpenAPI compatibility, deployment security và observability contract test;
+- CI workflow cho restore audit, formatting, Release build, migration, coverage và SQL test;
+- Docker smoke, migration artifact, recovery, performance và release packaging script.
 
-Test presence is implementation evidence only. Current pass/fail counts, Docker results, external
-provider checks and release recommendation are recorded separately after executing the final
-readiness verification.
+Sự hiện diện của test chỉ là bằng chứng implementation. Số lượng pass/fail hiện tại, Docker result,
+external provider check và release recommendation được ghi riêng sau lần xác minh readiness cuối.
 
-## Deliberate Boundaries
+## Ranh giới chủ ý
 
-- Supported deployment topology is one API instance, one SQL Server and persistent product-image
+- Topology triển khai được hỗ trợ là một API instance, một SQL Server và persistent product-image
   storage.
-- Stripe, CurrencyAPI and SMTP are disabled until credentials are supplied externally.
-- Email verification is recorded but is not required for login.
-- Reconciliation repairs payments, not provider-pending refunds.
-- Rate limiting and FX cache are process-local and are not presented as horizontally distributed.
-- Local/CI performance results are regression baselines, not production capacity claims.
+- Stripe, CurrencyAPI và SMTP bị tắt cho đến khi credential được cung cấp từ bên ngoài.
+- Email verification được ghi nhận nhưng chưa bắt buộc để login.
+- Reconciliation phục hồi payment, không tự phục hồi provider-pending refund.
+- Rate limiting và FX cache chạy trong process, không được trình bày như giải pháp phân tán ngang.
+- Kết quả performance local/CI là regression baseline, không phải production capacity claim.

@@ -1,146 +1,148 @@
-# Backend Architecture
+# Kiến trúc backend
 
-## Scope
+## Phạm vi
 
-The system is a modular monolith: one ASP.NET Core API process and one SQL Server database.
-Client applications and container orchestration are intentionally outside this repository.
+Hệ thống là modular monolith: một ASP.NET Core API process và một SQL Server database. Client và
+container orchestration ngoài Docker Compose local được chủ ý đặt ngoài repository này.
 
-The solution uses separate `Domain`, `Application`, `Infrastructure`, API host, unit-test and
-integration-test projects.
-Project references enforce the dependency direction while deployment remains a single process.
+Solution tách các project `Domain`, `Application`, `Infrastructure`, API host, unit test và
+integration test. Project reference cưỡng chế dependency direction trong khi ứng dụng vẫn được
+triển khai thành một process.
 
-## Dependency Direction
+## Hướng phụ thuộc
 
 ```text
 HTTP request
     |
-API controllers / middleware
+API controller / middleware
     |
-Application services / validation / DTOs ------> Domain entities / policies
-    |                                                  ^
-    v                                                  |
-Application persistence contracts <------ Infrastructure adapters
-                                           (EF Core, SQL Server, files, SMTP)
+Application service / validation / DTO ------> Domain entity / policy
+    |                                               ^
+    v                                               |
+Application persistence contract <------ Infrastructure adapter
+                                        (EF Core, SQL Server, file, SMTP)
 ```
 
-`Program.cs` is the composition root. Controllers contain no business transaction logic.
-Application services own use-case orchestration and commit boundaries. Feature-specific
-repository contracts isolate query and persistence details, while SQL-specific locking remains
-explicit at the data boundary. The project is deployed as one process; it is not a microservice
-system.
+`Program.cs` là composition root. Controller không chứa business Transaction logic. Application
+service sở hữu use-case orchestration và commit boundary. Repository contract theo feature cô lập
+query và persistence detail, còn SQL locking nằm tường minh tại data boundary. Dự án triển khai
+thành một process; đây không phải hệ thống microservice.
 
-Application code uses repositories, `IUnitOfWork`, `IDataConsistencyService` and
-`IAppTransaction`. EF Core query composition, SQL Server transaction objects, lock hints and
-provider exception types are implemented only in Infrastructure. Web request context, JWT
-generation, password hashing and local file storage are also consumed through Application ports
-and implemented by API or Infrastructure adapters. Architecture regression tests reject EF Core,
-ASP.NET Core and concrete security-library references under `Application`.
+Application dùng repository, `IUnitOfWork`, `IDataConsistencyService` và `IAppTransaction`. EF Core
+query composition, SQL Server Transaction object, lock hint và provider exception type chỉ được
+triển khai trong Infrastructure. Web request context, JWT generation, password hashing và local
+file storage cũng được Application sử dụng qua port và do API hoặc Infrastructure triển khai.
+Architecture regression test từ chối tham chiếu EF Core, ASP.NET Core và security library cụ thể
+trong `Application`.
 
-The compiler enforces `Application -> Domain` and
-`Infrastructure -> Application + Domain`; the API host references both to compose the process.
-Application services and infrastructure adapters own their registrations through their respective
-`DependencyInjection` classes. The API host composes those modules with its web, security and
-configuration registrations.
-`AppDbContext` discovers per-entity `IEntityTypeConfiguration<T>` implementations from
-`src/ECommerceBackend.Infrastructure/Data/Configurations`; indexes, constraints, relationships and authorization seed
-data are kept at that persistence boundary.
+Compiler cưỡng chế `Application -> Domain` và `Infrastructure -> Application + Domain`; API host
+tham chiếu cả hai để ghép ứng dụng. Application service và Infrastructure adapter tự đăng ký qua
+`DependencyInjection` tương ứng. API host ghép các module cùng đăng ký web, security và
+configuration.
 
-## Domain Invariants
+`AppDbContext` tự phát hiện các `IEntityTypeConfiguration<T>` trong
+`src/ECommerceBackend.Infrastructure/Data/Configurations`. Index, constraint, relationship và
+authorization seed data nằm tại persistence boundary này.
 
-`Order`, `Payment`, `Shipment` and `ReturnRequest` expose state changes through domain methods; their lifecycle and monetary
-setters are private. `OrderPricingPolicy` validates decimal scale, supported amount limits and
-consistent totals before an order is mutated. `InventoryPolicy` is the single rule boundary for
-order reservation and release, and returns the exact quantity movement and resulting balance for
-the immutable inventory ledger.
+## Bất biến domain
 
-Domain rules throw `DomainRuleViolationException` with stable codes. Application guards translate
-those failures to the existing HTTP 400 or 409 contracts without losing the domain code. Application
-services still own authorization, locking, transaction orchestration and persistence; they do not
-reimplement aggregate state rules.
+`Order`, `Payment`, `Shipment` và `ReturnRequest` chỉ cho thay đổi state qua domain method; lifecycle
+và monetary setter là private. `OrderPricingPolicy` xác minh decimal scale, amount limit được hỗ
+trợ và total nhất quán trước khi order bị thay đổi. `InventoryPolicy` là rule boundary duy nhất cho
+reserve/release stock và trả về chính xác quantity movement cùng resulting balance để ghi immutable
+inventory ledger.
 
-Business timestamps in checkout, order lifecycle and payment webhook flows come from the injected
-`TimeProvider`. One captured UTC timestamp is reused for all records produced by the same business
-event, which keeps histories and ledger entries deterministic in tests and consistent in storage.
-Database checks, unique indexes and row versions remain defense-in-depth beneath these domain rules.
+Domain rule ném `DomainRuleViolationException` với code ổn định. Application guard chuyển lỗi đó
+sang HTTP 400 hoặc 409 hiện có mà không làm mất domain code. Application service vẫn sở hữu
+authorization, locking, Transaction orchestration và persistence; service không hiện thực lại
+aggregate state rule.
 
-## Modules
+Business timestamp trong checkout, order lifecycle và Payment Webhook lấy từ `TimeProvider` được
+inject. Một UTC timestamp được capture và tái sử dụng cho mọi record sinh bởi cùng business event,
+giúp history và ledger xác định trong test và nhất quán trong storage. Database check, unique index
+và Row Version tiếp tục là lớp bảo vệ bổ sung bên dưới domain rule.
 
-- Auth: register, constant-work login, timed account lockout, single-use password reset,
-  token-family rotation, reuse detection, logout and logout-all.
-- Users: profile, password changes, paged administration, role assignment and last-admin protection.
-- Catalog: category hierarchy, products, images, search, filtering and paging.
-- Cart: one cart per user, unique product lines, at most 50 distinct products and current-price
-  availability checks. Legacy oversized carts remain readable and removable but cannot be quoted
-  or checked out until reduced to the supported limit. Cart reads are side-effect free: a missing
-  legacy cart returns an empty response, while registration or the first mutation persists it.
-- Orders: idempotent checkout, order snapshots, state transitions, shipment, cancellation and return workflow.
-- Pricing: server-side quote, shipping/tax policy, promotion limits and immutable redemption records.
-- Payments: centralized state machine, immutable status history, COD adapter and signed/idempotent webhook processing.
-- Inventory: current balance plus immutable stock movement ledger.
-- Reports: bounded UTC order/payment cohorts, cash flow, delivered-product ranking and low-stock snapshot.
-- Notifications: transactional outbox, retry/dead-letter dispatch and configurable SMTP sender.
+## Các module
 
-Public application service interfaces remain stable facades for controllers and hosted workers.
-The large auth, order and operations implementations are composed from focused use cases:
-registration/session/password reset, checkout/order queries/lifecycle commands, and
-dead-letter/audit/retention operations. Facades do not own `DbContext` or transaction dependencies.
-Session, shipment, order cancellation and return commands each have a dedicated use case.
-Checkout remains one transaction-owning use case and delegates cart loading, aggregate creation
-and persistence staging to focused collaborators.
+- Auth: register, constant-work login, timed account lockout, password reset dùng một lần,
+  token-family rotation, reuse detection, logout và logout-all.
+- Users: profile, password change, administration có phân trang, role assignment và bảo vệ Admin
+  cuối cùng.
+- Catalog: category hierarchy, product, image, search, filter và paging.
+- Cart: một cart mỗi user, product line duy nhất, tối đa 50 product khác nhau và kiểm tra
+  availability theo giá hiện tại. Legacy cart quá lớn vẫn đọc và xóa được nhưng không thể quote
+  hoặc checkout cho đến khi giảm về giới hạn. Cart read không có side effect: cart legacy chưa tồn
+  tại trả empty response; registration hoặc mutation đầu tiên mới persist cart.
+- Orders: idempotent checkout, order snapshot, state transition, shipment, cancellation và return
+  workflow.
+- Pricing: server-side quote, shipping/tax policy, promotion limit và immutable redemption record.
+- Payments: state machine tập trung, immutable status history, COD adapter và signed/idempotent
+  Webhook processing.
+- Inventory: current balance cùng immutable stock movement ledger.
+- Reports: bounded UTC order/payment cohort, cash flow, delivered-product ranking và low-stock
+  snapshot.
+- Notifications: Transactional Outbox, retry/dead-letter dispatch và SMTP sender cấu hình được.
 
-Application source ownership is organized under `Features/<Capability>`. Each capability keeps its
-DTOs, validators, service contracts, use cases and repository contracts together, while shared
-transaction, consistency and request-context ports remain under `Interfaces`. Existing namespaces
-stay stable so this physical reorganization does not change public contracts or dependency
-direction.
+Public application service interface là facade ổn định cho controller và hosted worker. Các phần
+Auth, Order và Operations lớn được ghép từ use case tập trung: registration/session/password reset,
+checkout/order query/lifecycle command, dead-letter/audit/retention operation. Facade không sở hữu
+`DbContext` hoặc Transaction dependency. Session, shipment, order cancellation và return command
+có use case riêng. Checkout vẫn là use case sở hữu Transaction và giao việc tải cart, tạo aggregate
+cùng staging persistence cho collaborator tập trung.
 
-Repositories are feature-specific rather than generic. Their contracts expose business-oriented
-queries and persistence operations without leaking `DbSet` or `IQueryable`. Application services
-retain transaction orchestration and call `IUnitOfWork` at the same commit points as the business
-use case; all repositories in one request share the same scoped `AppDbContext`.
+Application source được tổ chức dưới `Features/<Capability>`. Mỗi capability đặt DTO, validator,
+service contract, use case và repository contract cùng nhau; transaction, consistency và
+request-context port dùng chung nằm dưới `Interfaces`. Namespace hiện có được giữ ổn định nên việc
+tổ chức vật lý không đổi public contract hoặc dependency direction.
 
-## Testing Boundaries
+Repository được thiết kế theo feature thay vì generic repository. Contract expose business query
+và persistence operation, không làm lộ `DbSet` hoặc `IQueryable`. Application service giữ
+Transaction orchestration và gọi `IUnitOfWork` tại cùng commit point của use case; mọi repository
+trong một request dùng chung scoped `AppDbContext`.
 
-`ECommerceBackend.UnitTests` references only Application and Domain. It covers validators, domain
-invariants, policies and state machines without API hosting or persistence adapters.
+## Ranh giới kiểm thử
 
-`ECommerceBackend.IntegrationTests` references the API composition root and is organized by
-feature. EF Core InMemory tests verify service/repository composition only; they are not used as
-evidence for relational constraints, transactions or concurrency. Tests tagged
-`SqlServerIntegration`, `SqlServerRecoveryIntegration` and `SqlServerPerformance` use an isolated
-SQL Server database for those guarantees. OpenAPI and architecture contract tests remain in this
-project because they verify the assembled system rather than one class in isolation.
+`ECommerceBackend.UnitTests` chỉ tham chiếu Application và Domain. Project này kiểm tra validator,
+domain invariant, policy và state machine mà không host API hoặc persistence adapter.
 
-## Checkout Flow
+`ECommerceBackend.IntegrationTests` tham chiếu API composition root và được tổ chức theo feature.
+EF Core InMemory test chỉ xác minh service/repository composition; chúng không được dùng làm bằng
+chứng cho relational constraint, Transaction hoặc concurrency. Test có tag
+`SqlServerIntegration`, `SqlServerRecoveryIntegration` và `SqlServerPerformance` dùng database SQL
+Server cô lập cho các bảo đảm đó. OpenAPI và architecture contract test nằm trong project này vì
+chúng xác minh hệ thống đã ghép thay vì một class độc lập.
+
+## Luồng checkout
 
 ```text
-Idempotency-Key lookup
-  -> lock cart
-  -> repeat idempotency lookup
-  -> reject carts above the 50-line transaction boundary
-  -> lock products in stable ID order
-  -> lock promotion and recheck global/customer limits
-  -> validate active products, price, stock and server-side quote
-  -> create Pending Order + recipient/OrderDetails snapshots + Payment + StatusHistory
-  -> snapshot promotion, shipping method and all monetary components
-  -> increment promotion usage + append PromotionRedemption
-  -> set a bounded inventory hold expiration
-  -> reserve stock + append InventoryTransactions
-  -> clear cart
-  -> one SaveChanges + commit
+Tra cứu Idempotency-Key
+  -> khóa cart
+  -> tra cứu lại Idempotency-Key
+  -> từ chối cart vượt giới hạn Transaction 50 dòng
+  -> khóa product theo thứ tự ID ổn định
+  -> khóa promotion và kiểm tra lại giới hạn tổng/theo Customer
+  -> xác minh active product, giá, stock và server-side quote
+  -> tạo Pending Order + recipient/OrderDetails snapshot + Payment + StatusHistory
+  -> snapshot promotion, shipping method và mọi money component
+  -> tăng promotion usage + thêm PromotionRedemption
+  -> đặt inventory hold expiration có giới hạn
+  -> reserve stock + thêm InventoryTransaction
+  -> xóa cart
+  -> một SaveChanges + commit
 ```
 
-The same user and idempotency key return the original order. Reusing that key with a
-different address, note, payment method, shipping method or promotion returns `409 Conflict`.
-`POST /api/v1/orders/quote` is informational and expires after the configured interval. Checkout
-never trusts a total from the client: it recalculates the quote after locking the relevant rows.
-Promotion usage is consumed when the order is committed and is not restored by cancellation.
-Clients may send the optional `ExpectedTotalAmount` from the latest quote. Checkout returns
-`409 checkout_price_changed` before mutating state when the authoritative total no longer matches.
-The free-standard-shipping threshold and configured tax rate apply to merchandise subtotal after
-discount; shipping itself is not included in the taxable amount.
+Cùng user và Idempotency key sẽ nhận lại order ban đầu. Tái sử dụng key với address, note, payment
+method, shipping method hoặc promotion khác trả `409 Conflict`. `POST /api/v1/orders/quote` chỉ
+mang tính thông tin và hết hạn sau khoảng cấu hình. Checkout không tin total từ client: quote được
+tính lại sau khi các row liên quan đã bị khóa. Promotion usage được dùng khi order commit và không
+được hoàn lại khi hủy đơn.
 
-## Order And Payment State
+Client có thể gửi `ExpectedTotalAmount` từ quote gần nhất. Checkout trả
+`409 checkout_price_changed` trước mutation nếu authoritative total đã thay đổi. Ngưỡng miễn phí
+standard shipping và tax rate cấu hình áp dụng trên merchandise subtotal sau discount; shipping
+không nằm trong taxable amount.
+
+## Trạng thái đơn hàng và thanh toán
 
 ```text
 Order: Pending -> Confirmed -> Shipping -> Delivered -> ReturnRequested
@@ -159,287 +161,281 @@ Payment: Pending <-> RequiresAction <-> Processing
             |              |
             +--------------+---------------> Failed / Cancelled
 
-COD reaches Paid when the order is Delivered and Cancelled when the order is Cancelled.
+COD đạt Paid khi Order là Delivered và đạt Cancelled khi Order là Cancelled.
 ```
 
-The lifecycle decision tables are the source of truth for commands and tests:
+Các decision table sau là nguồn sự thật cho command và test:
 
-| Current order | Accepted next state | Required condition |
+| Trạng thái order hiện tại | Trạng thái tiếp theo được chấp nhận | Điều kiện bắt buộc |
 | --- | --- | --- |
-| `Pending` | `Confirmed`, `Cancelled` | Cancellation requires payment not to be `Paid` or `Refunded` |
-| `Confirmed` | `Shipping`, `Cancelled` | Dispatch owns `Shipping`; cancellation requires payment not to be `Paid` or `Refunded` |
-| `Shipping` | `Delivered`, `DeliveryFailed` | Shipment workflow owns delivery; failure requires an operational note |
-| `DeliveryFailed` | `Shipping`, `Cancelled` | Retry must use the existing carrier and tracking number; cancellation requires payment not to be `Paid` or `Refunded` |
-| `Delivered` | `ReturnRequested` | Payment must be `Paid` and the request must be within the return window |
-| `ReturnRequested` | `ReturnApproved`, `Delivered` | Approval continues the return; rejection restores `Delivered` |
-| `ReturnApproved` | `Returned` | Approved goods must be received and inspected |
-| `Returned` | `Refunded` | Payment and return request must already be `Refunded` |
-| `Cancelled` | None | Terminal |
-| `Refunded` | None | Terminal |
+| `Pending` | `Confirmed`, `Cancelled` | Cancellation yêu cầu payment chưa là `Paid` hoặc `Refunded` |
+| `Confirmed` | `Shipping`, `Cancelled` | Dispatch sở hữu `Shipping`; cancellation yêu cầu payment chưa là `Paid` hoặc `Refunded` |
+| `Shipping` | `Delivered`, `DeliveryFailed` | Shipment workflow sở hữu delivery; failure yêu cầu operational note |
+| `DeliveryFailed` | `Shipping`, `Cancelled` | Retry phải dùng carrier và tracking number hiện có; cancellation yêu cầu payment chưa là `Paid` hoặc `Refunded` |
+| `Delivered` | `ReturnRequested` | Payment phải là `Paid` và request còn trong return window |
+| `ReturnRequested` | `ReturnApproved`, `Delivered` | Approval tiếp tục return; rejection khôi phục `Delivered` |
+| `ReturnApproved` | `Returned` | Hàng đã duyệt phải được nhận và kiểm tra |
+| `Returned` | `Refunded` | Payment và return request phải đã là `Refunded` |
+| `Cancelled` | Không có | Terminal state |
+| `Refunded` | Không có | Terminal state |
 
-At the domain boundary, changing to the current state is an idempotent no-op. API commands may
-still reject a generic transition when a dedicated shipment, return or refund command owns it.
+Tại domain boundary, chuyển sang state hiện tại là idempotent no-op. API command vẫn có thể từ
+chối generic transition khi một shipment, return hoặc refund command chuyên biệt sở hữu transition.
 
-| Current payment | Accepted next state | Retry behavior |
+| Trạng thái payment hiện tại | Trạng thái tiếp theo được chấp nhận | Hành vi retry |
 | --- | --- | --- |
-| `Pending` | `RequiresAction`, `Processing`, `Paid`, `Failed`, `Cancelled` | Create/reconcile/webhook retries are idempotent |
-| `RequiresAction` | `Pending`, `Processing`, `Paid`, `Failed`, `Cancelled` | A later provider observation may move the payment forward or back to pending |
-| `Processing` | `Pending`, `RequiresAction`, `Paid`, `Failed`, `Cancelled` | Reconciliation repairs a missed provider event under a lease |
-| `Paid` | `PartiallyRefunded`, `Refunded` | Refund amount and original currency are validated before transition |
-| `PartiallyRefunded` | `Refunded` | Cumulative refund cannot exceed the paid amount |
-| `Failed` | None | Terminal |
-| `Cancelled` | None | Terminal |
-| `Refunded` | None | Terminal; another provider event is audited without another notification |
+| `Pending` | `RequiresAction`, `Processing`, `Paid`, `Failed`, `Cancelled` | Create/reconcile/Webhook retry là idempotent |
+| `RequiresAction` | `Pending`, `Processing`, `Paid`, `Failed`, `Cancelled` | Provider observation sau có thể đẩy payment tiến lên hoặc về pending |
+| `Processing` | `Pending`, `RequiresAction`, `Paid`, `Failed`, `Cancelled` | Reconciliation sửa event bị lỡ dưới lease |
+| `Paid` | `PartiallyRefunded`, `Refunded` | Refund amount và currency gốc được validate trước transition |
+| `PartiallyRefunded` | `Refunded` | Cumulative refund không vượt paid amount |
+| `Failed` | Không có | Terminal state |
+| `Cancelled` | Không có | Terminal state |
+| `Refunded` | Không có | Terminal; provider event khác được audit nhưng không gửi notification mới |
 
-| Shipment situation | Result |
+| Tình huống shipment | Kết quả |
 | --- | --- |
-| Confirmed order without shipment | Create shipment and move to `Shipping` |
-| Shipping order with the same carrier/tracking | Idempotent replay |
-| Shipping order with different carrier/tracking | `409 shipment_identity_mismatch` |
-| Delivery failed with the same carrier/tracking | Record another `Shipping` attempt |
-| Delivery failed with different carrier/tracking | `409 shipment_identity_mismatch` |
-| Delivered shipment replay | Idempotent replay; COD is collected once |
+| Confirmed order chưa có shipment | Tạo shipment và chuyển sang `Shipping` |
+| Shipping order có cùng carrier/tracking | Idempotent replay |
+| Shipping order có carrier/tracking khác | `409 shipment_identity_mismatch` |
+| Delivery failed với cùng carrier/tracking | Ghi một lần thử `Shipping` khác |
+| Delivery failed với carrier/tracking khác | `409 shipment_identity_mismatch` |
+| Replay shipment đã delivered | Idempotent replay; COD chỉ được thu một lần |
 
-| Return situation | Result |
+| Tình huống return | Kết quả |
 | --- | --- |
-| Delivered, paid, in-window order without a request | Create one `Pending` request and move the order to `ReturnRequested` |
-| Existing request with the same normalized reason | Idempotent replay at its current outcome |
-| Existing request with another reason | `409 return_request_already_exists` |
-| Rejected request | Terminal; a second request is not created for the same order |
-| Pending request approved/rejected | Move to `Approved`, or `Rejected` and restore order to `Delivered` |
-| Approved request received | Restore stock once and move request/order to `Received`/`Returned` |
-| Received request refunded with the same reference | Complete once, then return the stored result on replay |
-| Refunded request replayed with another reference | `409 refund_reference_mismatch` |
+| Order delivered, paid, còn trong thời hạn và chưa có request | Tạo một request `Pending` và chuyển order sang `ReturnRequested` |
+| Request hiện có cùng normalized reason | Idempotent replay tại outcome hiện tại |
+| Request hiện có với reason khác | `409 return_request_already_exists` |
+| Request bị từ chối | Terminal; không tạo request thứ hai cho cùng order |
+| Pending request được duyệt/từ chối | Chuyển sang `Approved`, hoặc `Rejected` và khôi phục order về `Delivered` |
+| Approved request được nhận | Hoàn stock một lần và chuyển request/order sang `Received`/`Returned` |
+| Received request được refund với cùng reference | Hoàn tất một lần, replay trả kết quả đã lưu |
+| Refunded request replay bằng reference khác | `409 refund_reference_mismatch` |
 
-Stock is reserved while an order is Pending. Shipment dispatch requires a carrier and tracking
-number. A delivery failure keeps stock reserved; staff can retry the same shipment or cancel.
-Customer return requests are bounded by `Returns:ReturnWindowDays`; Staff approves or rejects them.
-Stock is restored only when approved goods are physically received and inspected.
+Stock được giữ khi order là `Pending`. Shipment dispatch yêu cầu carrier và tracking number.
+Delivery failure tiếp tục giữ stock; Staff có thể retry cùng shipment hoặc hủy. Customer return
+request bị giới hạn bởi `Returns:ReturnWindowDays`; Staff duyệt hoặc từ chối. Stock chỉ được hoàn
+khi hàng đã duyệt được nhận vật lý và kiểm tra.
 
-`POST /api/v1/orders/{id}/refund` selects the refund path from the original payment method. COD
-records an already-completed external refund after the return has been received. Card payments
-reserve a `PaymentRefund`, commit, call Stripe outside the SQL transaction, then complete the
-payment, return request, order histories, audit and outbox in a second short transaction. The
-reference is an idempotency key; partial and full refunds preserve original and VND base snapshots,
-and cumulative refund cannot exceed the captured amount.
+`POST /api/v1/orders/{id}/refund` chọn refund path theo payment method gốc. COD ghi nhận external
+refund đã hoàn thành sau khi return được nhận. Card payment reserve một `PaymentRefund`, commit,
+gọi Stripe ngoài SQL Transaction, sau đó hoàn tất payment, return request, order history, audit và
+Outbox trong Transaction ngắn thứ hai. Reference là Idempotency key; partial/full refund giữ
+snapshot currency gốc và VND base, còn cumulative refund không vượt captured amount.
 
-Pending COD orders expire after the configured hold period. The expiration worker selects a bounded
-batch by `(Status, ExpiresAt, Id)`, then locks each order and rechecks its state inside a transaction.
-Expiration is represented as `Cancelled` with `CancellationReason=SystemExpired` and `ExpiredAt` so
-existing API consumers do not need a new enum value. Customer cancellation is limited to an owned
-`Pending` order. Checkout serializes on the customer cart and rejects creation above the configured
-pending-order limit.
+Pending COD order hết hạn sau thời gian giữ cấu hình. Expiration worker chọn batch có giới hạn theo
+`(Status, ExpiresAt, Id)`, rồi khóa từng order và kiểm tra lại state trong Transaction. Expiration
+được biểu diễn bằng `Cancelled` cùng `CancellationReason=SystemExpired` và `ExpiredAt`, nên API
+consumer hiện tại không cần enum mới. Customer cancellation chỉ áp dụng cho owned `Pending` order.
+Checkout serialize theo customer cart và từ chối tạo mới khi vượt pending-order limit cấu hình.
 
-## Payment Webhooks
+## Payment Webhook
 
-`GET /api/v1/payments/methods` is the public capability contract for checkout clients. It lists only
-methods that have a registered checkout provider; webhook-only adapters are excluded. Checkout
-still resolves the selected method server-side and rejects an unregistered provider, so publishing
-a new enum value alone cannot enable an incomplete payment path.
+`GET /api/v1/payments/methods` là public capability contract cho checkout client. Endpoint chỉ liệt
+kê method có checkout provider đã đăng ký; adapter chỉ có Webhook không được công bố. Checkout vẫn
+resolve method phía server và từ chối provider chưa đăng ký, vì vậy chỉ thêm enum value không thể
+bật một payment path chưa hoàn chỉnh.
 
-`POST /api/v1/payments/webhooks/{providerCode}` reads a bounded, strict UTF-8 raw body. The generic
-HMAC adapter verifies `HMAC_SHA256(secret, eventId + "." + rawBody)` from
-`X-Payment-Signature`; `X-Payment-Event-Id` is unique per provider. Reusing an event ID with
-different content returns `409`. A replay returns the result stored for the original event,
-even if the payment has since moved to another state.
+`POST /api/v1/payments/webhooks/{providerCode}` đọc strict UTF-8 raw body có giới hạn. Generic HMAC
+adapter xác minh `HMAC_SHA256(secret, eventId + "." + rawBody)` từ `X-Payment-Signature`;
+`X-Payment-Event-Id` là duy nhất theo provider. Tái sử dụng event ID với content khác trả `409`.
+Replay trả kết quả đã lưu cho event ban đầu dù payment đã chuyển state sau đó.
 
-The generic HMAC adapter remains a Development/Testing contract sample and is rejected in
-Production. Stripe has a provider-specific adapter for PaymentIntent creation/query, refunds and
-signed webhooks. Stripe is disabled unless its test credentials and webhook secret are supplied;
-deterministic tests prove the contract but are not evidence of an external sandbox run.
+Generic HMAC adapter chỉ là Development/Testing contract sample và bị từ chối trong Production.
+Stripe có provider-specific adapter cho tạo/truy vấn PaymentIntent, refund và signed Webhook.
+Stripe bị tắt nếu thiếu test credential hoặc Webhook secret; deterministic test chứng minh contract
+nhưng không phải bằng chứng đã chạy external sandbox.
 
-Webhook processing retains the SHA-256 payload hash by default, not the raw body. Set
-`PaymentWebhooks:GenericHmac:RetainRawPayload=true` only for a time-bounded investigation after
-confirming that the provider payload contains no data that should be minimized.
+Mặc định Webhook processing chỉ giữ SHA-256 payload hash, không giữ raw body. Chỉ bật
+`PaymentWebhooks:GenericHmac:RetainRawPayload=true` cho điều tra có thời hạn sau khi xác nhận provider
+payload không chứa dữ liệu cần tối thiểu hóa.
 
-Provider transitions include `RequiresAction`, `Processing`, `Paid`, `Failed`, `Cancelled`,
-`PartiallyRefunded` and `Refunded`. Every accepted event is audited; a replay or an event that
-leaves the payment in the same state does not add another status-history row or notification.
-Remote gateway I/O is always performed outside inventory/order SQL transactions.
+Provider transition gồm `RequiresAction`, `Processing`, `Paid`, `Failed`, `Cancelled`,
+`PartiallyRefunded` và `Refunded`. Mỗi event hợp lệ được audit; replay hoặc event giữ payment ở cùng
+state không tạo status-history row hay notification khác. Remote gateway I/O luôn chạy ngoài
+inventory/order SQL Transaction.
 
-Capture events must match the server-side amount and currency. Refund events must use the original
-payment currency and cannot push cumulative refund above the captured amount. Provider occurrence
-timestamps cannot predate payment creation, refunds cannot predate payment capture, and timestamps
-beyond the configured future-clock tolerance are rejected.
-Order lifecycle updates and payment webhooks both lock `Order -> Payment`; cancellation then locks
-products in stable GUID order. This prevents cancellation and capture from committing an invalid
-`Cancelled` order with a `Paid` payment.
+Capture event phải khớp server-side amount và currency. Refund event phải dùng payment currency
+gốc và không được đẩy cumulative refund vượt captured amount. Provider occurrence timestamp không
+được trước lúc tạo payment, refund không được trước payment capture, và timestamp vượt future-clock
+tolerance cấu hình bị từ chối.
+
+Order lifecycle update và Payment Webhook cùng khóa `Order -> Payment`; cancellation sau đó khóa
+product theo thứ tự GUID ổn định. Quy tắc này ngăn cancellation và capture commit tổ hợp order
+`Cancelled` nhưng payment `Paid` không hợp lệ.
 
 ## Transactional Outbox
 
-Order placement, order status changes and payment webhooks append notification messages in
-the same database transaction as business data. The background dispatcher atomically claims
-messages, retries with exponential backoff and dead-letters after the configured attempt count.
-Delivery is at-least-once; notification adapters receive the outbox ID as an idempotency key.
-Enqueue, lease, completion, retry and backlog-health timestamps use the injected UTC clock.
-SMTP messages also use a deterministic RFC `Message-ID` derived from that outbox ID, so every
-retry of the same message carries the same delivery identity. This gives downstream mail systems
-a stable deduplication signal, but does not claim exactly-once delivery: a process can stop after
-SMTP accepts a message and before the database records completion. After the lease expires, the
-dispatcher intentionally delivers that message again with the same `Message-ID`.
+Order placement, order status change và Payment Webhook thêm notification message trong cùng
+database Transaction với business data. Background dispatcher claim message atomically, retry với
+exponential backoff và dead-letter sau số lần thử cấu hình. Delivery là at-least-once; notification
+adapter nhận Outbox ID làm Idempotency key. Enqueue, lease, completion, retry và backlog-health
+timestamp dùng UTC clock được inject.
 
-The project does not persist a separate provider-delivery receipt because SMTP does not expose a
-portable idempotent acknowledgement contract. Provider-specific delivery tracking should only be
-introduced with an email API whose contract and operational requirements can enforce it.
+SMTP message cũng dùng RFC `Message-ID` xác định từ Outbox ID, vì vậy mọi retry của cùng message có
+cùng delivery identity. Downstream mail system nhận được tín hiệu deduplication ổn định, nhưng dự án
+không tuyên bố exactly-once: process có thể dừng sau khi SMTP nhận message và trước khi database ghi
+completion. Khi lease hết hạn, dispatcher chủ ý gửi lại message với cùng `Message-ID`.
 
-When `Outbox:RequireProcessing=true`, readiness also requires a recent dispatcher heartbeat. This
-detects a stopped dispatcher before its backlog reaches the age threshold.
+Dự án không lưu provider-delivery receipt riêng vì SMTP không cung cấp portable idempotent
+acknowledgement contract. Provider-specific delivery tracking chỉ nên thêm khi dùng email API có
+contract và operational requirement đủ để cưỡng chế.
 
-Admins can inspect dead letters without receiving their payload and re-drive one message at a
-time. Re-drive locks the message, rechecks terminal state, resets retry state and appends an audit
-event in one transaction. Concurrent or repeated requests are idempotent.
+Khi `Outbox:RequireProcessing=true`, readiness còn yêu cầu dispatcher heartbeat gần đây. Điều này
+phát hiện dispatcher dừng trước khi backlog vượt age threshold.
 
-## Operations And Audit
+Admin có thể xem dead letter mà không nhận payload và redrive từng message. Redrive khóa message,
+kiểm tra lại terminal state, reset retry state và thêm audit event trong một Transaction. Request
+đồng thời hoặc lặp là idempotent.
 
-Privileged role, catalogue, product-image and order-status mutations append an `AuditEvent` before
-their transaction commits. Events contain bounded metadata, actor, forwarded client IP and the
-request correlation ID; secrets and request payloads are excluded. Admin-only operations endpoints
-provide paged audit/dead-letter reads and bounded upload reconciliation.
+## Vận hành và audit
 
-Upload reconciliation compares `/uploads/products` with `ProductImages`. Dry-run is the default.
-Cleanup only touches application-generated orphan names older than the configured grace period;
-missing referenced files are reported and never removed from the database automatically.
+Mutation đặc quyền cho role, catalog, product image và order status thêm `AuditEvent` trước khi
+Transaction commit. Event chứa metadata có giới hạn, actor, forwarded client IP và request
+correlation ID; secret và request payload bị loại bỏ. Endpoint Operations chỉ dành cho Admin cung
+cấp audit/dead-letter read có phân trang và upload reconciliation có giới hạn.
 
-## Consistency Rules
+Upload reconciliation so sánh `/uploads/products` với `ProductImages`. Dry-run là mặc định. Cleanup
+chỉ chạm tới application-generated orphan name cũ hơn grace period cấu hình; file được tham chiếu
+nhưng bị thiếu chỉ được báo cáo và không bị tự động xóa khỏi database.
 
-- Cart mutations serialize per cart.
-- Order lifecycle, shipment, return and webhook mutations lock the order before dependent rows.
-- Checkout and cancellation lock product rows in stable GUID order.
-- Checkout preflights every cart line after acquiring product locks and before mutating any stock,
-  order, payment or cart state; an unavailable line therefore leaves the entire cart unchanged.
-- Catalogue writes lock categories before products; multi-category updates lock category GUIDs in ascending order.
-- Product-image mutations use the product row as their serialization boundary and load image state after acquiring that lock.
-- Product administration writes stock through `InventoryPolicy`; the returned mutation is persisted verbatim in the inventory ledger.
-- Product, category, order, payment, user and refresh-token rows use row-version concurrency.
-- Category uniqueness is enforced both in code and filtered SQL unique indexes.
-- Historical order names and prices come from `OrderDetails`, not the current product row.
-- Every stock change caused by product administration or an order appends an inventory entry.
-- Database constraints prevent duplicate order lines, payment outcomes and order inventory movements.
-  Order lifecycle writes serialize on the locked order row so repeated delivery attempts can retain
-  multiple `Shipping` and `DeliveryFailed` history entries.
-- Payment and webhook status outcomes are persisted as immutable audit data with valid state/value constraints.
+## Quy tắc nhất quán
 
-## Reporting Semantics
+- Cart mutation được serialize theo cart.
+- Order lifecycle, shipment, return và Webhook mutation khóa order trước dependent row.
+- Checkout và cancellation khóa product row theo thứ tự GUID ổn định.
+- Checkout preflight mọi cart line sau khi lấy product lock và trước khi thay đổi stock, order,
+  payment hoặc cart; một line không khả dụng vì vậy để toàn bộ cart không đổi.
+- Catalog write khóa category trước product; update nhiều category khóa category GUID tăng dần.
+- Product-image mutation dùng product row làm serialization boundary và tải image state sau lock.
+- Product administration ghi stock qua `InventoryPolicy`; mutation trả về được persist nguyên vẹn
+  trong inventory ledger.
+- Product, category, order, payment, user và Refresh Token row dùng Row Version concurrency.
+- Category uniqueness được cưỡng chế cả trong code và filtered SQL unique index.
+- Historical order name và price lấy từ `OrderDetails`, không lấy product row hiện tại.
+- Mọi stock change do product administration hoặc order đều thêm inventory entry.
+- Database constraint ngăn order line, payment outcome và order inventory movement trùng. Order
+  lifecycle write serialize theo locked order row nên delivery attempt lặp vẫn có thể giữ nhiều
+  history entry `Shipping` và `DeliveryFailed`.
+- Payment và Webhook status outcome được lưu thành immutable audit data với constraint state/value
+  hợp lệ.
 
-`GET /api/v1/reports/sales-summary` uses the half-open UTC range `[From, To)` and limits a
-request to 366 days. `TotalOrders` and `OrdersByStatus` are cohorts of orders created in the
-range. `DeliveredOrders`, `CancelledOrders` and top products use the matching
-`OrderStatusHistory` transition time. Gross cash collected uses `PaidAt`; refunds use the
-`Refunded` payment history occurrence time; net revenue is gross collected minus refunds in the
-range.
+## Ngữ nghĩa báo cáo
 
-When the caller omits report dates, the service captures the injected UTC clock once and uses
-the deterministic window `[now - 30 days, now)`. Invalid ranges, excessive ranges, low-stock
-thresholds and top-product limits expose stable business error codes. SQL Server integration
-tests lock the inclusion of `From`, exclusion of `To`, refund occurrence semantics and historical
-product-name snapshots.
+`GET /api/v1/reports/sales-summary` dùng half-open UTC range `[From, To)` và giới hạn request ở 366
+ngày. `TotalOrders` và `OrdersByStatus` là cohort order được tạo trong khoảng. `DeliveredOrders`,
+`CancelledOrders` và top product dùng transition time tương ứng trong `OrderStatusHistory`. Gross
+cash collected dùng `PaidAt`; refund dùng occurrence time của payment history `Refunded`; net
+revenue bằng gross collected trừ refund trong khoảng.
 
-Top products include only orders delivered in the range, aggregate once per `ProductId`, and use
-the latest historical name snapshot in that cohort. Low-stock count is a current inventory snapshot
-using the requested threshold, not a historical value.
-Top-product revenue is gross merchandise value from `OrderDetails` snapshots; order-level
-discounts, shipping fees and taxes are intentionally not allocated across individual lines.
+Khi caller bỏ report date, service capture UTC clock một lần và dùng window xác định
+`[now - 30 days, now)`. Range không hợp lệ, range quá lớn, low-stock threshold và top-product limit
+trả stable business error code. SQL Server integration test cố định quy tắc bao gồm `From`, loại
+`To`, ngữ nghĩa refund occurrence và historical product-name snapshot.
 
-## Authorization
+Top product chỉ gồm order delivered trong khoảng, aggregate một lần theo `ProductId` và dùng latest
+historical name snapshot trong cohort. Low-stock count là current inventory snapshot theo threshold
+yêu cầu, không phải historical value. Top-product revenue là gross merchandise value từ
+`OrderDetails` snapshot; order-level discount, shipping fee và tax chủ ý không được phân bổ xuống
+từng line.
 
-JWT roles are informational; protected administration endpoints require permission claims.
-Access-token validation also verifies the user token version and an active refresh-token
-family in SQL Server. Password and role changes revoke all existing sessions immediately.
-Customer cart, order, cancellation and return commands scope every lookup to the authenticated
-user; a cross-owner identifier returns `404` rather than disclosing that the resource exists.
-Role assignment forbids self-changes and runs under `Serializable` isolation with a
-transaction-scoped `ECommerceBackend.RoleAssignment` application lock. Concurrent demotions
-therefore cannot remove the last active `Admin`; the second command observes the committed first
-change and rejects removal of the remaining admin.
+## Phân quyền
 
-A user account is the serialization boundary for session mutations. Login, refresh, logout,
-logout-all, password changes and role changes lock the user before touching refresh tokens;
-the fixed `User -> RefreshToken` lock order prevents a concurrent refresh from surviving a
-session revocation. Refresh-token rotation and revocation are domain methods with private
-mutation setters, and token activity is evaluated against an explicit UTC timestamp.
+JWT role chỉ mang tính thông tin; protected administration endpoint yêu cầu permission claim.
+Access-token validation còn xác minh user token version và active Refresh Token family trong SQL
+Server. Password hoặc role change thu hồi mọi session hiện có ngay lập tức. Customer cart, order,
+cancellation và return command luôn scope lookup theo user đã xác thực; cross-owner identifier trả
+`404` thay vì tiết lộ resource tồn tại.
 
-Identity services and the admin bootstrapper use the injected `TimeProvider`. Token creation,
-rotation, family revocation, password changes and JWT expiry therefore share deterministic
-security timestamps. Identity conflicts expose stable error codes while preserving the
-existing HTTP 400, 401 and 409 status contracts.
+Role assignment cấm self-change và chạy dưới isolation `Serializable` với Transaction-scoped
+application lock `ECommerceBackend.RoleAssignment`. Hai demotion đồng thời vì vậy không thể xóa
+active `Admin` cuối cùng; command thứ hai thấy commit của command đầu và từ chối xóa Admin còn lại.
 
-Login performs a BCrypt verification for both known and unknown user names, returns the same
-unauthorized contract and applies a configurable, automatically expiring lockout after repeated
-failures. Password-reset requests intentionally return the same success response for registered
-and unknown email addresses. Reset tokens are random, stored only as SHA-256 hashes, expire,
-are single-use and are serialized per user. Completing a reset increments the user token version
-and revokes every refresh-token family.
+User account là serialization boundary cho session mutation. Login, refresh, logout, logout-all,
+password change và role change khóa user trước Refresh Token; lock order `User -> RefreshToken` cố
+định ngăn concurrent refresh sống sót sau session revocation. Refresh Token rotation và revocation
+là domain method với private mutation setter; token activity được đánh giá tại UTC timestamp tường
+minh.
 
-Password-reset notifications use a Data Protection protected outbox payload so the raw reset
-token is not stored as readable JSON. Email verification has its own hashed, expiring, single-use
-token and records `User.EmailVerifiedAt`. It is intentionally not an enforced sign-in condition;
-making it mandatory requires an explicit enrollment and compatibility policy for existing users.
+Identity service và Admin bootstrapper dùng `TimeProvider` được inject. Token creation, rotation,
+family revocation, password change và JWT expiry vì vậy dùng security timestamp xác định. Identity
+conflict trả stable error code trong khi giữ HTTP 400, 401 và 409 contract hiện có.
 
-## Operations
+Login thực hiện BCrypt verification cho cả username tồn tại và không tồn tại, trả cùng unauthorized
+contract và áp dụng lockout tự hết hạn sau nhiều lần thất bại. Password-reset request cố ý trả cùng
+success response cho email đã đăng ký và không tồn tại. Reset token là random, chỉ lưu SHA-256 hash,
+có thời hạn, dùng một lần và được serialize theo user. Hoàn tất reset tăng user token version và
+thu hồi mọi Refresh Token family.
 
-Every request receives an `X-Correlation-ID` response header. A caller-provided ID is accepted
-only when it is 1-128 ASCII letters, digits, dots, underscores or hyphens; otherwise the server
-uses the current activity trace ID or generates one. The same value becomes `traceId` in error
-responses and a Serilog property in request, console and rolling-file logs. Activity IDs use W3C
-format; `TraceId` and `SpanId` are separate structured log properties for cross-service tracing.
+Password-reset notification dùng Data Protection protected Outbox payload nên raw reset token
+không được lưu dưới dạng JSON đọc được. Email verification có token hash, thời hạn và single-use
+riêng, đồng thời ghi `User.EmailVerifiedAt`. Trạng thái này chủ ý chưa phải điều kiện sign-in; bật
+bắt buộc cần enrollment và compatibility policy rõ cho user hiện có.
 
-All responses also carry `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
-`Referrer-Policy: no-referrer` and a restrictive permissions policy. These headers are added before
-static product images are served as well as before API middleware runs.
+## Vận hành
 
-Catalogue reads pass request cancellation into EF Core and split collection includes to avoid a
-cartesian product when products have multiple images. Query count, duration and returned item
-count are emitted without recording search text. The bounded `catalog.outcome` tag distinguishes
-successful, cancelled and failed database queries so optimization decisions include unsuccessful
-traffic instead of measuring only the happy path. Full-text search and response caching remain
-measurement-gated because their operational cost and invalidation rules are not yet justified.
+Mỗi request nhận response header `X-Correlation-ID`. Caller-provided ID chỉ được chấp nhận khi dài
+1-128 ký tự ASCII gồm chữ, số, dấu chấm, underscore hoặc hyphen; nếu không, server dùng current
+activity trace ID hoặc tạo mới. Cùng giá trị trở thành `traceId` trong error response và Serilog
+property trong request, console và rolling-file log. Activity ID dùng W3C format; `TraceId` và
+`SpanId` là structured log property riêng cho cross-service tracing.
 
-The existing product and order list endpoints retain their version 1 response contracts. Clients
-that only render list rows can use `/api/v1/products/summaries`,
-`/api/v1/orders/my/summaries` and `/api/v1/orders/summaries`. These endpoints project only list
-fields in SQL and do not materialize product image collections, order details, payment history or
-status history. Detail endpoints remain the source for complete aggregate views.
+Mọi response còn có `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: no-referrer` và restrictive permissions policy. Các header được thêm trước khi
+static product image được phục vụ và trước API middleware.
 
-Exception, MVC validation, authentication, authorization and rate-limit failures share the
-`application/problem+json` contract. Standard `ProblemDetails` fields coexist with the stable
-compatibility fields `message`, `code`, `traceId`, `details` and `errors`.
-Fixed-window limits are bound from the startup-validated `RateLimiting` section; changing a limit
-requires an application restart and does not change the current in-process deployment boundary.
-Rejected fixed-window leases expose their remaining delay as a delta-seconds `Retry-After` header
-alongside the standard `rate_limit_exceeded` ProblemDetails body.
-Client-facing titles and messages are Vietnamese while `code` remains a stable English identifier.
-Version 1 is available under `/api/v1`; the original `/api` routes assume version 1 and remain
-covered by contract tests for backward compatibility.
+Catalog read truyền request cancellation vào EF Core và split collection include để tránh
+cartesian product khi product có nhiều image. Query count, duration và returned-item count được phát
+mà không ghi search text. Tag `catalog.outcome` có giới hạn phân biệt query thành công, bị cancel và
+thất bại, để quyết định tối ưu không chỉ đo happy path. Full-text search và response cache tiếp tục
+phụ thuộc bằng chứng đo vì operational cost và invalidation rule chưa được chứng minh cần thiết.
 
-`/health/live` contains only the in-process self check. `/health/ready` verifies SQL Server,
-product-image storage write access, outbox processing, pending-order expiration and data-retention
-worker state. The local-storage probe creates, flushes and removes a uniquely named temporary file;
-it does not leave an upload record or database row. Dependency checks share the startup-validated
-`HealthChecks:DependencyTimeoutSeconds` limit and propagate timeout/request cancellation through
-their I/O calls. Public health endpoints return only aggregate status; per-check descriptions and
-data are restricted to Admin through `/health/details`.
+Product và order list endpoint hiện có giữ response contract v1. Client chỉ render list row có thể
+dùng `/api/v1/products/summaries`, `/api/v1/orders/my/summaries` và
+`/api/v1/orders/summaries`. Các endpoint này project list field ngay trong SQL và không materialize
+product image collection, order detail, payment history hoặc status history. Detail endpoint tiếp
+tục là nguồn complete aggregate view.
 
-Client-aborted requests are recorded as cancellation instead of an internal server error and do
-not attempt to write JSON to a closed connection. Exceptions raised after response headers start
-are rethrown because replacing a partially written response would corrupt the HTTP contract.
+Exception, MVC validation, authentication, authorization và rate-limit failure dùng chung contract
+`application/problem+json`. Standard `ProblemDetails` field tồn tại cùng compatibility field ổn định
+`message`, `code`, `traceId`, `details` và `errors`.
 
-## Deliberate Boundaries
+Fixed-window limit được bind từ section `RateLimiting` đã validate khi startup; thay limit cần
+restart ứng dụng và không đổi in-process deployment boundary. Rejected fixed-window lease trả phần
+thời gian còn lại trong header `Retry-After` dạng delta-seconds cùng ProblemDetails
+`rate_limit_exceeded`. Title và message cho client dùng tiếng Việt; `code` giữ English identifier
+ổn định. Version 1 có tại `/api/v1`; route `/api` cũ mặc định version 1 và được contract test bảo vệ
+tương thích ngược.
 
-- Local image storage is retained behind the fully asynchronous `IProductImageStorage` port for
-  the current deployment scope; `IUploadService` continues to own image validation and
-  product-image rules.
-- Static serving is limited to generated product images under `/uploads/products`; only JPG, PNG
-  and WEBP content types are exposed and responses disable MIME sniffing.
-- SQL command timeout is configured through `Database:CommandTimeoutSeconds`. EF Core retry is not
-  enabled globally because checkout, order lifecycle and webhooks own explicit transactions and
-  locks; retries must wrap each complete business operation before they are introduced.
-- COD is always available. Stripe card checkout is available only when the provider is enabled and
-  supplied through external configuration; the generic HMAC provider stays Development/Testing-only.
-- Currency snapshots support VND, USD and EUR with VND as the reporting base. The CurrencyAPI
-  adapter uses timeout, process-local cache, single-flight and a bounded stale fallback.
-- Shipping fee, discount and tax are calculated from configured server-side rules; live carrier
-  pricing and jurisdiction-specific tax remain outside the current scope.
-- Payment adapters are validated before persistence: provider codes must be route-safe, checkout
-  methods must be defined, initial states must follow the payment state machine, and webhook-capable
-  checkout providers must return a bounded transaction ID.
-- Product variants and live carrier/tax integrations remain future domain modules.
+`/health/live` chỉ chứa in-process self check. `/health/ready` kiểm tra SQL Server, quyền ghi
+product-image storage, Outbox processing, pending-order expiration và data-retention worker state.
+Local-storage probe tạo, flush rồi xóa unique temporary file; không để lại upload record hoặc
+database row. Dependency check dùng chung timeout
+`HealthChecks:DependencyTimeoutSeconds` đã validate khi startup và truyền timeout/request
+cancellation qua I/O. Public health endpoint chỉ trả aggregate status; dữ liệu từng check chỉ dành
+cho Admin tại `/health/details`.
+
+Client-aborted request được ghi là cancellation thay vì internal server error và không cố ghi JSON
+vào connection đã đóng. Exception sau khi response header đã bắt đầu được rethrow vì thay response
+đang ghi dở sẽ phá HTTP contract.
+
+## Ranh giới chủ ý
+
+- Local image storage được giữ sau asynchronous `IProductImageStorage` port cho phạm vi triển khai
+  hiện tại; `IUploadService` tiếp tục sở hữu image validation và product-image rule.
+- Static serving chỉ dành cho generated product image dưới `/uploads/products`; chỉ JPG, PNG và WEBP
+  được phục vụ, response tắt MIME sniffing.
+- SQL command timeout cấu hình qua `Database:CommandTimeoutSeconds`. EF Core retry không bật toàn cục
+  vì checkout, order lifecycle và Webhook sở hữu explicit Transaction và lock; retry phải bọc toàn
+  business operation nếu được thêm sau này.
+- COD luôn khả dụng. Stripe card checkout chỉ khả dụng khi provider được bật và cấu hình từ bên
+  ngoài; generic HMAC provider chỉ dùng Development/Testing.
+- Currency snapshot hỗ trợ VND, USD và EUR với VND là reporting base. CurrencyAPI adapter dùng
+  timeout, process-local cache, single-flight và stale fallback có giới hạn.
+- Shipping fee, discount và tax được tính từ server-side rule cấu hình; live carrier pricing và
+  jurisdiction-specific tax ngoài phạm vi hiện tại.
+- Payment adapter được validate trước persistence: provider code phải route-safe, checkout method
+  phải được định nghĩa, initial state phải theo payment state machine và Webhook-capable checkout
+  provider phải trả transaction ID có giới hạn.
+- Product variant cùng live carrier/tax integration là future domain module.
