@@ -198,8 +198,21 @@ Compose sẽ khởi động SQL Server, chạy EF Core migration bằng service 
 - Liveness: <http://localhost:5171/health/live>
 - Readiness: <http://localhost:5171/health/ready>
 
-Sau khi Admin được tạo thành công, đặt `ADMIN_BOOTSTRAP_ENABLED=false` và khởi động lại API. Dừng
-ứng dụng nhưng giữ dữ liệu local bằng:
+Sau khi Admin được tạo thành công, đặt `ADMIN_BOOTSTRAP_ENABLED=false` và khởi động lại API.
+
+### Dữ liệu demo tùy chọn
+
+Sau khi migration hoàn tất, có thể seed dữ liệu demo vào SQL Server local bằng `sqlcmd`. Thay giá
+trị password bên dưới bằng `MSSQL_SA_PASSWORD` trong `.env`:
+
+```powershell
+sqlcmd -S localhost,1433 -U sa -P "<MSSQL_SA_PASSWORD>" -C -d ECommerceDB -b -f 65001 -v EnvironmentName=Development -i scripts/SeedDemoData.sql
+```
+
+Biến `EnvironmentName` là bắt buộc. Script chỉ chấp nhận `Development`, `Local` hoặc `Testing` và
+từ chối database có tên chứa `Prod` hoặc `Production`.
+
+Dừng ứng dụng nhưng giữ dữ liệu local bằng:
 
 ```powershell
 docker compose down
