@@ -15,7 +15,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
     [Migration("20260721114935_AddPendingOrderLifecycle")]
     partial class AddPendingOrderLifecycle
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

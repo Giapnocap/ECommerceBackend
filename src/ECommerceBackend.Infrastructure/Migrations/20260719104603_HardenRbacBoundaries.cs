@@ -4,10 +4,8 @@
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class HardenRbacBoundaries : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateIndex(
@@ -17,7 +15,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 unique: true);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(

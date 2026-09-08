@@ -5,10 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddPrivilegedAuditTrail : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -54,7 +52,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 columns: new[] { "EntityType", "EntityId", "CreatedAt" });
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

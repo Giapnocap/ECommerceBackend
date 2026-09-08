@@ -15,7 +15,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
     [Migration("20260717160641_CompleteBackendFoundation")]
     partial class CompleteBackendFoundation
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

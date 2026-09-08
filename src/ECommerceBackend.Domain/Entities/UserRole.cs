@@ -7,7 +7,6 @@ namespace ECommerceBackend.Domain.Entities
         public Guid UserId { get; internal set; }
         public Guid RoleId { get; internal set; }
 
-        // Navigation
         public User? User { get; set; }
         public Role? Role { get; set; }
 

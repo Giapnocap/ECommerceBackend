@@ -4,10 +4,8 @@
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddRefundMoneySnapshots : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<decimal>(
@@ -90,7 +88,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 sql: "LEN([BaseCurrency]) = 3 AND [BaseCurrency] = UPPER([BaseCurrency])");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropCheckConstraint(

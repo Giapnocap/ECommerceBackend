@@ -15,7 +15,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
     [Migration("20260726065143_OptimizeCatalogDefaultSort")]
     partial class OptimizeCatalogDefaultSort
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

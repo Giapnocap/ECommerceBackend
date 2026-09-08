@@ -15,7 +15,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
     [Migration("20260724152822_HardenAuthenticationFlows")]
     partial class HardenAuthenticationFlows
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

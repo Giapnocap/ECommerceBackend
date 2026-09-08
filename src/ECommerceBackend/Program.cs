@@ -100,7 +100,6 @@ try
 }
 catch (Exception ex) when (ex.GetType().Name == "HostAbortedException")
 {
-    // EF Core tooling aborts the host during design-time discovery.
 }
 catch (Exception ex)
 {

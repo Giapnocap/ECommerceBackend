@@ -15,7 +15,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
     [Migration("20260719112657_HardenPaymentLifecycleAndWebhookAudit")]
     partial class HardenPaymentLifecycleAndWebhookAudit
     {
-        /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618

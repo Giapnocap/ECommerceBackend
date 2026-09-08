@@ -5,10 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class HardenAuthenticationFlows : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<int>(
@@ -72,7 +70,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 filter: "[ConsumedAt] IS NULL AND [RevokedAt] IS NULL");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

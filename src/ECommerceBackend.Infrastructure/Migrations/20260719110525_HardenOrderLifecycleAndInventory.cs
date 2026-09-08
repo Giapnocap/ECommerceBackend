@@ -4,10 +4,8 @@
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class HardenOrderLifecycleAndInventory : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
@@ -54,7 +52,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 sql: "([Type] = 0 AND [QuantityChange] > 0) OR ([Type] = 1 AND [QuantityChange] <> 0) OR ([Type] = 2 AND [QuantityChange] < 0) OR ([Type] = 3 AND [QuantityChange] > 0)");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(

@@ -60,8 +60,8 @@ namespace ECommerceBackend.Application.DTOs
         public Guid? CategoryId { get; set; }
         public decimal? MinPrice { get; set; }
         public decimal? MaxPrice { get; set; }
-        public string? SortBy { get; set; }       // name | price | createdAt
-        public string? SortOrder { get; set; }    // asc | desc
+        public string? SortBy { get; set; }
+        public string? SortOrder { get; set; }
         public int Page { get; set; } = 1;
         public int PageSize { get; set; } = 12;
     }

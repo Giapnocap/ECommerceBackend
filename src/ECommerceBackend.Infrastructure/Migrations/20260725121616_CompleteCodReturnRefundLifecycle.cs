@@ -4,10 +4,8 @@
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class CompleteCodReturnRefundLifecycle : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropCheckConstraint(
@@ -74,7 +72,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 sql: "[Type] BETWEEN 0 AND 4");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropCheckConstraint(

@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Quản lý khách hàng dành cho quản trị viên</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/admin/customers")]
@@ -26,7 +25,6 @@ namespace ECommerceBackend.API.Controllers
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>Lấy danh sách khách hàng có tìm kiếm, lọc trạng thái và phân trang</summary>
         [HttpGet]
         [ProducesResponseType(typeof(PagedResult<CustomerListItemResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetCustomers(
@@ -34,7 +32,6 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _customerService.GetCustomersAsync(query, cancellationToken));
 
-        /// <summary>Lấy hồ sơ và các chỉ số tổng hợp của khách hàng</summary>
         [HttpGet("{customerId:guid}")]
         [ProducesResponseType(typeof(CustomerDetailResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetCustomer(
@@ -42,7 +39,6 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _customerService.GetCustomerDetailAsync(customerId, cancellationToken));
 
-        /// <summary>Lấy đơn hàng của một khách hàng theo trang</summary>
         [HttpGet("{customerId:guid}/orders")]
         [ProducesResponseType(typeof(PagedResult<CustomerOrderResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetOrders(
@@ -51,7 +47,6 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _customerService.GetOrdersAsync(customerId, query, cancellationToken));
 
-        /// <summary>Lấy yêu cầu trả hàng của một khách hàng theo trang</summary>
         [HttpGet("{customerId:guid}/returns")]
         [ProducesResponseType(typeof(PagedResult<CustomerReturnResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetReturns(
@@ -60,7 +55,6 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _customerService.GetReturnsAsync(customerId, query, cancellationToken));
 
-        /// <summary>Khóa khách hàng và thu hồi toàn bộ phiên đăng nhập đang hoạt động</summary>
         [HttpPost("{customerId:guid}/lock")]
         [ProducesResponseType(typeof(CustomerAccountStatusResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Lock(
@@ -71,7 +65,6 @@ namespace ECommerceBackend.API.Controllers
                 customerId,
                 cancellationToken));
 
-        /// <summary>Mở khóa khách hàng; token cũ vẫn không được khôi phục</summary>
         [HttpPost("{customerId:guid}/unlock")]
         [ProducesResponseType(typeof(CustomerAccountStatusResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> Unlock(

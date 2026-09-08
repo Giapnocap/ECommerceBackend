@@ -5,10 +5,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class HardenOutboxDeliveryAndOperations : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(
@@ -58,7 +56,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 sql: "([ProcessedAt] IS NULL AND [DeadLetteredAt] IS NULL) OR ([LockId] IS NULL AND [LockedAt] IS NULL)");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(

@@ -4,7 +4,6 @@ namespace ECommerceBackend.Application.Common
     {
         public const string SectionName = "DataRetention";
 
-        // Deletion remains opt-in even when an administrator requests an applied run.
         public bool Enabled { get; set; }
         public bool AutomaticProcessingEnabled { get; set; }
         public bool RequireAutomaticProcessing { get; set; }

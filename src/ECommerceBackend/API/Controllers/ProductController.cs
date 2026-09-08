@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Quản lý sản phẩm</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/products")]
@@ -31,7 +30,6 @@ namespace ECommerceBackend.API.Controllers
             _uploadService = uploadService;
         }
 
-        /// <summary>Lấy danh sách sản phẩm có phân trang, lọc và sắp xếp</summary>
         [HttpGet]
         [AllowAnonymous]
         [ProducesResponseType(typeof(PagedResult<ProductResponse>), StatusCodes.Status200OK)]
@@ -43,7 +41,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Lấy danh sách tóm tắt sản phẩm bằng truy vấn gọn</summary>
         [HttpGet("summaries")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(PagedResult<ProductSummaryResponse>), StatusCodes.Status200OK)]
@@ -57,7 +54,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Lấy chi tiết sản phẩm theo Id</summary>
         [HttpGet("{id:guid}")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
@@ -68,7 +64,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Tạo sản phẩm mới</summary>
         [HttpPost]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
@@ -84,7 +79,6 @@ namespace ECommerceBackend.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
 
-        /// <summary>[Admin] Cập nhật sản phẩm</summary>
         [HttpPut("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
@@ -102,7 +96,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Điều chỉnh tồn kho sản phẩm</summary>
         [HttpPut("{id:guid}/stock")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
@@ -124,7 +117,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Xóa mềm sản phẩm</summary>
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
@@ -134,7 +126,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(new { message = "Xóa sản phẩm thành công." });
         }
 
-        /// <summary>[Admin] Tải ảnh lên cho sản phẩm</summary>
         [HttpPost("{id:guid}/images")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [EnableRateLimiting("upload")]
@@ -155,7 +146,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Xóa ảnh sản phẩm</summary>
         [HttpDelete("{id:guid}/images/{imageId:guid}")]
         [Authorize(Policy = PermissionNames.ManageProducts)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]

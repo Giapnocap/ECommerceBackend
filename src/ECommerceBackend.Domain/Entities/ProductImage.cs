@@ -7,7 +7,6 @@ namespace ECommerceBackend.Domain.Entities
         public string ImageUrl { get; set; } = string.Empty;
         public bool IsMain { get; set; } = false;
 
-        // Navigation
         public Product? Product { get; set; }
     }
 }

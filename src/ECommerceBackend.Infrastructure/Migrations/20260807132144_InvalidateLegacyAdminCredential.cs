@@ -4,10 +4,8 @@
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class InvalidateLegacyAdminCredential : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql(
@@ -21,10 +19,8 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 """);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            // Invalidated credentials must never be restored by rollback.
         }
     }
 }

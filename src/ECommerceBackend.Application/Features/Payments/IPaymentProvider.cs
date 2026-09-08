@@ -40,7 +40,6 @@ namespace ECommerceBackend.Application.Interfaces
         bool SupportsWebhooks { get; }
         bool RequiresExternalInitialization => false;
 
-        // Must be local and side-effect free because checkout holds database row locks.
         PaymentInitializationResult Initialize(PaymentInitializationRequest request);
         Task<VerifiedPaymentWebhook> VerifyWebhookAsync(
             PaymentWebhookRequest request,

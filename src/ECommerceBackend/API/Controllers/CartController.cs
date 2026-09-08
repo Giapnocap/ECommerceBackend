@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Quản lý giỏ hàng</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/cart")]
@@ -22,7 +21,6 @@ namespace ECommerceBackend.API.Controllers
 
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>Lấy giỏ hàng của tôi</summary>
         [HttpGet]
         [ProducesResponseType(typeof(CartResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetMyCart(CancellationToken cancellationToken)
@@ -31,7 +29,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Thêm sản phẩm vào giỏ hàng</summary>
         [HttpPost("items")]
         [ProducesResponseType(typeof(CartResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> AddItem(
@@ -42,7 +39,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Cập nhật số lượng sản phẩm trong giỏ (quantity = 0 để xóa)</summary>
         [HttpPut("items/{cartItemId:guid}")]
         [ProducesResponseType(typeof(CartResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> UpdateItem(
@@ -54,7 +50,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Xóa sản phẩm khỏi giỏ hàng</summary>
         [HttpDelete("items/{cartItemId:guid}")]
         [ProducesResponseType(typeof(CartResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> RemoveItem(Guid cartItemId, CancellationToken cancellationToken)
@@ -63,7 +58,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Xóa toàn bộ giỏ hàng</summary>
         [HttpDelete]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> ClearCart(CancellationToken cancellationToken)

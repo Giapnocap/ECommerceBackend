@@ -4,10 +4,8 @@
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class HardenProductImagesAndCategories : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql(
@@ -109,7 +107,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 sql: "[ParentId] IS NULL OR [ParentId] <> [Id]");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropCheckConstraint(

@@ -11,7 +11,6 @@ namespace ECommerceBackend.Domain.Entities
         public bool IsDeleted { get; internal set; }
         public byte[] RowVersion { get; set; } = [];
 
-        // Navigation
         public Category? Parent { get; set; }
         public ICollection<Category> Children { get; set; } = new List<Category>();
         public ICollection<Product> Products { get; set; } = new List<Product>();

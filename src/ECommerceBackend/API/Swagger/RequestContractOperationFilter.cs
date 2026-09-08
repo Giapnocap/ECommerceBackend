@@ -8,6 +8,16 @@ namespace ECommerceBackend.API.Swagger
     {
         public void Apply(OpenApiOperation operation, OperationFilterContext context)
         {
+            if (operation.Parameters != null)
+            {
+                foreach (var parameter in operation.Parameters.Where(parameter =>
+                    parameter.In == ParameterLocation.Path
+                    && string.IsNullOrWhiteSpace(parameter.Description)))
+                {
+                    parameter.Description = "Mã định danh tài nguyên trên đường dẫn.";
+                }
+            }
+
             if (IsAction<OrderController>(context, nameof(OrderController.PlaceOrder)))
             {
                 ConfigureRequiredHeader(

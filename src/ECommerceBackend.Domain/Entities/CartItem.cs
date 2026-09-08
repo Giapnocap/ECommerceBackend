@@ -11,7 +11,6 @@ namespace ECommerceBackend.Domain.Entities
         public int Quantity { get; internal set; }
         public decimal UnitPrice { get; internal set; }
 
-        // Navigation
         public Cart? Cart { get; set; }
         public Product? Product { get; set; }
 

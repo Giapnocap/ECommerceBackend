@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Phân tích hiệu quả mã khuyến mãi dành cho quản trị viên</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/admin/promotions")]
@@ -23,12 +22,6 @@ namespace ECommerceBackend.API.Controllers
             _promotionService = promotionService;
         }
 
-        /// <summary>Xếp hạng hiệu quả các mã khuyến mãi</summary>
-        /// <remarks>
-        /// from và to lọc theo thời điểm đổi mã. GrossRevenue là tổng tạm tính đơn hàng,
-        /// NetRevenue là tổng tạm tính trừ giảm giá; hai chỉ số không đại diện cho tiền đã thu,
-        /// phí vận chuyển, thuế hoặc số tiền hoàn.
-        /// </remarks>
         [HttpGet("analytics")]
         [ProducesResponseType(
             typeof(PagedResult<PromotionAnalyticsResponse>),
@@ -38,7 +31,6 @@ namespace ECommerceBackend.API.Controllers
             CancellationToken cancellationToken)
             => Ok(await _promotionService.GetAnalyticsAsync(query, cancellationToken));
 
-        /// <summary>Xem hiệu quả của một mã khuyến mãi</summary>
         [HttpGet("{id:guid}/analytics")]
         [ProducesResponseType(typeof(PromotionAnalyticsResponse), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetAnalyticsByPromotion(

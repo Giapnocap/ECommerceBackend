@@ -38,8 +38,6 @@ namespace ECommerceBackend.Infrastructure.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Soft delete is applied explicitly in services so required relationships
-            // such as OrderDetail -> Product can still preserve historical data.
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
         }
     }

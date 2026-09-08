@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Quản lý mã khuyến mãi</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/promotions")]
@@ -28,7 +27,6 @@ namespace ECommerceBackend.API.Controllers
             => Guid.Parse(
                 User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>[Admin] Lấy danh sách mã khuyến mãi</summary>
         [HttpGet]
         [ProducesResponseType(
             typeof(PagedResult<PromotionResponse>),
@@ -43,7 +41,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Lấy chi tiết mã khuyến mãi</summary>
         [HttpGet("{id:guid}")]
         [ProducesResponseType(
             typeof(PromotionResponse),
@@ -58,7 +55,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Tạo mã khuyến mãi</summary>
         [HttpPost]
         [ProducesResponseType(
             typeof(PromotionResponse),
@@ -77,7 +73,6 @@ namespace ECommerceBackend.API.Controllers
                 result);
         }
 
-        /// <summary>[Admin] Cập nhật chính sách mã khuyến mãi</summary>
         [HttpPut("{id:guid}")]
         [ProducesResponseType(
             typeof(PromotionResponse),
@@ -95,7 +90,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Ngừng sử dụng mã khuyến mãi</summary>
         [HttpDelete("{id:guid}")]
         [ProducesResponseType(
             typeof(MessageResponse),

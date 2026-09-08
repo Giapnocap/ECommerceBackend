@@ -8,7 +8,6 @@ using System.Security.Claims;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Quản lý danh mục sản phẩm</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/categories")]
@@ -20,7 +19,6 @@ namespace ECommerceBackend.API.Controllers
         public CategoryController(ICategoryService categoryService) => _categoryService = categoryService;
         private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-        /// <summary>Lấy tất cả danh mục (dạng cây cha-con)</summary>
         [HttpGet]
         [AllowAnonymous]
         [ProducesResponseType(typeof(IEnumerable<CategoryResponse>), StatusCodes.Status200OK)]
@@ -30,7 +28,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Lấy chi tiết danh mục theo Id</summary>
         [HttpGet("{id:guid}")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
@@ -40,7 +37,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Tạo danh mục mới</summary>
         [HttpPost]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status201Created)]
@@ -55,7 +51,6 @@ namespace ECommerceBackend.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
         }
 
-        /// <summary>[Admin] Cập nhật danh mục</summary>
         [HttpPut("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
@@ -72,7 +67,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>[Admin] Xóa mềm danh mục</summary>
         [HttpDelete("{id:guid}")]
         [Authorize(Policy = PermissionNames.ManageCategories)]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]

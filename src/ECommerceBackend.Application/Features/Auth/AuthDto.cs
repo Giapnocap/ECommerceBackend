@@ -1,6 +1,5 @@
 namespace ECommerceBackend.Application.DTOs
 {
-    // ===== REQUEST =====
     public class RegisterRequest
     {
         public string UserName { get; set; } = string.Empty;
@@ -42,7 +41,6 @@ namespace ECommerceBackend.Application.DTOs
         public string Token { get; set; } = string.Empty;
     }
 
-    // ===== RESPONSE =====
     public class AuthResponse
     {
         public Guid UserId { get; set; }

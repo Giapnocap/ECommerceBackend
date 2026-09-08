@@ -19,7 +19,6 @@ namespace ECommerceBackend.API.Swagger
                     .OfType<AllowAnonymousAttribute>()
                     .Any();
 
-            // AddECommerceAuthorization applies an authenticated fallback policy.
             return !allowsAnonymous;
         }
     }

@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Báo cáo tồn kho và lịch sử biến động</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/inventory")]
@@ -23,7 +22,6 @@ namespace ECommerceBackend.API.Controllers
             _inventoryService = inventoryService;
         }
 
-        /// <summary>Lấy lịch sử biến động tồn kho của một sản phẩm</summary>
         [HttpGet("products/{productId:guid}/transactions")]
         [ProducesResponseType(typeof(PagedResult<InventoryTransactionResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetTransactions(
@@ -38,7 +36,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Lấy danh sách sản phẩm sắp hết hàng</summary>
         [HttpGet("low-stock")]
         [ProducesResponseType(typeof(PagedResult<LowStockProductResponse>), StatusCodes.Status200OK)]
         public async Task<IActionResult> GetLowStock(

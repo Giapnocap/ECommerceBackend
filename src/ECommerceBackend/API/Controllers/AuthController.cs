@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Xác thực người dùng — Đăng ký / Đăng nhập</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/auth")]
@@ -24,7 +23,6 @@ namespace ECommerceBackend.API.Controllers
         private Guid CurrentSessionId => Guid.Parse(
             User.FindFirstValue(AuthClaimTypes.SessionId)!);
 
-        /// <summary>Đăng ký tài khoản mới (tự động gán vai trò Customer)</summary>
         [HttpPost("register")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -37,7 +35,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Đăng nhập và nhận mã truy cập JWT</summary>
         [HttpPost("login")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -50,7 +47,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Yêu cầu gửi hướng dẫn đặt lại mật khẩu</summary>
         [HttpPost("forgot-password")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -66,7 +62,6 @@ namespace ECommerceBackend.API.Controllers
             });
         }
 
-        /// <summary>Đặt lại mật khẩu bằng mã dùng một lần</summary>
         [HttpPost("reset-password")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -82,7 +77,6 @@ namespace ECommerceBackend.API.Controllers
             });
         }
 
-        /// <summary>Gửi lại liên kết xác minh email cho tài khoản hiện tại</summary>
         [HttpPost("email-verification")]
         [Authorize]
         [EnableRateLimiting("auth")]
@@ -99,7 +93,6 @@ namespace ECommerceBackend.API.Controllers
             });
         }
 
-        /// <summary>Xác minh email bằng mã dùng một lần</summary>
         [HttpPost("email-verification/confirm")]
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
@@ -115,7 +108,6 @@ namespace ECommerceBackend.API.Controllers
             });
         }
 
-        /// <summary>Liệt kê các phiên đăng nhập đang hoạt động</summary>
         [HttpGet("sessions")]
         [Authorize]
         [ProducesResponseType(
@@ -128,7 +120,6 @@ namespace ECommerceBackend.API.Controllers
                 CurrentSessionId,
                 cancellationToken));
 
-        /// <summary>Thu hồi một phiên đăng nhập theo mã phiên</summary>
         [HttpDelete("sessions/{sessionId:guid}")]
         [Authorize]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -143,7 +134,6 @@ namespace ECommerceBackend.API.Controllers
             return NoContent();
         }
 
-        /// <summary>Thu hồi toàn bộ phiên đăng nhập của tài khoản</summary>
         [HttpDelete("sessions")]
         [Authorize]
         [EnableRateLimiting("auth")]
@@ -155,7 +145,6 @@ namespace ECommerceBackend.API.Controllers
             return NoContent();
         }
 
-        /// <summary>Làm mới mã truy cập bằng mã làm mới</summary>
         [HttpPost("refresh")]
         [AllowAnonymous]
         [EnableRateLimiting("refresh")]
@@ -168,7 +157,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Đăng xuất và thu hồi mã làm mới hiện tại</summary>
         [HttpPost("logout")]
         [Authorize]
         [ProducesResponseType(typeof(MessageResponse), StatusCodes.Status200OK)]
@@ -180,7 +168,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(new { message = "Đăng xuất thành công." });
         }
 
-        /// <summary>Đăng xuất khỏi tất cả thiết bị và thu hồi toàn bộ phiên</summary>
         [HttpPost("logout-all")]
         [Authorize]
         [EnableRateLimiting("auth")]

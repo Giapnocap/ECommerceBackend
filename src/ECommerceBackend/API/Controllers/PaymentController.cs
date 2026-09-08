@@ -13,7 +13,6 @@ using Microsoft.Extensions.Options;
 
 namespace ECommerceBackend.API.Controllers
 {
-    /// <summary>Nhận thông báo thanh toán đã ký từ cổng được cấu hình</summary>
     [ApiController]
     [ApiVersion(1.0)]
     [Route("api/payments")]
@@ -49,7 +48,6 @@ namespace ECommerceBackend.API.Controllers
             AuthClaimTypes.Permission,
             PermissionNames.ProcessOrders);
 
-        /// <summary>Liệt kê các phương thức thanh toán đang khả dụng khi đặt hàng</summary>
         [HttpGet("methods")]
         [AllowAnonymous]
         [ProducesResponseType(typeof(IReadOnlyList<PaymentMethodResponse>), StatusCodes.Status200OK)]
@@ -69,7 +67,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(methods);
         }
 
-        /// <summary>Khởi tạo giao dịch thanh toán trực tuyến sau khi đơn hàng đã được lưu</summary>
         [HttpPost("orders/{orderId:guid}/initialize")]
         [Authorize]
         [EnableRateLimiting("checkout")]
@@ -85,8 +82,6 @@ namespace ECommerceBackend.API.Controllers
                 CanProcessOrders,
                 cancellationToken));
 
-        /// <summary>Xử lý thông báo đã ký từ cổng thanh toán</summary>
-        /// <remarks>Chữ ký được xác minh bằng chính xác nội dung JSON UTF-8 của yêu cầu.</remarks>
         [HttpPost("webhooks/{providerCode}")]
         [AllowAnonymous]
         [EnableRateLimiting("webhook")]
@@ -107,7 +102,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(result);
         }
 
-        /// <summary>Xử lý webhook Stripe bằng chữ ký trên raw request body</summary>
         [HttpPost("webhooks/stripe")]
         [AllowAnonymous]
         [EnableRateLimiting("webhook")]

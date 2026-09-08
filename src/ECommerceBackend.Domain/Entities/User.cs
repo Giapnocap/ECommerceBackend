@@ -180,7 +180,6 @@ namespace ECommerceBackend.Domain.Entities
                     "Không thể khóa tài khoản đã bị xóa.");
             }
 
-            // DateTime.MaxValue represents a manual lock that requires an explicit unlock.
             if (LockoutEndAt == DateTime.MaxValue)
                 return false;
 

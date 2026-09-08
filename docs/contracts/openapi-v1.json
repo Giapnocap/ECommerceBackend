@@ -35,10 +35,8 @@
       },
       "ApiErrorResponse": {
         "additionalProperties": {},
-        "description": "D\u1EEF li\u1EC7u l\u1ED7i chu\u1EA9n tr\u1EA3 v\u1EC1 t\u1EEB ki\u1EC3m tra d\u1EEF li\u1EC7u, quy t\u1EAFc nghi\u1EC7p v\u1EE5 v\u00E0 l\u1EDBp x\u1EED l\u00FD ngo\u1EA1i l\u1EC7.",
         "properties": {
           "code": {
-            "description": "M\u00E3 l\u1ED7i \u1ED5n \u0111\u1ECBnh d\u00E0nh cho \u1EE9ng d\u1EE5ng g\u1ECDi API.",
             "nullable": true,
             "type": "string"
           },
@@ -47,7 +45,6 @@
             "type": "string"
           },
           "details": {
-            "description": "Th\u00F4ng tin ch\u1EA9n \u0111o\u00E1n ch\u1EC9 xu\u1EA5t hi\u1EC7n trong m\u00F4i tr\u01B0\u1EDDng ph\u00E1t tri\u1EC3n khi c\u00F3.",
             "nullable": true,
             "type": "string"
           },
@@ -58,7 +55,6 @@
               },
               "type": "array"
             },
-            "description": "L\u1ED7i ki\u1EC3m tra d\u1EEF li\u1EC7u theo t\u00EAn thu\u1ED9c t\u00EDnh c\u1EE7a y\u00EAu c\u1EA7u.",
             "nullable": true,
             "type": "object"
           },
@@ -67,7 +63,6 @@
             "type": "string"
           },
           "message": {
-            "description": "Th\u00F4ng b\u00E1o l\u1ED7i d\u00E0nh cho ng\u01B0\u1EDDi d\u00F9ng.",
             "nullable": true,
             "type": "string"
           },
@@ -81,7 +76,6 @@
             "type": "string"
           },
           "traceId": {
-            "description": "M\u00E3 truy v\u1EBFt y\u00EAu c\u1EA7u d\u00F9ng \u0111\u1EC3 \u0111i\u1EC1u tra s\u1EF1 c\u1ED1.",
             "nullable": true,
             "type": "string"
           },
@@ -1473,10 +1467,8 @@
       },
       "MessageResponse": {
         "additionalProperties": false,
-        "description": "D\u1EEF li\u1EC7u th\u00F4ng b\u00E1o th\u00E0nh c\u00F4ng.",
         "properties": {
           "message": {
-            "description": "Th\u00F4ng b\u00E1o th\u00E0nh c\u00F4ng d\u00E0nh cho ng\u01B0\u1EDDi d\u00F9ng.",
             "nullable": true,
             "type": "string"
           }
@@ -3562,7 +3554,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y danh s\u00E1ch kh\u00E1ch h\u00E0ng c\u00F3 t\u00ECm ki\u1EBFm, l\u1ECDc tr\u1EA1ng th\u00E1i v\u00E0 ph\u00E2n trang",
         "tags": [
           "AdminCustomer"
         ]
@@ -3572,6 +3563,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "customerId",
             "required": true,
@@ -3638,7 +3630,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y h\u1ED3 s\u01A1 v\u00E0 c\u00E1c ch\u1EC9 s\u1ED1 t\u1ED5ng h\u1EE3p c\u1EE7a kh\u00E1ch h\u00E0ng",
         "tags": [
           "AdminCustomer"
         ]
@@ -3648,6 +3639,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "customerId",
             "required": true,
@@ -3714,7 +3706,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Kh\u00F3a kh\u00E1ch h\u00E0ng v\u00E0 thu h\u1ED3i to\u00E0n b\u1ED9 phi\u00EAn \u0111\u0103ng nh\u1EADp \u0111ang ho\u1EA1t \u0111\u1ED9ng",
         "tags": [
           "AdminCustomer"
         ]
@@ -3724,6 +3715,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "customerId",
             "required": true,
@@ -3806,7 +3798,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y \u0111\u01A1n h\u00E0ng c\u1EE7a m\u1ED9t kh\u00E1ch h\u00E0ng theo trang",
         "tags": [
           "AdminCustomer"
         ]
@@ -3816,6 +3807,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "customerId",
             "required": true,
@@ -3898,7 +3890,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y y\u00EAu c\u1EA7u tr\u1EA3 h\u00E0ng c\u1EE7a m\u1ED9t kh\u00E1ch h\u00E0ng theo trang",
         "tags": [
           "AdminCustomer"
         ]
@@ -3908,6 +3899,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "customerId",
             "required": true,
@@ -3974,7 +3966,6 @@
             "Bearer": []
           }
         ],
-        "summary": "M\u1EDF kh\u00F3a kh\u00E1ch h\u00E0ng; token c\u0169 v\u1EABn kh\u00F4ng \u0111\u01B0\u1EE3c kh\u00F4i ph\u1EE5c",
         "tags": [
           "AdminCustomer"
         ]
@@ -4096,7 +4087,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y c\u00E1c s\u1EA3n ph\u1EA9m c\u00F3 t\u1ED3n kho kh\u00F4ng v\u01B0\u1EE3t qu\u00E1 ng\u01B0\u1EE1ng",
         "tags": [
           "AdminDashboard"
         ]
@@ -4164,7 +4154,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y ph\u00E2n b\u1ED1 tr\u1EA1ng th\u00E1i \u0111\u01A1n h\u00E0ng hi\u1EC7n t\u1EA1i",
         "tags": [
           "AdminDashboard"
         ]
@@ -4242,7 +4231,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y ho\u1EA1t \u0111\u1ED9ng g\u1EA7n \u0111\u00E2y \u0111\u00E3 \u0111\u01B0\u1EE3c gi\u1EDBi h\u1EA1n t\u1EEB \u0111\u01A1n h\u00E0ng, tr\u1EA3 h\u00E0ng v\u00E0 audit",
         "tags": [
           "AdminDashboard"
         ]
@@ -4332,7 +4320,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y xu h\u01B0\u1EDBng doanh thu th\u1EF1c thu theo ng\u00E0y, tu\u1EA7n ho\u1EB7c th\u00E1ng",
         "tags": [
           "AdminDashboard"
         ]
@@ -4407,7 +4394,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y c\u00E1c ch\u1EC9 s\u1ED1 v\u1EADn h\u00E0nh ch\u00EDnh t\u1EA1i th\u1EDDi \u0111i\u1EC3m hi\u1EC7n t\u1EA1i",
         "tags": [
           "AdminDashboard"
         ]
@@ -4501,7 +4487,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y c\u00E1c s\u1EA3n ph\u1EA9m b\u00E1n ch\u1EA1y theo \u0111\u01A1n \u0111\u00E3 giao trong kho\u1EA3ng th\u1EDDi gian y\u00EAu c\u1EA7u",
         "tags": [
           "AdminDashboard"
         ]
@@ -4628,7 +4613,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y danh s\u00E1ch t\u1ED3n kho c\u00F3 t\u00ECm ki\u1EBFm, l\u1ECDc v\u00E0 ph\u00E2n trang",
         "tags": [
           "AdminInventory"
         ]
@@ -4638,6 +4622,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "productId",
             "required": true,
@@ -4740,7 +4725,6 @@
             "Bearer": []
           }
         ],
-        "summary": "\u0110i\u1EC1u ch\u1EC9nh t\u1ED3n kho sau ki\u1EC3m k\u00EA ho\u1EB7c x\u1EED l\u00FD ch\u00EAnh l\u1EC7ch",
         "tags": [
           "AdminInventory"
         ]
@@ -4750,6 +4734,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "productId",
             "required": true,
@@ -4863,7 +4848,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y l\u1ECBch s\u1EED bi\u1EBFn \u0111\u1ED9ng t\u1ED3n kho \u0111\u00E3 l\u1ECDc v\u00E0 ph\u00E2n trang",
         "tags": [
           "AdminInventory"
         ]
@@ -4873,6 +4857,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "productId",
             "required": true,
@@ -4975,7 +4960,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Nh\u1EADp th\u00EAm h\u00E0ng v\u00E0 ghi nh\u1EADn bi\u1EBFn \u0111\u1ED9ng t\u1ED3n kho nguy\u00EAn t\u1EED",
         "tags": [
           "AdminInventory"
         ]
@@ -4985,6 +4969,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "productId",
             "required": true,
@@ -5097,7 +5082,6 @@
             "Bearer": []
           }
         ],
-        "summary": "C\u1EADp nh\u1EADt ng\u01B0\u1EE1ng c\u1EA3nh b\u00E1o t\u1ED3n kho ri\u00EAng c\u1EE7a s\u1EA3n ph\u1EA9m",
         "tags": [
           "AdminInventory"
         ]
@@ -5105,7 +5089,6 @@
     },
     "/api/v1/admin/promotions/analytics": {
       "get": {
-        "description": "from v\u00E0 to l\u1ECDc theo th\u1EDDi \u0111i\u1EC3m \u0111\u1ED5i m\u00E3. GrossRevenue l\u00E0 t\u1ED5ng t\u1EA1m t\u00EDnh \u0111\u01A1n h\u00E0ng,\r\nNetRevenue l\u00E0 t\u1ED5ng t\u1EA1m t\u00EDnh tr\u1EEB gi\u1EA3m gi\u00E1; hai ch\u1EC9 s\u1ED1 kh\u00F4ng \u0111\u1EA1i di\u1EC7n cho ti\u1EC1n \u0111\u00E3 thu,\r\nph\u00ED v\u1EADn chuy\u1EC3n, thu\u1EBF ho\u1EB7c s\u1ED1 ti\u1EC1n ho\u00E0n.",
         "parameters": [
           {
             "in": "query",
@@ -5204,7 +5187,6 @@
             "Bearer": []
           }
         ],
-        "summary": "X\u1EBFp h\u1EA1ng hi\u1EC7u qu\u1EA3 c\u00E1c m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "AdminPromotionAnalytics"
         ]
@@ -5214,6 +5196,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -5306,7 +5289,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Xem hi\u1EC7u qu\u1EA3 c\u1EE7a m\u1ED9t m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "AdminPromotionAnalytics"
         ]
@@ -5314,7 +5296,6 @@
     },
     "/api/v1/admin/reports/customers": {
       "get": {
-        "description": "TopCustomers x\u1EBFp theo ti\u1EC1n \u0111\u00E3 thanh to\u00E1n tr\u1EEB ho\u00E0n ti\u1EC1n trong [from, to).",
         "parameters": [
           {
             "in": "query",
@@ -5398,7 +5379,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y ch\u1EC9 s\u1ED1 kh\u00E1ch h\u00E0ng v\u00E0 kh\u00E1ch h\u00E0ng chi ti\u00EAu cao nh\u1EA5t",
         "tags": [
           "AdminReport"
         ]
@@ -5406,7 +5386,6 @@
     },
     "/api/v1/admin/reports/orders": {
       "get": {
-        "description": "C\u00E1c tr\u1EA1ng th\u00E1i v\u00E0 t\u1EF7 l\u1EC7 \u0111\u01B0\u1EE3c t\u00EDnh t\u1EEB tr\u1EA1ng th\u00E1i hi\u1EC7n t\u1EA1i c\u1EE7a order \u0111\u01B0\u1EE3c t\u1EA1o trong [from, to).\r\nReturnedOrders g\u1ED3m tr\u1EA1ng th\u00E1i Returned v\u00E0 Refunded.",
         "parameters": [
           {
             "in": "query",
@@ -5482,7 +5461,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y th\u1ED1ng k\u00EA \u0111\u01A1n h\u00E0ng theo cohort ng\u00E0y t\u1EA1o \u0111\u01A1n",
         "tags": [
           "AdminReport"
         ]
@@ -5581,7 +5559,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y s\u1EA3n ph\u1EA9m b\u00E1n ch\u1EA1y theo th\u1EDDi \u0111i\u1EC3m chuy\u1EC3n sang Delivered v\u00E0 s\u1ED1 l\u01B0\u1EE3ng t\u1ED3n th\u1EA5p hi\u1EC7n t\u1EA1i",
         "tags": [
           "AdminReport"
         ]
@@ -5589,7 +5566,6 @@
     },
     "/api/v1/admin/reports/returns": {
       "get": {
-        "description": "ReturnRequestCount t\u00EDnh theo RequestedAt; ReturnRatePercent l\u1EA5y s\u1ED1 y\u00EAu c\u1EA7u tr\u1EA3 h\u00E0ng chia cho order t\u1EA1o trong [from, to).\r\nRefundAmount t\u00EDnh theo th\u1EDDi \u0111i\u1EC3m payment \u0111\u01B0\u1EE3c chuy\u1EC3n sang Refunded.",
         "parameters": [
           {
             "in": "query",
@@ -5673,7 +5649,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y ch\u1EC9 s\u1ED1 y\u00EAu c\u1EA7u tr\u1EA3 h\u00E0ng, ho\u00E0n ti\u1EC1n v\u00E0 c\u00E1c l\u00FD do ph\u1ED5 bi\u1EBFn",
         "tags": [
           "AdminReport"
         ]
@@ -5681,7 +5656,6 @@
     },
     "/api/v1/admin/reports/revenue": {
       "get": {
-        "description": "GrossRevenue t\u00EDnh t\u1EEB payment c\u00F3 PaidAt trong [from, to) v\u00E0 tr\u1EA1ng th\u00E1i hi\u1EC7n t\u1EA1i Paid ho\u1EB7c Refunded.\r\nRefundAmount t\u00EDnh t\u1EEB payment-status history chuy\u1EC3n sang Refunded trong [from, to).\r\nAverageOrderValue l\u00E0 GrossRevenue chia cho s\u1ED1 order c\u00F3 payment \u0111\u01B0\u1EE3c t\u00EDnh v\u00E0o GrossRevenue.",
         "parameters": [
           {
             "in": "query",
@@ -5764,7 +5738,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y doanh thu theo th\u1EDDi \u0111i\u1EC3m thanh to\u00E1n v\u00E0 ho\u00E0n ti\u1EC1n",
         "tags": [
           "AdminReport"
         ]
@@ -5849,7 +5822,6 @@
             "Bearer": []
           }
         ],
-        "summary": "G\u1EEDi l\u1EA1i li\u00EAn k\u1EBFt x\u00E1c minh email cho t\u00E0i kho\u1EA3n hi\u1EC7n t\u1EA1i",
         "tags": [
           "Auth"
         ]
@@ -5938,7 +5910,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "X\u00E1c minh email b\u1EB1ng m\u00E3 d\u00F9ng m\u1ED9t l\u1EA7n",
         "tags": [
           "Auth"
         ]
@@ -6017,7 +5988,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "Y\u00EAu c\u1EA7u g\u1EEDi h\u01B0\u1EDBng d\u1EABn \u0111\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u",
         "tags": [
           "Auth"
         ]
@@ -6096,7 +6066,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "\u0110\u0103ng nh\u1EADp v\u00E0 nh\u1EADn m\u00E3 truy c\u1EADp JWT",
         "tags": [
           "Auth"
         ]
@@ -6180,7 +6149,6 @@
             "Bearer": []
           }
         ],
-        "summary": "\u0110\u0103ng xu\u1EA5t v\u00E0 thu h\u1ED3i m\u00E3 l\u00E0m m\u1EDBi hi\u1EC7n t\u1EA1i",
         "tags": [
           "Auth"
         ]
@@ -6265,7 +6233,6 @@
             "Bearer": []
           }
         ],
-        "summary": "\u0110\u0103ng xu\u1EA5t kh\u1ECFi t\u1EA5t c\u1EA3 thi\u1EBFt b\u1ECB v\u00E0 thu h\u1ED3i to\u00E0n b\u1ED9 phi\u00EAn",
         "tags": [
           "Auth"
         ]
@@ -6354,7 +6321,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "L\u00E0m m\u1EDBi m\u00E3 truy c\u1EADp b\u1EB1ng m\u00E3 l\u00E0m m\u1EDBi",
         "tags": [
           "Auth"
         ]
@@ -6443,7 +6409,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "\u0110\u0103ng k\u00FD t\u00E0i kho\u1EA3n m\u1EDBi (t\u1EF1 \u0111\u1ED9ng g\u00E1n vai tr\u00F2 Customer)",
         "tags": [
           "Auth"
         ]
@@ -6532,7 +6497,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "\u0110\u1EB7t l\u1EA1i m\u1EADt kh\u1EA9u b\u1EB1ng m\u00E3 d\u00F9ng m\u1ED9t l\u1EA7n",
         "tags": [
           "Auth"
         ]
@@ -6610,7 +6574,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Thu h\u1ED3i to\u00E0n b\u1ED9 phi\u00EAn \u0111\u0103ng nh\u1EADp c\u1EE7a t\u00E0i kho\u1EA3n",
         "tags": [
           "Auth"
         ]
@@ -6676,7 +6639,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Li\u1EC7t k\u00EA c\u00E1c phi\u00EAn \u0111\u0103ng nh\u1EADp \u0111ang ho\u1EA1t \u0111\u1ED9ng",
         "tags": [
           "Auth"
         ]
@@ -6686,6 +6648,7 @@
       "delete": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "sessionId",
             "required": true,
@@ -6745,7 +6708,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Thu h\u1ED3i m\u1ED9t phi\u00EAn \u0111\u0103ng nh\u1EADp theo m\u00E3 phi\u00EAn",
         "tags": [
           "Auth"
         ]
@@ -6820,7 +6782,6 @@
             "Bearer": []
           }
         ],
-        "summary": "X\u00F3a to\u00E0n b\u1ED9 gi\u1ECF h\u00E0ng",
         "tags": [
           "Cart"
         ]
@@ -6883,7 +6844,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y gi\u1ECF h\u00E0ng c\u1EE7a t\u00F4i",
         "tags": [
           "Cart"
         ]
@@ -6977,7 +6937,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Th\u00EAm s\u1EA3n ph\u1EA9m v\u00E0o gi\u1ECF h\u00E0ng",
         "tags": [
           "Cart"
         ]
@@ -6987,6 +6946,7 @@
       "delete": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "cartItemId",
             "required": true,
@@ -7063,7 +7023,6 @@
             "Bearer": []
           }
         ],
-        "summary": "X\u00F3a s\u1EA3n ph\u1EA9m kh\u1ECFi gi\u1ECF h\u00E0ng",
         "tags": [
           "Cart"
         ]
@@ -7071,6 +7030,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "cartItemId",
             "required": true,
@@ -7176,7 +7136,6 @@
             "Bearer": []
           }
         ],
-        "summary": "C\u1EADp nh\u1EADt s\u1ED1 l\u01B0\u1EE3ng s\u1EA3n ph\u1EA9m trong gi\u1ECF (quantity = 0 \u0111\u1EC3 x\u00F3a)",
         "tags": [
           "Cart"
         ]
@@ -7219,7 +7178,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "L\u1EA5y t\u1EA5t c\u1EA3 danh m\u1EE5c (d\u1EA1ng c\u00E2y cha-con)",
         "tags": [
           "Category"
         ]
@@ -7311,7 +7269,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] T\u1EA1o danh m\u1EE5c m\u1EDBi",
         "tags": [
           "Category"
         ]
@@ -7321,6 +7278,7 @@
       "delete": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -7407,7 +7365,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] X\u00F3a m\u1EC1m danh m\u1EE5c",
         "tags": [
           "Category"
         ]
@@ -7415,6 +7372,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -7466,7 +7424,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "L\u1EA5y chi ti\u1EBFt danh m\u1EE5c theo Id",
         "tags": [
           "Category"
         ]
@@ -7474,6 +7431,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -7579,7 +7537,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] C\u1EADp nh\u1EADt danh m\u1EE5c",
         "tags": [
           "Category"
         ]
@@ -7701,7 +7658,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y danh s\u00E1ch s\u1EA3n ph\u1EA9m s\u1EAFp h\u1EBFt h\u00E0ng",
         "tags": [
           "Inventory"
         ]
@@ -7711,6 +7667,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "productId",
             "required": true,
@@ -7824,7 +7781,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y l\u1ECBch s\u1EED bi\u1EBFn \u0111\u1ED9ng t\u1ED3n kho c\u1EE7a m\u1ED9t s\u1EA3n ph\u1EA9m",
         "tags": [
           "Inventory"
         ]
@@ -7952,7 +7908,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Tra c\u1EE9u nh\u1EADt k\u00FD b\u1EA3o m\u1EADt v\u00E0 nghi\u1EC7p v\u1EE5",
         "tags": [
           "Operations"
         ]
@@ -7962,6 +7917,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -8038,7 +7994,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Xem chi ti\u1EBFt m\u1ED9t b\u1EA3n ghi nh\u1EADt k\u00FD b\u1EA3o m\u1EADt ho\u1EB7c nghi\u1EC7p v\u1EE5",
         "tags": [
           "Operations"
         ]
@@ -8122,7 +8077,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Xem tr\u01B0\u1EDBc ho\u1EB7c \u00E1p d\u1EE5ng ch\u00EDnh s\u00E1ch l\u01B0u gi\u1EEF d\u1EEF li\u1EC7u v\u1EADn h\u00E0nh",
         "tags": [
           "Operations"
         ]
@@ -8205,7 +8159,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Li\u1EC7t k\u00EA th\u00F4ng b\u00E1o kh\u00F4ng g\u1EEDi \u0111\u01B0\u1EE3c sau khi \u0111\u00E3 th\u1EED l\u1EA1i h\u1EBFt s\u1ED1 l\u1EA7n",
         "tags": [
           "Operations"
         ]
@@ -8215,6 +8168,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -8291,7 +8245,6 @@
             "Bearer": []
           }
         ],
-        "summary": "\u0110\u01B0a th\u00F4ng b\u00E1o l\u1ED7i tr\u1EDF l\u1EA1i h\u00E0ng \u0111\u1EE3i g\u1EEDi",
         "tags": [
           "Operations"
         ]
@@ -8375,7 +8328,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Ph\u00E1t hi\u1EC7n ho\u1EB7c x\u1EED l\u00FD ch\u00EAnh l\u1EC7ch gi\u1EEFa t\u1EC7p t\u1EA3i l\u00EAn v\u00E0 d\u1EEF li\u1EC7u trong c\u01A1 s\u1EDF d\u1EEF li\u1EC7u",
         "tags": [
           "Operations"
         ]
@@ -8473,7 +8425,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] L\u1EA5y t\u1EA5t c\u1EA3 \u0111\u01A1n h\u00E0ng theo b\u1ED9 l\u1ECDc",
         "tags": [
           "Order"
         ]
@@ -8596,7 +8547,6 @@
             "Bearer": []
           }
         ],
-        "summary": "\u0110\u1EB7t h\u00E0ng t\u1EEB gi\u1ECF h\u00E0ng hi\u1EC7n t\u1EA1i trong m\u1ED9t giao d\u1ECBch d\u1EEF li\u1EC7u",
         "tags": [
           "Order"
         ]
@@ -8681,7 +8631,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y danh s\u00E1ch \u0111\u01A1n h\u00E0ng c\u1EE7a t\u00F4i",
         "tags": [
           "Order"
         ]
@@ -8766,7 +8715,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y danh s\u00E1ch t\u00F3m t\u1EAFt \u0111\u01A1n h\u00E0ng c\u1EE7a t\u00F4i b\u1EB1ng truy v\u1EA5n g\u1ECDn",
         "tags": [
           "Order"
         ]
@@ -8870,7 +8818,6 @@
             "Bearer": []
           }
         ],
-        "summary": "T\u00EDnh l\u1EA1i gi\u00E1 gi\u1ECF h\u00E0ng theo khuy\u1EBFn m\u00E3i v\u00E0 ph\u01B0\u01A1ng th\u1EE9c giao h\u00E0ng",
         "tags": [
           "Order"
         ]
@@ -8968,7 +8915,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] L\u1EA5y danh s\u00E1ch t\u00F3m t\u1EAFt \u0111\u01A1n h\u00E0ng b\u1EB1ng truy v\u1EA5n g\u1ECDn",
         "tags": [
           "Order"
         ]
@@ -8978,6 +8924,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9054,7 +9001,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y chi ti\u1EBFt \u0111\u01A1n h\u00E0ng theo Id",
         "tags": [
           "Order"
         ]
@@ -9064,6 +9010,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9159,7 +9106,6 @@
             "Bearer": []
           }
         ],
-        "summary": "H\u1EE7y m\u1ED9t \u0111\u01A1n h\u00E0ng h\u1EE3p l\u1EC7 c\u1EE7a kh\u00E1ch h\u00E0ng hi\u1EC7n t\u1EA1i",
         "tags": [
           "Order"
         ]
@@ -9169,6 +9115,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9264,7 +9211,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] Ghi nh\u1EADn ho\u00E0n ti\u1EC1n COD \u0111\u00E3 ho\u00E0n t\u1EA5t cho \u0111\u01A1n ho\u00E0n h\u00E0ng",
         "tags": [
           "Order"
         ]
@@ -9274,7 +9220,7 @@
       "post": {
         "parameters": [
           {
-            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng thu\u1ED9c kh\u00E1ch h\u00E0ng hi\u1EC7n t\u1EA1i",
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9301,8 +9247,7 @@
                 "$ref": "#/components/schemas/CreateReturnRequest"
               }
             }
-          },
-          "description": "L\u00FD do tr\u1EA3 h\u00E0ng"
+          }
         },
         "responses": {
           "200": {
@@ -9371,7 +9316,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Kh\u00E1ch h\u00E0ng y\u00EAu c\u1EA7u tr\u1EA3 m\u1ED9t \u0111\u01A1n \u0111\u00E3 giao",
         "tags": [
           "Order"
         ]
@@ -9381,7 +9325,7 @@
       "post": {
         "parameters": [
           {
-            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9408,8 +9352,7 @@
                 "$ref": "#/components/schemas/ReceiveReturnRequest"
               }
             }
-          },
-          "description": "Ghi ch\u00FA ki\u1EC3m tra h\u00E0ng ho\u00E0n"
+          }
         },
         "responses": {
           "200": {
@@ -9478,7 +9421,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] Nh\u1EADn v\u00E0 ki\u1EC3m tra h\u00E0ng ho\u00E0n",
         "tags": [
           "Order"
         ]
@@ -9488,7 +9430,7 @@
       "post": {
         "parameters": [
           {
-            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9515,8 +9457,7 @@
                 "$ref": "#/components/schemas/ReviewReturnRequest"
               }
             }
-          },
-          "description": "Quy\u1EBFt \u0111\u1ECBnh v\u00E0 ghi ch\u00FA x\u00E9t duy\u1EC7t"
+          }
         },
         "responses": {
           "200": {
@@ -9585,7 +9526,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] Duy\u1EC7t ho\u1EB7c t\u1EEB ch\u1ED1i y\u00EAu c\u1EA7u tr\u1EA3 h\u00E0ng",
         "tags": [
           "Order"
         ]
@@ -9595,7 +9535,7 @@
       "post": {
         "parameters": [
           {
-            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9622,8 +9562,7 @@
                 "$ref": "#/components/schemas/MarkShipmentDeliveredRequest"
               }
             }
-          },
-          "description": "Ghi ch\u00FA giao h\u00E0ng th\u00E0nh c\u00F4ng"
+          }
         },
         "responses": {
           "200": {
@@ -9692,7 +9631,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] X\u00E1c nh\u1EADn v\u1EADn \u0111\u01A1n \u0111\u00E3 giao th\u00E0nh c\u00F4ng",
         "tags": [
           "Order"
         ]
@@ -9702,7 +9640,7 @@
       "post": {
         "parameters": [
           {
-            "description": "M\u00E3 \u0111\u01A1n h\u00E0ng",
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9729,8 +9667,7 @@
                 "$ref": "#/components/schemas/DispatchShipmentRequest"
               }
             }
-          },
-          "description": "Th\u00F4ng tin \u0111\u01A1n v\u1ECB v\u1EADn chuy\u1EC3n v\u00E0 m\u00E3 v\u1EADn \u0111\u01A1n"
+          }
         },
         "responses": {
           "200": {
@@ -9799,7 +9736,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] T\u1EA1o v\u1EADn \u0111\u01A1n v\u00E0 xu\u1EA5t giao \u0111\u01A1n h\u00E0ng",
         "tags": [
           "Order"
         ]
@@ -9809,6 +9745,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -9914,7 +9851,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Staff/Admin] C\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i \u0111\u01A1n h\u00E0ng",
         "tags": [
           "Order"
         ]
@@ -9957,7 +9893,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "Li\u1EC7t k\u00EA c\u00E1c ph\u01B0\u01A1ng th\u1EE9c thanh to\u00E1n \u0111ang kh\u1EA3 d\u1EE5ng khi \u0111\u1EB7t h\u00E0ng",
         "tags": [
           "Payment"
         ]
@@ -10054,7 +9989,6 @@
             "Bearer": []
           }
         ],
-        "summary": "Kh\u1EDFi t\u1EA1o giao d\u1ECBch thanh to\u00E1n tr\u1EF1c tuy\u1EBFn sau khi \u0111\u01A1n h\u00E0ng \u0111\u00E3 \u0111\u01B0\u1EE3c l\u01B0u",
         "tags": [
           "Payment"
         ]
@@ -10166,7 +10100,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "X\u1EED l\u00FD webhook Stripe b\u1EB1ng ch\u1EEF k\u00FD tr\u00EAn raw request body",
         "tags": [
           "Payment"
         ]
@@ -10174,7 +10107,6 @@
     },
     "/api/v1/payments/webhooks/{providerCode}": {
       "post": {
-        "description": "Ch\u1EEF k\u00FD \u0111\u01B0\u1EE3c x\u00E1c minh b\u1EB1ng ch\u00EDnh x\u00E1c n\u1ED9i dung JSON UTF-8 c\u1EE7a y\u00EAu c\u1EA7u.",
         "parameters": [
           {
             "description": "M\u00E3 c\u1EE7a c\u1ED5ng thanh to\u00E1n \u0111\u00E3 c\u1EA5u h\u00ECnh.",
@@ -10307,7 +10239,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "X\u1EED l\u00FD th\u00F4ng b\u00E1o \u0111\u00E3 k\u00FD t\u1EEB c\u1ED5ng thanh to\u00E1n",
         "tags": [
           "Payment"
         ]
@@ -10410,7 +10341,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "L\u1EA5y danh s\u00E1ch s\u1EA3n ph\u1EA9m c\u00F3 ph\u00E2n trang, l\u1ECDc v\u00E0 s\u1EAFp x\u1EBFp",
         "tags": [
           "Product"
         ]
@@ -10492,7 +10422,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] T\u1EA1o s\u1EA3n ph\u1EA9m m\u1EDBi",
         "tags": [
           "Product"
         ]
@@ -10595,7 +10524,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "L\u1EA5y danh s\u00E1ch t\u00F3m t\u1EAFt s\u1EA3n ph\u1EA9m b\u1EB1ng truy v\u1EA5n g\u1ECDn",
         "tags": [
           "Product"
         ]
@@ -10605,6 +10533,7 @@
       "delete": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -10691,7 +10620,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] X\u00F3a m\u1EC1m s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
         ]
@@ -10699,6 +10627,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -10750,7 +10679,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "summary": "L\u1EA5y chi ti\u1EBFt s\u1EA3n ph\u1EA9m theo Id",
         "tags": [
           "Product"
         ]
@@ -10758,6 +10686,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -10863,7 +10792,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] C\u1EADp nh\u1EADt s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
         ]
@@ -10873,6 +10801,7 @@
       "post": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -11017,7 +10946,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] T\u1EA3i \u1EA3nh l\u00EAn cho s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
         ]
@@ -11027,6 +10955,7 @@
       "delete": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -11036,6 +10965,7 @@
             }
           },
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "imageId",
             "required": true,
@@ -11122,7 +11052,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] X\u00F3a \u1EA3nh s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
         ]
@@ -11257,7 +11186,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] \u0110i\u1EC1u ch\u1EC9nh t\u1ED3n kho s\u1EA3n ph\u1EA9m",
         "tags": [
           "Product"
         ]
@@ -11347,7 +11275,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] L\u1EA5y danh s\u00E1ch m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "Promotion"
         ]
@@ -11429,7 +11356,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] T\u1EA1o m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "Promotion"
         ]
@@ -11439,6 +11365,7 @@
       "delete": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -11515,7 +11442,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] Ng\u1EEBng s\u1EED d\u1EE5ng m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "Promotion"
         ]
@@ -11523,6 +11449,7 @@
       "get": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -11599,7 +11526,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] L\u1EA5y chi ti\u1EBFt m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "Promotion"
         ]
@@ -11607,6 +11533,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -11702,7 +11629,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] C\u1EADp nh\u1EADt ch\u00EDnh s\u00E1ch m\u00E3 khuy\u1EBFn m\u00E3i",
         "tags": [
           "Promotion"
         ]
@@ -11710,7 +11636,6 @@
     },
     "/api/v1/reports/sales-summary": {
       "get": {
-        "description": "TotalOrders v\u00E0 OrdersByStatus t\u00EDnh theo th\u1EDDi \u0111i\u1EC3m t\u1EA1o \u0111\u01A1n.\r\nDeliveredOrders, CancelledOrders v\u00E0 TopSellingProducts t\u00EDnh theo th\u1EDDi \u0111i\u1EC3m chuy\u1EC3n tr\u1EA1ng th\u00E1i t\u01B0\u01A1ng \u1EE9ng.\r\nDoanh thu t\u00EDnh theo th\u1EDDi \u0111i\u1EC3m thanh to\u00E1n v\u00E0 ho\u00E0n ti\u1EC1n.",
         "parameters": [
           {
             "in": "query",
@@ -11802,7 +11727,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y b\u00E1o c\u00E1o t\u1ED5ng quan theo kho\u1EA3ng th\u1EDDi gian [From, To)",
         "tags": [
           "Report"
         ]
@@ -11899,7 +11823,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] L\u1EA5y danh s\u00E1ch t\u1EA5t c\u1EA3 ng\u01B0\u1EDDi d\u00F9ng",
         "tags": [
           "User"
         ]
@@ -11964,7 +11887,6 @@
             "Bearer": []
           }
         ],
-        "summary": "L\u1EA5y th\u00F4ng tin h\u1ED3 s\u01A1 c\u1EE7a ch\u00EDnh m\u00ECnh",
         "tags": [
           "User"
         ]
@@ -12056,7 +11978,6 @@
             "Bearer": []
           }
         ],
-        "summary": "C\u1EADp nh\u1EADt h\u1ED3 s\u01A1 c\u00E1 nh\u00E2n",
         "tags": [
           "User"
         ]
@@ -12150,7 +12071,6 @@
             "Bearer": []
           }
         ],
-        "summary": "\u0110\u1ED5i m\u1EADt kh\u1EA9u",
         "tags": [
           "User"
         ]
@@ -12160,6 +12080,7 @@
       "put": {
         "parameters": [
           {
+            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
             "in": "path",
             "name": "id",
             "required": true,
@@ -12265,7 +12186,6 @@
             "Bearer": []
           }
         ],
-        "summary": "[Admin] G\u00E1n vai tr\u00F2 cho ng\u01B0\u1EDDi d\u00F9ng",
         "tags": [
           "User"
         ]

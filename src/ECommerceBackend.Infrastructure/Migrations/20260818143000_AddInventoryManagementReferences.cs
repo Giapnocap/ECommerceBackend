@@ -4,10 +4,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace ECommerceBackend.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddInventoryManagementReferences : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
@@ -41,7 +39,6 @@ namespace ECommerceBackend.Infrastructure.Migrations
                 sql: "([Type] IN (0, 1, 5) AND [OrderId] IS NULL) OR ([Type] IN (2, 3, 4) AND [OrderId] IS NOT NULL)");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql(
