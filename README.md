@@ -25,17 +25,10 @@ Set-Location ECommerceBackend
 Copy-Item .env.example .env
 ```
 
-Mở `.env`, đặt giá trị cho `MSSQL_SA_PASSWORD` và `JWT_KEY`, sau đó chạy:
+Mở `.env` và đặt giá trị cho:
 
-```powershell
-docker compose up --build
-```
-
-Docker Compose sẽ khởi động SQL Server, chạy migration, rồi mới khởi động API.
-
-### Tạo Admin đầu tiên
-
-Trước lần chạy đầu, điền các biến sau trong `.env`:
+- `MSSQL_SA_PASSWORD`, `JWT_KEY`
+- Tài khoản Admin đầu tiên:
 
 ```env
 ADMIN_BOOTSTRAP_ENABLED=true
@@ -45,8 +38,21 @@ ADMIN_BOOTSTRAP_FULL_NAME=Administrator
 ADMIN_BOOTSTRAP_PASSWORD=YourSecurePassword123!
 ```
 
-Sau khi Admin đã được tạo, đổi `ADMIN_BOOTSTRAP_ENABLED=false` và khởi động lại API. Không commit
-file `.env` hoặc dùng các giá trị mẫu này trên môi trường thật.
+Không commit file `.env` và không dùng các giá trị mẫu này trên môi trường thật.
+
+Chạy ứng dụng:
+
+```powershell
+docker compose up --build
+```
+
+Docker Compose sẽ khởi động SQL Server, chạy migration, rồi mới khởi động API.
+
+Sau khi Admin đã được tạo, đổi `ADMIN_BOOTSTRAP_ENABLED=false` trong `.env` và chạy:
+
+```powershell
+docker compose up -d --force-recreate api
+```
 
 Dừng ứng dụng:
 
