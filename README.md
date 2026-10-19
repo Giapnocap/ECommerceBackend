@@ -32,7 +32,7 @@ ADMIN_BOOTSTRAP_ENABLED=true
 ADMIN_BOOTSTRAP_USERNAME=admin
 ADMIN_BOOTSTRAP_EMAIL=admin@example.com
 ADMIN_BOOTSTRAP_FULL_NAME=Administrator
-ADMIN_BOOTSTRAP_PASSWORD=YourSecurePassword123!
+ADMIN_BOOTSTRAP_PASSWORD=change-me-admin-password-123!
 ```
 
 Chạy bằng Docker:
