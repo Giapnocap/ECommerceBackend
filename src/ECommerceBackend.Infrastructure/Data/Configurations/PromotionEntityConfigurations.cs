@@ -22,6 +22,9 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
             builder.Property(promotion => promotion.RowVersion)
                 .IsRowVersion();
 
+            builder.Property(promotion => promotion.ApplicablePaymentMethod)
+                .IsRequired(false);
+
             builder.HasIndex(promotion => promotion.NormalizedCode)
                 .HasDatabaseName("UX_Promotions_NormalizedCode")
                 .IsUnique();
@@ -40,6 +43,9 @@ namespace ECommerceBackend.Infrastructure.Data.Configurations
                 table.HasCheckConstraint(
                     "CK_Promotions_Type_Valid",
                     "[Type] BETWEEN 0 AND 1");
+                table.HasCheckConstraint(
+                    "CK_Promotions_ApplicablePaymentMethod_Valid",
+                    "[ApplicablePaymentMethod] IS NULL OR [ApplicablePaymentMethod] BETWEEN 0 AND 1");
                 table.HasCheckConstraint(
                     "CK_Promotions_Value_Valid",
                     "[Value] > 0 AND ([Type] <> 1 OR [Value] <= 100)");

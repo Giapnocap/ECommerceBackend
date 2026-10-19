@@ -57,11 +57,11 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 .Where(token => token.UserId == userId
                     && token.RevokedAt == null
                     && token.ExpiresAt > occurredAt)
+                .OrderByDescending(token => token.CreatedAt)
                 .Select(token => new AuthSessionRecord(
                     token.FamilyId,
                     token.CreatedAt,
                     token.ExpiresAt))
-                .OrderByDescending(session => session.LastRefreshedAt)
                 .ToListAsync(cancellationToken);
 
             return activeTokens

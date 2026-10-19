@@ -169,6 +169,7 @@ public static class ResponseMappings
             Value = promotion.Value,
             MinimumSubtotal = promotion.MinimumSubtotal,
             MaximumDiscountAmount = promotion.MaximumDiscountAmount,
+            ApplicablePaymentMethod = promotion.ApplicablePaymentMethod,
             StartsAt = promotion.StartsAt,
             EndsAt = promotion.EndsAt,
             UsageLimit = promotion.UsageLimit,
@@ -185,6 +186,10 @@ public static class ResponseMappings
             Id = detail.Id,
             ProductId = detail.ProductId,
             ProductName = detail.ProductNameSnapshot,
+            ProductImageUrl = detail.Product?.Images
+                .OrderByDescending(image => image.IsMain)
+                .Select(image => image.ImageUrl)
+                .FirstOrDefault(),
             Quantity = detail.Quantity,
             UnitPrice = detail.UnitPrice,
             BaseUnitPrice = detail.BaseUnitPrice

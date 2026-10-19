@@ -39,6 +39,31 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
                 .Select(user => (Guid?)user.Id)
                 .SingleOrDefaultAsync(cancellationToken);
 
+        public Task<Guid?> GetActiveUserIdByUserNameOrPhoneAsync(
+            string identifier,
+            CancellationToken cancellationToken = default)
+        {
+            var trimmed = identifier.Trim();
+            var normalized = trimmed.ToUpperInvariant();
+            var digitsOnly = new string(trimmed.Where(char.IsDigit).ToArray());
+
+            return _context.Users
+                .AsNoTracking()
+                .Where(user => !user.IsDeleted && (
+                    user.NormalizedUserName == normalized ||
+                    (user.Phone != null && (
+                        user.Phone == trimmed ||
+                        user.Phone == digitsOnly ||
+                        (digitsOnly.Length == 10 && digitsOnly.StartsWith("0") && user.Phone == "+84" + digitsOnly.Substring(1)) ||
+                        (digitsOnly.Length == 9 && user.Phone == "0" + digitsOnly) ||
+                        (digitsOnly.Length == 11 && digitsOnly.StartsWith("84") && user.Phone == "0" + digitsOnly.Substring(2)) ||
+                        (digitsOnly.Length == 11 && digitsOnly.StartsWith("84") && user.Phone == "+" + digitsOnly)
+                    ))
+                ))
+                .Select(user => (Guid?)user.Id)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+
         public Task<Guid?> GetActiveUserIdByEmailAsync(
             string normalizedEmail,
             CancellationToken cancellationToken = default)

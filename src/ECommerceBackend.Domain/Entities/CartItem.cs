@@ -99,8 +99,8 @@ namespace ECommerceBackend.Domain.Entities
             if (requestedQuantity > product.StockQuantity)
             {
                 throw new DomainRuleViolationException(
-                    "business_error",
-                    $"Sản phẩm '{product.Name}' chỉ còn {product.StockQuantity} trong kho.");
+                    "insufficient_stock",
+                    "Sản phẩm vừa thêm không đủ tồn kho tại GTH Mart!");
             }
 
             OrderPricingPolicy.EnsureMoneyValue(

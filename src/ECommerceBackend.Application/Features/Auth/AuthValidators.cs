@@ -20,7 +20,7 @@ namespace ECommerceBackend.Application.Validation
 
             RuleFor(x => x.Password)
                 .NotEmpty().WithMessage("Mật khẩu không được để trống.")
-                .MinimumLength(12).WithMessage("Mật khẩu phải có ít nhất 12 ký tự.")
+                .MinimumLength(6).WithMessage("Mật khẩu phải có ít nhất 6 ký tự.")
                 .MaximumLength(128).WithMessage("Mật khẩu không được vượt quá 128 ký tự.");
 
             RuleFor(x => x.FullName)
@@ -88,7 +88,7 @@ namespace ECommerceBackend.Application.Validation
                 .MaximumLength(512).WithMessage("Mã đặt lại mật khẩu không hợp lệ.");
             RuleFor(request => request.NewPassword)
                 .NotEmpty().WithMessage("Mật khẩu mới không được để trống.")
-                .MinimumLength(12).WithMessage("Mật khẩu mới phải có ít nhất 12 ký tự.")
+                .MinimumLength(6).WithMessage("Mật khẩu mới phải có ít nhất 6 ký tự.")
                 .MaximumLength(128).WithMessage("Mật khẩu mới không được vượt quá 128 ký tự.");
         }
     }

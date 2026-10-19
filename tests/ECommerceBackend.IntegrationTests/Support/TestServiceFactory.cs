@@ -80,18 +80,7 @@ internal static class TestServiceFactory
         var tokenIssuer = new AuthTokenIssuer(
             jwtOptions,
             new JwtAccessTokenGenerator(jwtOptions));
-        var outbox = new OutboxWriter(
-            new OutboxRepository(context),
-            clock,
-            protector);
-        var emailVerification = new EmailVerificationUseCase(
-            authSessionRepository,
-            context,
-            consistency,
-            outbox,
-            audit,
-            options,
-            clock);
+
         return new AuthService(
             new AuthRegistrationUseCase(
                 userRepository,
@@ -101,7 +90,6 @@ internal static class TestServiceFactory
                 consistency,
                 hasher,
                 tokenIssuer,
-                emailVerification,
                 clock),
             new AuthLoginUseCase(
                 userRepository,
@@ -124,29 +112,7 @@ internal static class TestServiceFactory
                 authSessionRepository,
                 context,
                 consistency,
-                clock),
-            new AuthLogoutAllUseCase(
-                authSessionRepository,
-                context,
-                consistency,
-                clock),
-            new PasswordResetUseCase(
-                userRepository,
-                authSessionRepository,
-                context,
-                consistency,
-                hasher,
-                outbox,
-                audit,
-                options,
-                clock),
-            new AuthSessionManagementUseCase(
-                authSessionRepository,
-                context,
-                consistency,
-                audit,
-                clock),
-            emailVerification);
+                clock));
     }
 
     public static UserService CreateUserService(AppDbContext context, TimeProvider? timeProvider = null)
@@ -176,8 +142,7 @@ internal static class TestServiceFactory
         TimeProvider? timeProvider = null,
         OrderLifecycleOptions? lifecycleOptions = null,
         PricingOptions? pricingOptions = null,
-        ReturnPolicyOptions? returnPolicyOptions = null,
-        IExchangeRateProvider? exchangeRateProvider = null)
+        ReturnPolicyOptions? returnPolicyOptions = null)
     {
         var orderRepository = new OrderRepository(context);
         var userRepository = new UserRepository(context);
@@ -197,8 +162,6 @@ internal static class TestServiceFactory
         var pricing = new OrderPricingUseCase(
             cartRepository,
             promotionRepository,
-            exchangeRateProvider
-                ?? new TestExchangeRateProvider(clock),
             clock,
             Options.Create(
                 pricingOptions ?? new PricingOptions

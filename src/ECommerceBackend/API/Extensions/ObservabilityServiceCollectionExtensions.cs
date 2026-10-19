@@ -3,7 +3,6 @@ using System.Reflection;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.Observability;
 using ECommerceBackend.Infrastructure.Observability;
-using ECommerceBackend.Infrastructure.Payments;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -21,7 +20,6 @@ namespace ECommerceBackend.API.Extensions
             "ECommerceBackend.Catalog",
             "ECommerceBackend.Operations",
             "ECommerceBackend.OrderExpiration",
-            PaymentReconciliationHostedService.MeterName,
             "ECommerceBackend.Outbox"
         ];
 

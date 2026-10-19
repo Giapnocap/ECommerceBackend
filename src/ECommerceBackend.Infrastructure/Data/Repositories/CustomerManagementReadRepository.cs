@@ -205,6 +205,10 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             var orders = _context.Orders
                 .AsNoTracking()
                 .Where(order => order.UserId == customerId)
+                .Where(order => !(order.Payment != null
+                    && order.Payment.Method != PaymentMethod.CashOnDelivery
+                    && order.Status == OrderStatus.Cancelled
+                    && order.Payment.Status != PaymentStatus.Paid))
                 .OrderByDescending(order => order.OrderDate)
                 .ThenByDescending(order => order.Id);
             var totalCount = await orders.CountAsync(cancellationToken);

@@ -5,7 +5,6 @@ using ECommerceBackend.Application.Interfaces;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Domain.Entities;
 using ECommerceBackend.Domain.Enums;
-using ECommerceBackend.Domain.Common;
 using ECommerceBackend.Domain.Policies;
 using Microsoft.Extensions.Options;
 
@@ -13,63 +12,22 @@ namespace ECommerceBackend.Application.Services
 {
     public sealed class OrderPricingUseCase
     {
+        private const string StoreCurrency = "VND";
         private readonly ICartRepository _cartRepository;
         private readonly IPromotionRepository _promotionRepository;
-        private readonly IExchangeRateProvider _exchangeRates;
         private readonly TimeProvider _timeProvider;
         private readonly PricingOptions _options;
 
         public OrderPricingUseCase(
             ICartRepository cartRepository,
             IPromotionRepository promotionRepository,
-            IExchangeRateProvider exchangeRates,
             TimeProvider timeProvider,
             IOptions<PricingOptions> options)
         {
             _cartRepository = cartRepository;
             _promotionRepository = promotionRepository;
-            _exchangeRates = exchangeRates;
             _timeProvider = timeProvider;
             _options = options.Value;
-        }
-
-        internal async Task<ExchangeRateQuote> GetExchangeRateAsync(
-            string? requestedCurrency,
-            CancellationToken cancellationToken = default)
-        {
-            var targetCurrency = string.IsNullOrWhiteSpace(
-                requestedCurrency)
-                    ? _options.Currency
-                    : CurrencyCatalog.Normalize(requestedCurrency);
-            if (!_options.SupportedCurrencies.Contains(
-                    targetCurrency,
-                    StringComparer.Ordinal))
-            {
-                throw new BusinessException(
-                    "currency_not_enabled",
-                    "Tiền tệ yêu cầu chưa được bật cho cửa hàng.");
-            }
-
-            var quote = await _exchangeRates.GetRateAsync(
-                _options.Currency,
-                targetCurrency,
-                cancellationToken);
-            if (!string.Equals(
-                    quote.BaseCurrency,
-                    _options.Currency,
-                    StringComparison.Ordinal)
-                || !string.Equals(
-                    quote.QuoteCurrency,
-                    targetCurrency,
-                    StringComparison.Ordinal)
-                || quote.Rate <= 0)
-            {
-                throw new ConflictException(
-                    "exchange_rate_response_invalid",
-                    "Dữ liệu tỷ giá không khớp yêu cầu báo giá.");
-            }
-
-            return quote;
         }
 
         public async Task<OrderQuoteResponse> GetQuoteAsync(
@@ -106,9 +64,6 @@ namespace ECommerceBackend.Application.Services
             }
 
             var occurredAt = _timeProvider.GetUtcNow().UtcDateTime;
-            var exchangeRate = await GetExchangeRateAsync(
-                request.Currency,
-                cancellationToken);
             var calculation = await CalculateAsync(
                 userId,
                 cart.CartItems,
@@ -116,8 +71,9 @@ namespace ECommerceBackend.Application.Services
                 request.ShippingMethod,
                 occurredAt,
                 lockPromotion: false,
-                exchangeRate,
-                cancellationToken);
+                cancellationToken,
+                request.PaymentMethod);
+
             var quoteExpiresAt = occurredAt.AddMinutes(
                 _options.QuoteValidityMinutes);
             if (calculation.Promotion != null
@@ -133,16 +89,15 @@ namespace ECommerceBackend.Application.Services
                 ShippingFee = calculation.Amounts.Shipping,
                 TaxAmount = calculation.Amounts.Tax,
                 TotalAmount = calculation.Amounts.Total,
-                Currency = calculation.Currency,
-                BaseSubtotalAmount = calculation.BaseAmounts.Subtotal,
-                BaseDiscountAmount = calculation.BaseAmounts.Discount,
-                BaseShippingFee = calculation.BaseAmounts.Shipping,
-                BaseTaxAmount = calculation.BaseAmounts.Tax,
-                BaseTotalAmount = calculation.BaseAmounts.Total,
-                BaseCurrency = calculation.BaseCurrency,
-                ExchangeRate = calculation.ExchangeRate,
-                ExchangeRateCapturedAt =
-                    calculation.ExchangeRateCapturedAt,
+                Currency = StoreCurrency,
+                BaseSubtotalAmount = calculation.Amounts.Subtotal,
+                BaseDiscountAmount = calculation.Amounts.Discount,
+                BaseShippingFee = calculation.Amounts.Shipping,
+                BaseTaxAmount = calculation.Amounts.Tax,
+                BaseTotalAmount = calculation.Amounts.Total,
+                BaseCurrency = StoreCurrency,
+                ExchangeRate = 1m,
+                ExchangeRateCapturedAt = occurredAt,
                 ShippingMethod = request.ShippingMethod.ToString(),
                 PromotionCode = calculation.Promotion?.Code,
                 CalculatedAt = occurredAt,
@@ -155,8 +110,8 @@ namespace ECommerceBackend.Application.Services
             IEnumerable<CartItem> items,
             string? promotionCode,
             ShippingMethod shippingMethod,
+            PaymentMethod paymentMethod,
             DateTime occurredAt,
-            ExchangeRateQuote exchangeRate,
             CancellationToken cancellationToken = default)
             => CalculateAsync(
                 userId,
@@ -165,8 +120,8 @@ namespace ECommerceBackend.Application.Services
                 shippingMethod,
                 occurredAt,
                 lockPromotion: true,
-                exchangeRate,
-                cancellationToken);
+                cancellationToken,
+                paymentMethod);
 
         internal async Task RedeemAsync(
             OrderPricingCalculation calculation,
@@ -180,9 +135,11 @@ namespace ECommerceBackend.Application.Services
 
             DomainRuleGuard.AsConflict(() =>
                 calculation.Promotion.Redeem(
-                    calculation.BaseAmounts.Subtotal,
+                    calculation.Amounts.Subtotal,
                     occurredAt,
-                    calculation.CustomerUsageCount));
+                    calculation.CustomerUsageCount,
+                    order.Payment?.Method));
+
             await _promotionRepository.AddRedemptionAsync(
                 new PromotionRedemption
                 {
@@ -190,7 +147,7 @@ namespace ECommerceBackend.Application.Services
                     PromotionId = calculation.Promotion.Id,
                     OrderId = order.Id,
                     UserId = userId,
-                    DiscountAmount = calculation.BaseAmounts.Discount,
+                    DiscountAmount = calculation.Amounts.Discount,
                     CreatedAt = occurredAt
                 },
                 cancellationToken);
@@ -203,8 +160,8 @@ namespace ECommerceBackend.Application.Services
             ShippingMethod shippingMethod,
             DateTime occurredAt,
             bool lockPromotion,
-            ExchangeRateQuote exchangeRate,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            PaymentMethod? paymentMethod = null)
         {
             var itemList = items.ToArray();
             var subtotal = DomainRuleGuard.AsBusiness(() =>
@@ -246,12 +203,14 @@ namespace ECommerceBackend.Application.Services
                         promotion.CalculateDiscount(
                             subtotal,
                             occurredAt,
-                            customerUsageCount))
+                            customerUsageCount,
+                            paymentMethod))
                     : DomainRuleGuard.AsBusiness(() =>
                         promotion.CalculateDiscount(
                             subtotal,
                             occurredAt,
-                            customerUsageCount));
+                            customerUsageCount,
+                            paymentMethod));
             }
 
             var rules = new OrderPricingRules(
@@ -259,93 +218,29 @@ namespace ECommerceBackend.Application.Services
                 _options.ExpressShippingFee,
                 _options.FreeStandardShippingMinimum,
                 _options.TaxRatePercent);
+
             var amounts = DomainRuleGuard.AsBusiness(() =>
                 OrderPricingPolicy.CalculateQuote(
                     subtotal,
                     discount,
                     shippingMethod,
                     rules));
-            var converted = ConvertAmounts(
-                itemList,
-                amounts,
-                exchangeRate);
+
+            var unitPrices = itemList.ToDictionary(
+                item => item.ProductId,
+                item => item.Product!.Price);
+
             return new OrderPricingCalculation(
-                converted.Amounts,
+                amounts,
                 amounts,
                 promotion,
                 customerUsageCount,
-                exchangeRate.BaseCurrency,
-                exchangeRate.QuoteCurrency,
-                exchangeRate.Rate,
-                exchangeRate.CapturedAt,
-                converted.UnitPrices);
+                StoreCurrency,
+                StoreCurrency,
+                1m,
+                occurredAt,
+                unitPrices);
         }
-
-        private static ConvertedPricing ConvertAmounts(
-            IReadOnlyCollection<CartItem> items,
-            OrderAmounts baseAmounts,
-            ExchangeRateQuote exchangeRate)
-        {
-            if (string.Equals(
-                    exchangeRate.BaseCurrency,
-                    exchangeRate.QuoteCurrency,
-                    StringComparison.Ordinal))
-            {
-                return new ConvertedPricing(
-                    baseAmounts,
-                    items.ToDictionary(
-                        item => item.ProductId,
-                        item => item.Product!.Price));
-            }
-
-            var unitPrices = items.ToDictionary(
-                item => item.ProductId,
-                item => ConvertAmount(
-                    item.Product!.Price,
-                    exchangeRate));
-            var subtotal = DomainRuleGuard.AsBusiness(() =>
-                OrderPricingPolicy.CalculateSubtotal(
-                    items.Select(item => new OrderPricingLine(
-                        item.Product!.Name,
-                        unitPrices[item.ProductId],
-                        item.Quantity))));
-            var discount = Math.Min(
-                subtotal,
-                ConvertAmount(baseAmounts.Discount, exchangeRate));
-            var shipping = ConvertAmount(
-                baseAmounts.Shipping,
-                exchangeRate);
-            var tax = ConvertAmount(baseAmounts.Tax, exchangeRate);
-            var amounts = DomainRuleGuard.AsBusiness(() =>
-                OrderPricingPolicy.CalculateAmounts(
-                    subtotal,
-                    discount,
-                    shipping,
-                    tax));
-            return new ConvertedPricing(amounts, unitPrices);
-        }
-
-        private static decimal ConvertAmount(
-            decimal amount,
-            ExchangeRateQuote exchangeRate)
-        {
-            try
-            {
-                return Money.Round(
-                    checked(amount * exchangeRate.Rate),
-                    exchangeRate.QuoteCurrency).Amount;
-            }
-            catch (OverflowException)
-            {
-                throw new BusinessException(
-                    "money_conversion_overflow",
-                    "Số tiền sau quy đổi vượt quá giới hạn cho phép.");
-            }
-        }
-
-        private sealed record ConvertedPricing(
-            OrderAmounts Amounts,
-            IReadOnlyDictionary<Guid, decimal> UnitPrices);
     }
 
     internal sealed record OrderPricingCalculation(

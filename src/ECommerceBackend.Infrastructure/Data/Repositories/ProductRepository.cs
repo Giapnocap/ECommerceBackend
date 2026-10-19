@@ -160,7 +160,11 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             }
 
             if (queryParams.CategoryId.HasValue)
-                query = query.Where(product => product.CategoryId == queryParams.CategoryId.Value);
+            {
+                var targetCategoryId = queryParams.CategoryId.Value;
+                query = query.Where(product => product.CategoryId == targetCategoryId
+                    || product.Category!.ParentId == targetCategoryId);
+            }
             if (queryParams.MinPrice.HasValue)
                 query = query.Where(product => product.Price >= queryParams.MinPrice.Value);
             if (queryParams.MaxPrice.HasValue)

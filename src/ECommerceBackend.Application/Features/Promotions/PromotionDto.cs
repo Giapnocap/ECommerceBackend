@@ -13,6 +13,7 @@ namespace ECommerceBackend.Application.DTOs
         DateTime EndsAt { get; }
         int UsageLimit { get; }
         int UsageLimitPerCustomer { get; }
+        PaymentMethod? ApplicablePaymentMethod { get; }
     }
 
     public sealed class PromotionResponse
@@ -23,6 +24,7 @@ namespace ECommerceBackend.Application.DTOs
         public decimal Value { get; set; }
         public decimal MinimumSubtotal { get; set; }
         public decimal? MaximumDiscountAmount { get; set; }
+        public PaymentMethod? ApplicablePaymentMethod { get; set; }
         public string Currency { get; set; } = CurrencyCatalog.BaseCurrency;
         public DateTime StartsAt { get; set; }
         public DateTime EndsAt { get; set; }
@@ -45,6 +47,7 @@ namespace ECommerceBackend.Application.DTOs
         public DateTime EndsAt { get; set; }
         public int UsageLimit { get; set; }
         public int UsageLimitPerCustomer { get; set; } = 1;
+        public PaymentMethod? ApplicablePaymentMethod { get; set; }
     }
 
     public sealed class UpdatePromotionRequest : IPromotionRuleRequest
@@ -58,6 +61,7 @@ namespace ECommerceBackend.Application.DTOs
         public int UsageLimit { get; set; }
         public int UsageLimitPerCustomer { get; set; } = 1;
         public bool IsActive { get; set; } = true;
+        public PaymentMethod? ApplicablePaymentMethod { get; set; }
     }
 
     public sealed class PromotionQueryParams

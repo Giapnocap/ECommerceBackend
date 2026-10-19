@@ -74,6 +74,11 @@ namespace ECommerceBackend.Application.Validation
                 .Must(currency => string.IsNullOrWhiteSpace(currency)
                     || CurrencyCatalog.IsSupported(currency))
                 .WithMessage("Tiền tệ yêu cầu chưa được hỗ trợ.");
+
+            RuleFor(x => x.PaymentMethod)
+                .IsInEnum()
+                .When(x => x.PaymentMethod.HasValue)
+                .WithMessage("Phương thức thanh toán không hợp lệ.");
         }
     }
 

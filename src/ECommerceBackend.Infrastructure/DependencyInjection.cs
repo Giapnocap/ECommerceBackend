@@ -4,12 +4,10 @@ using ECommerceBackend.Application.Interfaces.Persistence;
 using ECommerceBackend.Application.Interfaces.Repositories;
 using ECommerceBackend.Infrastructure.Data;
 using ECommerceBackend.Infrastructure.Data.Repositories;
-using ECommerceBackend.Infrastructure.Maintenance;
 using ECommerceBackend.Infrastructure.Notifications;
 using ECommerceBackend.Infrastructure.Observability;
 using ECommerceBackend.Infrastructure.Orders;
 using ECommerceBackend.Infrastructure.Payments;
-using ECommerceBackend.Infrastructure.Pricing;
 using ECommerceBackend.Infrastructure.Security;
 using ECommerceBackend.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +28,6 @@ namespace ECommerceBackend.Infrastructure
             AddRepositories(services);
             AddSecurityAdapters(services);
             AddStorageAdapters(services);
-            AddPricingAdapters(services, configuration);
             AddPaymentAndNotificationAdapters(services, configuration);
             AddHostedWorkers(services);
 
@@ -99,80 +96,25 @@ namespace ECommerceBackend.Infrastructure
                     .GetRequiredService<IProductImageStorage>());
         }
 
-        private static void AddPricingAdapters(
-            IServiceCollection services,
-            IConfiguration configuration)
-        {
-            services.TryAddSingleton(TimeProvider.System);
-            var exchangeRateOptions = configuration
-                .GetSection(ExchangeRateOptions.SectionName)
-                .Get<ExchangeRateOptions>() ?? new ExchangeRateOptions();
-            services.Configure<ExchangeRateOptions>(
-                configuration.GetSection(ExchangeRateOptions.SectionName));
-            services.AddMemoryCache();
-            services.AddHttpClient(
-                CurrencyApiExchangeRateProvider.HttpClientName,
-                client =>
-                {
-                    client.BaseAddress = Uri.TryCreate(
-                        exchangeRateOptions.BaseUrl,
-                        UriKind.Absolute,
-                        out var baseUri)
-                            ? baseUri
-                            : new Uri("https://api.currencyapi.com/");
-                    client.Timeout = TimeSpan.FromSeconds(
-                        exchangeRateOptions.RequestTimeoutSeconds);
-                });
-            services.AddSingleton<
-                IExchangeRateProvider,
-                CurrencyApiExchangeRateProvider>();
-        }
-
         private static void AddPaymentAndNotificationAdapters(
             IServiceCollection services,
             IConfiguration configuration)
         {
-            var stripeOptions = configuration
-                .GetSection(StripePaymentOptions.SectionName)
-                .Get<StripePaymentOptions>() ?? new StripePaymentOptions();
-            services.Configure<StripePaymentOptions>(
-                configuration.GetSection(StripePaymentOptions.SectionName));
             services.AddScoped<INotificationSender, ConfigurableNotificationSender>();
             services.AddScoped<OutboxProcessor>();
             services.AddSingleton<IPaymentProvider, CashOnDeliveryPaymentProvider>();
             services.AddSingleton<IPaymentProvider, GenericHmacPaymentProvider>();
-            if (stripeOptions.Enabled)
-            {
-                services.AddSingleton<
-                    IPaymentProvider,
-                    StripeCheckoutPaymentProvider>();
-            }
             services.AddSingleton<IPaymentProviderResolver, PaymentProviderResolver>();
-            services.AddHttpClient<IPaymentGateway, StripePaymentGateway>(client =>
-            {
-                client.BaseAddress = Uri.TryCreate(
-                    stripeOptions.BaseUrl,
-                    UriKind.Absolute,
-                    out var baseUri)
-                        ? baseUri
-                        : new Uri("https://api.stripe.com/");
-                client.Timeout = TimeSpan.FromSeconds(
-                    stripeOptions.RequestTimeoutSeconds);
-            });
         }
 
         private static void AddHostedWorkers(IServiceCollection services)
         {
             services.AddSingleton<OrderExpirationWorkerStatus>();
             services.AddSingleton<OutboxWorkerStatus>();
-            services.AddSingleton<DataRetentionWorkerStatus>();
-            services.AddSingleton<PaymentReconciliationWorkerStatus>();
             services.AddScoped<AdminBootstrapper>();
             services.AddHostedService<AdminBootstrapHostedService>();
             services.AddHostedService<OutboxDispatcherHostedService>();
             services.AddHostedService<OrderExpirationHostedService>();
-            services.AddHostedService<PaymentReconciliationHostedService>();
-            services.AddHostedService<DataRetentionHostedService>();
         }
     }
 }

@@ -57,26 +57,6 @@ namespace ECommerceBackend.API.Extensions
                 .AddCheck<DatabaseHealthCheck>(
                     "database",
                     tags: ["ready"],
-                    timeout: dependencyTimeout)
-                .AddCheck<ProductImageStorageHealthCheck>(
-                    "product-image-storage",
-                    tags: ["ready"],
-                    timeout: dependencyTimeout)
-                .AddCheck<OutboxHealthCheck>(
-                    "outbox",
-                    tags: ["ready"],
-                    timeout: dependencyTimeout)
-                .AddCheck<OrderExpirationHealthCheck>(
-                    "order-expiration",
-                    tags: ["ready"],
-                    timeout: dependencyTimeout)
-                .AddCheck<PaymentReconciliationHealthCheck>(
-                    "payment-reconciliation",
-                    tags: ["ready"],
-                    timeout: dependencyTimeout)
-                .AddCheck<DataRetentionHealthCheck>(
-                    "data-retention",
-                    tags: ["ready"],
                     timeout: dependencyTimeout);
 
             return services;

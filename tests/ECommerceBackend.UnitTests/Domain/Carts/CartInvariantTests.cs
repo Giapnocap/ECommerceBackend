@@ -24,7 +24,7 @@ public sealed class CartInvariantTests
 
         var exception = Assert.Throws<DomainRuleViolationException>(() =>
             item.IncreaseQuantity(2, product));
-        Assert.Equal("business_error", exception.Code);
+        Assert.Equal("insufficient_stock", exception.Code);
         Assert.Equal(4, item.Quantity);
         Assert.Equal(12m, item.UnitPrice);
     }

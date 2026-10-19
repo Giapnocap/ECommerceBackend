@@ -28,7 +28,6 @@ public sealed class ArchitectureBoundaryTests
             "Operations",
             "Orders",
             "Payments",
-            "Pricing",
             "Promotions",
             "Reports",
             "Users"
@@ -108,8 +107,6 @@ public sealed class ArchitectureBoundaryTests
         AssertPublicMethodCount<AuthLoginUseCase>(1);
         AssertPublicMethodCount<AuthRefreshUseCase>(1);
         AssertPublicMethodCount<AuthLogoutUseCase>(1);
-        AssertPublicMethodCount<AuthLogoutAllUseCase>(1);
-        AssertPublicMethodCount<PasswordResetUseCase>(2);
         AssertPublicMethodCount<OrderQueryUseCase>(5);
         AssertPublicMethodCount<OrderCheckoutUseCase>(1);
         AssertPublicMethodCount<OrderPricingUseCase>(1);
@@ -122,9 +119,7 @@ public sealed class ArchitectureBoundaryTests
         AssertPublicMethodCount<OrderReturnReviewUseCase>(1);
         AssertPublicMethodCount<OrderReturnReceiptUseCase>(1);
         AssertPublicMethodCount<OrderRefundUseCase>(1);
-        AssertPublicMethodCount<DeadLetterUseCase>(2);
         AssertPublicMethodCount<AuditQueryUseCase>(2);
-        AssertPublicMethodCount<DataRetentionUseCase>(1);
     }
 
     [Fact]

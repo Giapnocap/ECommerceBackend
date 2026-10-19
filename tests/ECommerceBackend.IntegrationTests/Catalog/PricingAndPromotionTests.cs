@@ -76,6 +76,49 @@ public sealed class PricingAndPromotionTests
     }
 
     [Fact]
+    public void Promotion_EnforcesApplicablePaymentMethod()
+    {
+        var onlineOnlyPromotion = Promotion.Create(
+            Guid.NewGuid(),
+            "ONLINEONLY",
+            PromotionType.Percentage,
+            value: 10m,
+            minimumSubtotal: 100_000m,
+            maximumDiscountAmount: 50_000m,
+            startsAt: Now.UtcDateTime.AddDays(-1),
+            endsAt: Now.UtcDateTime.AddDays(1),
+            usageLimit: 100,
+            usageLimitPerCustomer: 5,
+            Now.UtcDateTime,
+            applicablePaymentMethod: PaymentMethod.Card);
+
+        // Quoting with CashOnDelivery should fail
+        var codEx = Assert.Throws<DomainRuleViolationException>(() =>
+            onlineOnlyPromotion.CalculateDiscount(
+                subtotal: 500_000m,
+                Now.UtcDateTime,
+                customerUsageCount: 0,
+                paymentMethod: PaymentMethod.CashOnDelivery));
+        Assert.Contains("thanh toán trực tuyến (Online)", codEx.Message);
+
+        // Quoting with Card should succeed
+        var discount = onlineOnlyPromotion.CalculateDiscount(
+            subtotal: 500_000m,
+            Now.UtcDateTime,
+            customerUsageCount: 0,
+            paymentMethod: PaymentMethod.Card);
+        Assert.Equal(50_000m, discount);
+
+        // Quoting without payment method specified also succeeds at general quote stage
+        var generalDiscount = onlineOnlyPromotion.CalculateDiscount(
+            subtotal: 500_000m,
+            Now.UtcDateTime,
+            customerUsageCount: 0,
+            paymentMethod: null);
+        Assert.Equal(50_000m, generalDiscount);
+    }
+
+    [Fact]
     public async Task QuoteAndCheckout_RecalculateAndPersistPricingSnapshotOnce()
     {
         await using var context = TestAppDbContext.Create();
@@ -187,148 +230,6 @@ public sealed class PricingAndPromotionTests
         Assert.Single(await context.Orders.ToListAsync());
         Assert.Single(await context.CartItems.ToListAsync());
         Assert.Equal(1, promotion.UsedCount);
-    }
-
-    [Fact]
-    public async Task QuoteAndCheckout_WithUsd_PersistImmutableBaseAndOrderCurrencySnapshots()
-    {
-        await using var context = TestAppDbContext.Create();
-        var fixture = await SeedCheckoutAsync(context);
-        var promotion = CreatePromotion(
-            usageLimit: 10,
-            usageLimitPerCustomer: 1);
-        context.Promotions.Add(promotion);
-        await context.SaveChangesAsync();
-        var exchangeRates = new TestExchangeRateProvider(
-            new FixedTimeProvider(Now),
-            new Dictionary<(string Base, string Quote), decimal>
-            {
-                [("VND", "USD")] = 0.00004m
-            });
-        var options = PricingOptions();
-        options.SupportedCurrencies = ["VND", "USD"];
-        var service = TestServiceFactory.CreateOrderService(
-            context,
-            new FixedTimeProvider(Now),
-            pricingOptions: options,
-            exchangeRateProvider: exchangeRates);
-
-        var quote = await service.GetQuoteAsync(
-            fixture.User.Id,
-            new OrderQuoteRequest
-            {
-                ShippingMethod = ShippingMethod.Standard,
-                PromotionCode = "SAVE10",
-                Currency = "usd"
-            });
-
-        Assert.Equal("VND", quote.BaseCurrency);
-        Assert.Equal("USD", quote.Currency);
-        Assert.Equal(0.00004m, quote.ExchangeRate);
-        Assert.Equal(Now.UtcDateTime, quote.ExchangeRateCapturedAt);
-        Assert.Equal(1_000_000m, quote.BaseSubtotalAmount);
-        Assert.Equal(80_000m, quote.BaseDiscountAmount);
-        Assert.Equal(30_000m, quote.BaseShippingFee);
-        Assert.Equal(92_000m, quote.BaseTaxAmount);
-        Assert.Equal(1_042_000m, quote.BaseTotalAmount);
-        Assert.Equal(40m, quote.SubtotalAmount);
-        Assert.Equal(3.20m, quote.DiscountAmount);
-        Assert.Equal(1.20m, quote.ShippingFee);
-        Assert.Equal(3.68m, quote.TaxAmount);
-        Assert.Equal(41.68m, quote.TotalAmount);
-
-        var placed = await service.PlaceOrderAsync(
-            fixture.User.Id,
-            new PlaceOrderRequest
-            {
-                ShippingAddress = "1 Multi Currency Street",
-                PaymentMethod = PaymentMethod.CashOnDelivery,
-                ShippingMethod = ShippingMethod.Standard,
-                PromotionCode = "SAVE10",
-                ExpectedTotalAmount = quote.TotalAmount,
-                Currency = "USD"
-            },
-            "usd-checkout");
-
-        context.ChangeTracker.Clear();
-        var order = await context.Orders
-            .Include(item => item.OrderDetails)
-            .SingleAsync(item => item.Id == placed.Id);
-        var detail = Assert.Single(order.OrderDetails);
-        var payment = await context.Payments
-            .SingleAsync(item => item.OrderId == order.Id);
-        var redemption = await context.PromotionRedemptions
-            .SingleAsync(item => item.OrderId == order.Id);
-
-        Assert.Equal("VND", order.BaseCurrency);
-        Assert.Equal("USD", order.Currency);
-        Assert.Equal(0.00004m, order.ExchangeRate);
-        Assert.Equal(1_042_000m, order.BaseTotalAmount);
-        Assert.Equal(41.68m, order.TotalAmount);
-        Assert.Equal(500_000m, detail.BaseUnitPrice);
-        Assert.Equal(20m, detail.UnitPrice);
-        Assert.Equal("USD", payment.Currency);
-        Assert.Equal(41.68m, payment.Amount);
-        Assert.Equal(80_000m, redemption.DiscountAmount);
-    }
-
-    [Fact]
-    public async Task Checkout_FxChangeKeepsOldOrderSnapshotAndAppliesNewRateToNewOrder()
-    {
-        await using var context = TestAppDbContext.Create();
-        var fixture = await SeedCheckoutAsync(context);
-        var rates = new Dictionary<(string Base, string Quote), decimal>
-        {
-            [("VND", "USD")] = 0.00004m
-        };
-        var options = PricingOptions();
-        options.SupportedCurrencies = ["VND", "USD"];
-        var service = TestServiceFactory.CreateOrderService(
-            context,
-            new FixedTimeProvider(Now),
-            pricingOptions: options,
-            exchangeRateProvider: new TestExchangeRateProvider(
-                new FixedTimeProvider(Now),
-                rates));
-
-        var first = await service.PlaceOrderAsync(
-            fixture.User.Id,
-            new PlaceOrderRequest
-            {
-                ShippingAddress = "1 Snapshot Street",
-                PaymentMethod = PaymentMethod.CashOnDelivery,
-                ShippingMethod = ShippingMethod.Standard,
-                Currency = "USD"
-            },
-            "fx-snapshot-first");
-
-        await AddCartItemAsync(context, fixture.Cart.Id, fixture.Product.Id);
-        rates[("VND", "USD")] = 0.00005m;
-
-        var second = await service.PlaceOrderAsync(
-            fixture.User.Id,
-            new PlaceOrderRequest
-            {
-                ShippingAddress = "2 Snapshot Street",
-                PaymentMethod = PaymentMethod.CashOnDelivery,
-                ShippingMethod = ShippingMethod.Standard,
-                Currency = "USD"
-            },
-            "fx-snapshot-second");
-
-        context.ChangeTracker.Clear();
-        var orders = await context.Orders
-            .Where(order => order.Id == first.Id || order.Id == second.Id)
-            .OrderBy(order => order.OrderDate)
-            .ThenBy(order => order.Id)
-            .ToListAsync();
-        var firstStored = Assert.Single(orders, order => order.Id == first.Id);
-        var secondStored = Assert.Single(orders, order => order.Id == second.Id);
-
-        Assert.Equal(0.00004m, firstStored.ExchangeRate);
-        Assert.Equal(first.TotalAmount, firstStored.TotalAmount);
-        Assert.Equal(0.00005m, secondStored.ExchangeRate);
-        Assert.NotEqual(firstStored.TotalAmount, secondStored.TotalAmount);
     }
 
     [Fact]

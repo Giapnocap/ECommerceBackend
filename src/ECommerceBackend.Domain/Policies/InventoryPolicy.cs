@@ -33,7 +33,7 @@ namespace ECommerceBackend.Domain.Policies
             {
                 throw new DomainRuleViolationException(
                     "inventory_insufficient",
-                    $"Sản phẩm '{product.Name}' không đủ tồn kho. Hiện có: {product.StockQuantity}, yêu cầu: {quantity}.");
+                    "Sản phẩm không đủ tồn kho tại GTH Mart!");
             }
         }
 

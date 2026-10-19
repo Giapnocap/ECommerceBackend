@@ -21,7 +21,6 @@ namespace ECommerceBackend.Application.Services
         private readonly OrderQueryUseCase _queries;
         private readonly TimeProvider _timeProvider;
         private readonly IAuditWriter _audit;
-        private readonly OnlinePaymentRefundUseCase? _onlineRefund;
 
         public OrderRefundUseCase(
             IPaymentRepository paymentRepository,
@@ -39,7 +38,8 @@ namespace ECommerceBackend.Application.Services
                 consistency,
                 outbox,
                 queries,
-                TimeProvider.System)
+                TimeProvider.System,
+                null)
         {
         }
 
@@ -52,8 +52,7 @@ namespace ECommerceBackend.Application.Services
             IOutboxWriter outbox,
             OrderQueryUseCase queries,
             TimeProvider timeProvider,
-            IAuditWriter? auditWriter = null,
-            OnlinePaymentRefundUseCase? onlineRefund = null)
+            IAuditWriter? auditWriter = null)
         {
             _paymentRepository = paymentRepository;
             _fulfillmentRepository = fulfillmentRepository;
@@ -64,7 +63,6 @@ namespace ECommerceBackend.Application.Services
             _queries = queries;
             _timeProvider = timeProvider;
             _audit = auditWriter ?? NullAuditWriter.Instance;
-            _onlineRefund = onlineRefund;
         }
 
         public async Task<OrderResponse> ExecuteAsync(
@@ -73,24 +71,6 @@ namespace ECommerceBackend.Application.Services
             RecordOrderRefundRequest request,
             CancellationToken cancellationToken = default)
         {
-            var paymentMethod = await _paymentRepository
-                .GetMethodByOrderIdAsync(orderId, cancellationToken);
-            if (paymentMethod == PaymentMethod.Card)
-            {
-                if (_onlineRefund == null)
-                {
-                    throw new ConflictException(
-                        "online_refund_unavailable",
-                        "Luồng hoàn tiền trực tuyến chưa sẵn sàng.");
-                }
-
-                return await _onlineRefund.ExecuteAsync(
-                    orderId,
-                    actorUserId,
-                    request,
-                    cancellationToken);
-            }
-
             await using var transaction = await _consistency.BeginTransactionAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
@@ -114,13 +94,6 @@ namespace ECommerceBackend.Application.Services
                         "return_request_missing",
                         "Đơn hàng không có yêu cầu trả hàng hợp lệ.");
 
-                if (payment.Method != PaymentMethod.CashOnDelivery)
-                {
-                    throw new ConflictException(
-                        "manual_refund_method_unsupported",
-                        "Luồng ghi nhận hoàn tiền thủ công chỉ hỗ trợ thanh toán khi nhận hàng.");
-                }
-
                 var reference = NormalizeReference(request.Reference);
                 if (payment.Status == PaymentStatus.Refunded
                     || order.Status == OrderStatus.Refunded
@@ -131,7 +104,6 @@ namespace ECommerceBackend.Application.Services
                             payment.Id,
                             cancellationToken);
                     if (existingRefund == null
-                        || existingRefund.Source != PaymentStatusChangeSource.ManualRefund
                         || !string.Equals(
                             existingRefund.Reference,
                             reference,

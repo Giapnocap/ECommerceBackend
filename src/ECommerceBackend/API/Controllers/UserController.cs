@@ -10,7 +10,6 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/users")]
     [Route("api/v{version:apiVersion}/users")]
     [Authorize]
     [Produces("application/json")]

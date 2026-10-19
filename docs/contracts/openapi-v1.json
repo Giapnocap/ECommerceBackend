@@ -103,6 +103,10 @@
             "nullable": true,
             "type": "string"
           },
+          "actorName": {
+            "nullable": true,
+            "type": "string"
+          },
           "actorUserId": {
             "format": "uuid",
             "nullable": true,
@@ -117,6 +121,10 @@
             "type": "string"
           },
           "entityId": {
+            "nullable": true,
+            "type": "string"
+          },
+          "entityName": {
             "nullable": true,
             "type": "string"
           },
@@ -235,27 +243,6 @@
           },
           "userName": {
             "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "AuthSessionResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "expiresAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "isCurrent": {
-            "type": "boolean"
-          },
-          "lastRefreshedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "sessionId": {
-            "format": "uuid",
             "type": "string"
           }
         },
@@ -384,16 +371,6 @@
         },
         "type": "object"
       },
-      "ConfirmEmailRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "token": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
       "CreateCategoryRequest": {
         "additionalProperties": false,
         "properties": {
@@ -438,6 +415,9 @@
       "CreatePromotionRequest": {
         "additionalProperties": false,
         "properties": {
+          "applicablePaymentMethod": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
           "code": {
             "nullable": true,
             "type": "string"
@@ -1013,141 +993,6 @@
         },
         "type": "object"
       },
-      "DataRetentionRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "applyChanges": {
-            "type": "boolean"
-          },
-          "maxBatchSize": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "DataRetentionResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "applyChangesEnabled": {
-            "type": "boolean"
-          },
-          "dryRun": {
-            "type": "boolean"
-          },
-          "expiredRefreshTokenCandidateCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "expiredRefreshTokenCutoff": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "expiredRefreshTokenDeletedCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "processedOutboxCandidateCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "processedOutboxCutoff": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "processedOutboxDeletedCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "webhookPayloadCandidateCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "webhookPayloadCutoff": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "webhookPayloadRedactedCount": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "DeadLetterResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "attempts": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "deadLetteredAt": {
-            "format": "date-time",
-            "nullable": true,
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "lastAttemptAt": {
-            "format": "date-time",
-            "nullable": true,
-            "type": "string"
-          },
-          "lastError": {
-            "nullable": true,
-            "type": "string"
-          },
-          "occurredAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "type": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "DeadLetterResponsePagedResult": {
-        "additionalProperties": false,
-        "properties": {
-          "hasNextPage": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "hasPreviousPage": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/DeadLetterResponse"
-            },
-            "nullable": true,
-            "type": "array"
-          },
-          "page": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "pageSize": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "totalCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "totalPages": {
-            "format": "int32",
-            "readOnly": true,
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
       "DispatchShipmentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1160,42 +1005,6 @@
             "type": "string"
           },
           "trackingNumber": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ExternalPaymentResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "clientSecret": {
-            "nullable": true,
-            "type": "string"
-          },
-          "paymentId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "provider": {
-            "nullable": true,
-            "type": "string"
-          },
-          "providerPaymentId": {
-            "nullable": true,
-            "type": "string"
-          },
-          "status": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ForgotPasswordRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "email": {
             "nullable": true,
             "type": "string"
           }
@@ -1490,6 +1299,10 @@
             "format": "uuid",
             "type": "string"
           },
+          "productImageUrl": {
+            "nullable": true,
+            "type": "string"
+          },
           "productName": {
             "nullable": true,
             "type": "string"
@@ -1516,6 +1329,9 @@
           "currency": {
             "nullable": true,
             "type": "string"
+          },
+          "paymentMethod": {
+            "$ref": "#/components/schemas/PaymentMethod"
           },
           "promotionCode": {
             "nullable": true,
@@ -2429,100 +2245,12 @@
         },
         "type": "object"
       },
-      "PromotionAnalyticsResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "code": {
-            "nullable": true,
-            "type": "string"
-          },
-          "currency": {
-            "nullable": true,
-            "type": "string"
-          },
-          "discountAmount": {
-            "format": "double",
-            "type": "number"
-          },
-          "endsAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "generatedOrderCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "grossRevenue": {
-            "format": "double",
-            "type": "number"
-          },
-          "isActive": {
-            "type": "boolean"
-          },
-          "netRevenue": {
-            "format": "double",
-            "type": "number"
-          },
-          "promotionId": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "startsAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "status": {
-            "nullable": true,
-            "type": "string"
-          },
-          "usageCount": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "PromotionAnalyticsResponsePagedResult": {
-        "additionalProperties": false,
-        "properties": {
-          "hasNextPage": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "hasPreviousPage": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PromotionAnalyticsResponse"
-            },
-            "nullable": true,
-            "type": "array"
-          },
-          "page": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "pageSize": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "totalCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "totalPages": {
-            "format": "int32",
-            "readOnly": true,
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
       "PromotionResponse": {
         "additionalProperties": false,
         "properties": {
+          "applicablePaymentMethod": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
           "code": {
             "nullable": true,
             "type": "string"
@@ -2662,23 +2390,6 @@
         },
         "type": "object"
       },
-      "RedriveOutboxResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "nextAttemptAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "reDriven": {
-            "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
       "RefreshTokenRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2709,20 +2420,6 @@
             "type": "string"
           },
           "userName": {
-            "nullable": true,
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ResetPasswordRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "newPassword": {
-            "nullable": true,
-            "type": "string"
-          },
-          "token": {
             "nullable": true,
             "type": "string"
           }
@@ -3226,6 +2923,9 @@
       "UpdatePromotionRequest": {
         "additionalProperties": false,
         "properties": {
+          "applicablePaymentMethod": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
           "endsAt": {
             "format": "date-time",
             "type": "string"
@@ -3277,66 +2977,6 @@
           },
           "isMain": {
             "type": "boolean"
-          }
-        },
-        "type": "object"
-      },
-      "UploadReconciliationRequest": {
-        "additionalProperties": false,
-        "properties": {
-          "deleteOrphans": {
-            "type": "boolean"
-          },
-          "maxDeletes": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "UploadReconciliationResponse": {
-        "additionalProperties": false,
-        "properties": {
-          "deletedFileCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "dryRun": {
-            "type": "boolean"
-          },
-          "eligibleOrphanCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "missingFileCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "missingFiles": {
-            "items": {
-              "type": "string"
-            },
-            "nullable": true,
-            "type": "array"
-          },
-          "orphanFileCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "orphanFiles": {
-            "items": {
-              "type": "string"
-            },
-            "nullable": true,
-            "type": "array"
-          },
-          "referencedFileCount": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "scannedFileCount": {
-            "format": "int32",
-            "type": "integer"
           }
         },
         "type": "object"
@@ -5087,213 +4727,6 @@
         ]
       }
     },
-    "/api/v1/admin/promotions/analytics": {
-      "get": {
-        "parameters": [
-          {
-            "in": "query",
-            "name": "SortBy",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "Page",
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "PageSize",
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "From",
-            "schema": {
-              "format": "date-time",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "To",
-            "schema": {
-              "format": "date-time",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PromotionAnalyticsResponsePagedResult"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "AdminPromotionAnalytics"
-        ]
-      }
-    },
-    "/api/v1/admin/promotions/{id}/analytics": {
-      "get": {
-        "parameters": [
-          {
-            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "From",
-            "schema": {
-              "format": "date-time",
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "To",
-            "schema": {
-              "format": "date-time",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PromotionAnalyticsResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "404": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "AdminPromotionAnalytics"
-        ]
-      }
-    },
     "/api/v1/admin/reports/customers": {
       "get": {
         "parameters": [
@@ -5743,256 +5176,6 @@
         ]
       }
     },
-    "/api/v1/auth/email-verification": {
-      "post": {
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/email-verification/confirm": {
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/*\u002Bjson": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmEmailRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmEmailRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ConfirmEmailRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "409": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "D\u1EEF li\u1EC7u xung \u0111\u1ED9t do t\u00E0i nguy\u00EAn \u0111\u00E3 \u0111\u01B0\u1EE3c m\u1ED9t thao t\u00E1c kh\u00E1c thay \u0111\u1ED5i."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/forgot-password": {
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/*\u002Bjson": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
     "/api/v1/auth/login": {
       "post": {
         "requestBody": {
@@ -6132,90 +5315,6 @@
               }
             },
             "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/logout-all": {
-      "post": {
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
           },
           "500": {
             "content": {
@@ -6409,305 +5508,6 @@
             "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
           }
         },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/reset-password": {
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/*\u002Bjson": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MessageResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "409": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "D\u1EEF li\u1EC7u xung \u0111\u1ED9t do t\u00E0i nguy\u00EAn \u0111\u00E3 \u0111\u01B0\u1EE3c m\u1ED9t thao t\u00E1c kh\u00E1c thay \u0111\u1ED5i."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/sessions": {
-      "delete": {
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      },
-      "get": {
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AuthSessionResponse"
-                  },
-                  "type": "array"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/sessions/{sessionId}": {
-      "delete": {
-        "parameters": [
-          {
-            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
-            "in": "path",
-            "name": "sessionId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No Content"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
         "tags": [
           "Auth"
         ]
@@ -7977,340 +6777,6 @@
               }
             },
             "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Operations"
-        ]
-      }
-    },
-    "/api/v1/operations/data-retention": {
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/*\u002Bjson": {
-              "schema": {
-                "$ref": "#/components/schemas/DataRetentionRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DataRetentionRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DataRetentionRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DataRetentionResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Operations"
-        ]
-      }
-    },
-    "/api/v1/operations/outbox/dead-letters": {
-      "get": {
-        "parameters": [
-          {
-            "in": "query",
-            "name": "Page",
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "PageSize",
-            "schema": {
-              "format": "int32",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeadLetterResponsePagedResult"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Operations"
-        ]
-      }
-    },
-    "/api/v1/operations/outbox/dead-letters/{id}/redrive": {
-      "post": {
-        "parameters": [
-          {
-            "description": "M\u00E3 \u0111\u1ECBnh danh t\u00E0i nguy\u00EAn tr\u00EAn \u0111\u01B0\u1EDDng d\u1EABn.",
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RedriveOutboxResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "404": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Operations"
-        ]
-      }
-    },
-    "/api/v1/operations/uploads/reconcile": {
-      "post": {
-        "requestBody": {
-          "content": {
-            "application/*\u002Bjson": {
-              "schema": {
-                "$ref": "#/components/schemas/UploadReconciliationRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UploadReconciliationRequest"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UploadReconciliationRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UploadReconciliationResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
           },
           "500": {
             "content": {
@@ -9898,213 +8364,6 @@
         ]
       }
     },
-    "/api/v1/payments/orders/{orderId}/initialize": {
-      "post": {
-        "parameters": [
-          {
-            "description": "Ma don hang can khoi tao giao dich thanh toan.",
-            "in": "path",
-            "name": "orderId",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExternalPaymentResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "403": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ng\u01B0\u1EDDi d\u00F9ng \u0111\u00E3 x\u00E1c th\u1EF1c nh\u01B0ng kh\u00F4ng c\u00F3 \u0111\u1EE7 quy\u1EC1n th\u1EF1c hi\u1EC7n thao t\u00E1c."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "security": [
-          {
-            "Bearer": []
-          }
-        ],
-        "tags": [
-          "Payment"
-        ]
-      }
-    },
-    "/api/v1/payments/webhooks/stripe": {
-      "post": {
-        "parameters": [
-          {
-            "description": "Chu ky webhook Stripe duoc xac minh tren raw request body.",
-            "in": "header",
-            "name": "Stripe-Signature",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object"
-              }
-            }
-          },
-          "description": "N\u1ED9i dung JSON c\u1EE7a c\u1ED5ng thanh to\u00E1n. Chu\u1ED7i byte UTF-8 ch\u00EDnh x\u00E1c c\u1EE7a y\u00EAu c\u1EA7u \u0111\u01B0\u1EE3c d\u00F9ng \u0111\u1EC3 x\u00E1c minh ch\u1EEF k\u00FD.",
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaymentWebhookResponse"
-                }
-              }
-            },
-            "description": "OK"
-          },
-          "400": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
-          },
-          "401": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Ch\u01B0a x\u00E1c th\u1EF1c - m\u00E3 truy c\u1EADp b\u1ECB thi\u1EBFu ho\u1EB7c kh\u00F4ng h\u1EE3p l\u1EC7."
-          },
-          "404": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Kh\u00F4ng t\u00ECm th\u1EA5y t\u00E0i nguy\u00EAn \u0111\u01B0\u1EE3c y\u00EAu c\u1EA7u."
-          },
-          "413": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "D\u1EEF li\u1EC7u g\u1EEDi l\u00EAn v\u01B0\u1EE3t qu\u00E1 gi\u1EDBi h\u1EA1n c\u1EA5u h\u00ECnh."
-          },
-          "429": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Qu\u00E1 nhi\u1EC1u y\u00EAu c\u1EA7u - \u0111\u00E3 v\u01B0\u1EE3t gi\u1EDBi h\u1EA1n truy c\u1EADp.",
-            "headers": {
-              "Retry-After": {
-                "description": "S\u1ED1 gi\u00E2y t\u1ED1i thi\u1EC3u c\u1EA7n ch\u1EDD tr\u01B0\u1EDBc khi g\u1EEDi l\u1EA1i y\u00EAu c\u1EA7u.",
-                "schema": {
-                  "format": "int32",
-                  "minimum": 1,
-                  "type": "integer"
-                }
-              }
-            }
-          },
-          "500": {
-            "content": {
-              "application/problem\u002Bjson": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
-          }
-        },
-        "tags": [
-          "Payment"
-        ]
-      }
-    },
     "/api/v1/payments/webhooks/{providerCode}": {
       "post": {
         "parameters": [
@@ -11356,6 +9615,48 @@
             "Bearer": []
           }
         ],
+        "tags": [
+          "Promotion"
+        ]
+      }
+    },
+    "/api/v1/promotions/available": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PromotionResponse"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Y\u00EAu c\u1EA7u kh\u00F4ng h\u1EE3p l\u1EC7 do d\u1EEF li\u1EC7u \u0111\u1EA7u v\u00E0o ho\u1EB7c quy t\u1EAFc nghi\u1EC7p v\u1EE5."
+          },
+          "500": {
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "L\u1ED7i x\u1EED l\u00FD n\u1ED9i b\u1ED9 c\u1EE7a m\u00E1y ch\u1EE7."
+          }
+        },
         "tags": [
           "Promotion"
         ]

@@ -9,29 +9,17 @@ namespace ECommerceBackend.Application.Services
         private readonly AuthLoginUseCase _login;
         private readonly AuthRefreshUseCase _refresh;
         private readonly AuthLogoutUseCase _logout;
-        private readonly AuthLogoutAllUseCase _logoutAll;
-        private readonly PasswordResetUseCase _passwordReset;
-        private readonly AuthSessionManagementUseCase _sessionManagement;
-        private readonly EmailVerificationUseCase _emailVerification;
 
         public AuthService(
             AuthRegistrationUseCase registration,
             AuthLoginUseCase login,
             AuthRefreshUseCase refresh,
-            AuthLogoutUseCase logout,
-            AuthLogoutAllUseCase logoutAll,
-            PasswordResetUseCase passwordReset,
-            AuthSessionManagementUseCase sessionManagement,
-            EmailVerificationUseCase emailVerification)
+            AuthLogoutUseCase logout)
         {
             _registration = registration;
             _login = login;
             _refresh = refresh;
             _logout = logout;
-            _logoutAll = logoutAll;
-            _passwordReset = passwordReset;
-            _sessionManagement = sessionManagement;
-            _emailVerification = emailVerification;
         }
 
         public Task<AuthResponse> RegisterAsync(
@@ -44,44 +32,6 @@ namespace ECommerceBackend.Application.Services
             CancellationToken cancellationToken = default)
             => _login.ExecuteAsync(request, cancellationToken);
 
-        public Task RequestPasswordResetAsync(
-            ForgotPasswordRequest request,
-            CancellationToken cancellationToken = default)
-            => _passwordReset.RequestAsync(request, cancellationToken);
-
-        public Task ResetPasswordAsync(
-            ResetPasswordRequest request,
-            CancellationToken cancellationToken = default)
-            => _passwordReset.ResetAsync(request, cancellationToken);
-
-        public Task RequestEmailVerificationAsync(
-            Guid userId,
-            CancellationToken cancellationToken = default)
-            => _emailVerification.RequestAsync(userId, cancellationToken);
-
-        public Task ConfirmEmailAsync(
-            ConfirmEmailRequest request,
-            CancellationToken cancellationToken = default)
-            => _emailVerification.ConfirmAsync(request, cancellationToken);
-
-        public Task<IReadOnlyList<AuthSessionResponse>> GetSessionsAsync(
-            Guid userId,
-            Guid currentSessionId,
-            CancellationToken cancellationToken = default)
-            => _sessionManagement.GetAsync(
-                userId,
-                currentSessionId,
-                cancellationToken);
-
-        public Task RevokeSessionAsync(
-            Guid userId,
-            Guid sessionId,
-            CancellationToken cancellationToken = default)
-            => _sessionManagement.RevokeAsync(
-                userId,
-                sessionId,
-                cancellationToken);
-
         public Task<AuthResponse> RefreshAsync(
             RefreshTokenRequest request,
             CancellationToken cancellationToken = default)
@@ -92,10 +42,5 @@ namespace ECommerceBackend.Application.Services
             LogoutRequest request,
             CancellationToken cancellationToken = default)
             => _logout.ExecuteAsync(userId, request, cancellationToken);
-
-        public Task LogoutAllAsync(
-            Guid userId,
-            CancellationToken cancellationToken = default)
-            => _logoutAll.ExecuteAsync(userId, cancellationToken);
     }
 }

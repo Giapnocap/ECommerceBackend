@@ -94,9 +94,6 @@ namespace ECommerceBackend.Application.Services
                 userId,
                 request,
                 cancellationToken);
-            var exchangeRate = await _pricing.GetExchangeRateAsync(
-                request.Currency,
-                cancellationToken);
 
             Guid orderId;
             await using var transaction =
@@ -154,8 +151,8 @@ namespace ECommerceBackend.Application.Services
                     cart.CartItems,
                     request.PromotionCode,
                     request.ShippingMethod,
+                    request.PaymentMethod,
                     occurredAt,
-                    exchangeRate,
                     cancellationToken);
                 if (request.ExpectedTotalAmount.HasValue
                     && request.ExpectedTotalAmount.Value

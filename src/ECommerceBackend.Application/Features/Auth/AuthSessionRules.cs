@@ -37,7 +37,7 @@ namespace ECommerceBackend.Application.Services
             => new(
                 401,
                 "unauthorized",
-                "Tên đăng nhập, mật khẩu hoặc token không hợp lệ.");
+                "Tên đăng nhập hoặc mật khẩu không chính xác.");
 
         public static ConflictException SessionConflict(Exception inner)
             => new(

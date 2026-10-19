@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Asp.Versioning;
 using ECommerceBackend.Application.Common;
 using ECommerceBackend.Application.DTOs;
@@ -10,38 +9,17 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/operations")]
     [Route("api/v{version:apiVersion}/operations")]
     [Authorize(Roles = RoleNames.Admin)]
     [Produces("application/json")]
     public sealed class OperationsController : ControllerBase
     {
         private readonly IOperationsService _operations;
-        private readonly IUploadReconciliationService _uploadReconciliation;
 
-        public OperationsController(
-            IOperationsService operations,
-            IUploadReconciliationService uploadReconciliation)
+        public OperationsController(IOperationsService operations)
         {
             _operations = operations;
-            _uploadReconciliation = uploadReconciliation;
         }
-
-        private Guid CurrentUserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-        [HttpGet("outbox/dead-letters")]
-        [ProducesResponseType(typeof(PagedResult<DeadLetterResponse>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetDeadLetters(
-            [FromQuery] DeadLetterQueryParams query,
-            CancellationToken cancellationToken)
-            => Ok(await _operations.GetDeadLettersAsync(query, cancellationToken));
-
-        [HttpPost("outbox/dead-letters/{id:guid}/redrive")]
-        [ProducesResponseType(typeof(RedriveOutboxResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> RedriveDeadLetter(
-            Guid id,
-            CancellationToken cancellationToken)
-            => Ok(await _operations.RedriveDeadLetterAsync(id, CurrentUserId, cancellationToken));
 
         [HttpGet("audit-events")]
         [ProducesResponseType(typeof(PagedResult<AuditEventResponse>), StatusCodes.Status200OK)]
@@ -56,25 +34,5 @@ namespace ECommerceBackend.API.Controllers
             Guid id,
             CancellationToken cancellationToken)
             => Ok(await _operations.GetAuditEventAsync(id, cancellationToken));
-
-        [HttpPost("uploads/reconcile")]
-        [ProducesResponseType(typeof(UploadReconciliationResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> ReconcileUploads(
-            [FromBody] UploadReconciliationRequest request,
-            CancellationToken cancellationToken)
-            => Ok(await _uploadReconciliation.ReconcileAsync(
-                request,
-                CurrentUserId,
-                cancellationToken));
-
-        [HttpPost("data-retention")]
-        [ProducesResponseType(typeof(DataRetentionResponse), StatusCodes.Status200OK)]
-        public async Task<IActionResult> RunDataRetention(
-            [FromBody] DataRetentionRequest request,
-            CancellationToken cancellationToken)
-            => Ok(await _operations.RunDataRetentionAsync(
-                request,
-                CurrentUserId,
-                cancellationToken));
     }
 }

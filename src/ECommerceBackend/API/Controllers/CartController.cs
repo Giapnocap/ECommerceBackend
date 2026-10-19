@@ -10,7 +10,6 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/cart")]
     [Route("api/v{version:apiVersion}/cart")]
     [Authorize(Policy = AuthorizationPolicyNames.CustomerAccess)]
     [Produces("application/json")]

@@ -19,6 +19,7 @@ namespace ECommerceBackend.Domain.Entities
         public int UsageLimitPerCustomer { get; private set; }
         public int UsedCount { get; private set; }
         public bool IsActive { get; private set; }
+        public PaymentMethod? ApplicablePaymentMethod { get; private set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? UpdatedAt { get; private set; }
         public byte[] RowVersion { get; set; } = [];
@@ -38,7 +39,8 @@ namespace ECommerceBackend.Domain.Entities
             DateTime endsAt,
             int usageLimit,
             int usageLimitPerCustomer,
-            DateTime occurredAt)
+            DateTime occurredAt,
+            PaymentMethod? applicablePaymentMethod = null)
         {
             var promotion = new Promotion
             {
@@ -57,7 +59,8 @@ namespace ECommerceBackend.Domain.Entities
                 usageLimit,
                 usageLimitPerCustomer,
                 occurredAt,
-                isCreation: true);
+                isCreation: true,
+                applicablePaymentMethod: applicablePaymentMethod);
             return promotion;
         }
 
@@ -71,7 +74,8 @@ namespace ECommerceBackend.Domain.Entities
             int usageLimit,
             int usageLimitPerCustomer,
             bool isActive,
-            DateTime occurredAt)
+            DateTime occurredAt,
+            PaymentMethod? applicablePaymentMethod = null)
         {
             if (usageLimit < UsedCount)
             {
@@ -91,7 +95,8 @@ namespace ECommerceBackend.Domain.Entities
                 usageLimit,
                 usageLimitPerCustomer,
                 occurredAt,
-                isCreation: false);
+                isCreation: false,
+                applicablePaymentMethod: applicablePaymentMethod);
 
             IsActive = isActive;
             UpdatedAt = occurredAt;
@@ -100,9 +105,10 @@ namespace ECommerceBackend.Domain.Entities
         public decimal CalculateDiscount(
             decimal subtotal,
             DateTime occurredAt,
-            int customerUsageCount)
+            int customerUsageCount,
+            PaymentMethod? paymentMethod = null)
         {
-            EnsureEligible(subtotal, occurredAt, customerUsageCount);
+            EnsureEligible(subtotal, occurredAt, customerUsageCount, paymentMethod);
 
             decimal discount;
             try
@@ -139,9 +145,10 @@ namespace ECommerceBackend.Domain.Entities
         public void Redeem(
             decimal subtotal,
             DateTime occurredAt,
-            int customerUsageCount)
+            int customerUsageCount,
+            PaymentMethod? paymentMethod = null)
         {
-            EnsureEligible(subtotal, occurredAt, customerUsageCount);
+            EnsureEligible(subtotal, occurredAt, customerUsageCount, paymentMethod);
             UsedCount = checked(UsedCount + 1);
             UpdatedAt = occurredAt;
         }
@@ -166,7 +173,8 @@ namespace ECommerceBackend.Domain.Entities
         private void EnsureEligible(
             decimal subtotal,
             DateTime occurredAt,
-            int customerUsageCount)
+            int customerUsageCount,
+            PaymentMethod? paymentMethod = null)
         {
             if (customerUsageCount < 0)
             {
@@ -216,6 +224,16 @@ namespace ECommerceBackend.Domain.Entities
                     "promotion_customer_limit_reached",
                     "Bạn đã sử dụng hết số lượt cho phép của mã khuyến mãi này.");
             }
+
+            if (ApplicablePaymentMethod.HasValue && paymentMethod.HasValue && ApplicablePaymentMethod.Value != paymentMethod.Value)
+            {
+                var methodLabel = ApplicablePaymentMethod.Value == PaymentMethod.CashOnDelivery
+                    ? "thanh toán khi nhận hàng (COD)"
+                    : "thanh toán trực tuyến (Online)";
+                throw new DomainRuleViolationException(
+                    "promotion_payment_method_not_eligible",
+                    $"Mã khuyến mãi này chỉ áp dụng cho hình thức {methodLabel}.");
+            }
         }
 
         private void Configure(
@@ -229,8 +247,16 @@ namespace ECommerceBackend.Domain.Entities
             int usageLimit,
             int usageLimitPerCustomer,
             DateTime occurredAt,
-            bool isCreation)
+            bool isCreation,
+            PaymentMethod? applicablePaymentMethod = null)
         {
+            if (applicablePaymentMethod.HasValue && !Enum.IsDefined(applicablePaymentMethod.Value))
+            {
+                throw new DomainRuleViolationException(
+                    "promotion_payment_method_invalid",
+                    "Phương thức thanh toán áp dụng không hợp lệ.");
+            }
+
             var normalizedCode = NormalizeCode(code);
             if (!Enum.IsDefined(type))
             {
@@ -317,6 +343,7 @@ namespace ECommerceBackend.Domain.Entities
             EndsAt = endsAt;
             UsageLimit = usageLimit;
             UsageLimitPerCustomer = usageLimitPerCustomer;
+            ApplicablePaymentMethod = applicablePaymentMethod;
         }
 
         public static string NormalizeCode(string code)

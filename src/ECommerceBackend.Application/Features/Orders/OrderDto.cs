@@ -7,6 +7,7 @@ namespace ECommerceBackend.Application.DTOs
         public Guid Id { get; set; }
         public Guid ProductId { get; set; }
         public string ProductName { get; set; } = string.Empty;
+        public string? ProductImageUrl { get; set; }
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal BaseUnitPrice { get; set; }
@@ -146,6 +147,7 @@ namespace ECommerceBackend.Application.DTOs
         public ShippingMethod ShippingMethod { get; set; } = ShippingMethod.Standard;
         public string? PromotionCode { get; set; }
         public string? Currency { get; set; }
+        public PaymentMethod? PaymentMethod { get; set; }
     }
 
     public sealed class OrderQuoteResponse

@@ -51,11 +51,9 @@ namespace ECommerceBackend.Application.Services
             using var telemetry = BusinessTelemetry.Start(
                 "auth.login",
                 cancellationToken);
-            var normalizedUserName = AuthSessionRules.Normalize(
-                request.UserName);
             var userId =
-                await _userRepository.GetActiveUserIdByUserNameAsync(
-                    normalizedUserName,
+                await _userRepository.GetActiveUserIdByUserNameOrPhoneAsync(
+                    request.UserName.Trim(),
                     cancellationToken);
             if (!userId.HasValue)
             {

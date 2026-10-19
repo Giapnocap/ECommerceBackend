@@ -291,23 +291,7 @@ public class PaymentAndOutboxTests
         Assert.False(capability.RequiresExternalInitialization);
     }
 
-    [Fact]
-    public void StripeCheckoutProvider_DefersExternalCreationUntilAfterCommit()
-    {
-        var provider = new StripeCheckoutPaymentProvider();
-        var result = PaymentProviderContract.NormalizeInitialization(
-            provider,
-            provider.Initialize(new PaymentInitializationRequest(
-                Guid.NewGuid(),
-                "ORDER-STRIPE",
-                100_000)));
 
-        Assert.Equal(PaymentMethod.Card, provider.CheckoutMethod);
-        Assert.True(provider.SupportsWebhooks);
-        Assert.True(provider.RequiresExternalInitialization);
-        Assert.Equal(PaymentStatus.Pending, result.Status);
-        Assert.Null(result.ProviderTransactionId);
-    }
 
     [Theory]
     [InlineData("")]
@@ -806,46 +790,7 @@ public class PaymentAndOutboxTests
             DateTime.UtcNow));
     }
 
-    [Fact]
-    public async Task OutboxHealthCheck_ReportsStaleBacklogAndDeadLetters()
-    {
-        await using var context = TestAppDbContext.Create();
-        var now = new DateTimeOffset(2026, 7, 21, 8, 0, 0, TimeSpan.Zero);
-        var clock = new FixedTimeProvider(now);
-        var stale = new OutboxMessage
-        {
-            Id = Guid.NewGuid(),
-            Type = OutboxMessageTypes.NotificationRequested,
-            Payload = "{}",
-            OccurredAt = now.UtcDateTime.AddMinutes(-2),
-            NextAttemptAt = now.UtcDateTime.AddMinutes(-2)
-        };
-        context.OutboxMessages.Add(stale);
-        await context.SaveChangesAsync();
 
-        var healthCheck = new OutboxHealthCheck(
-            context,
-            Options.Create(new OutboxOptions
-            {
-                Enabled = true,
-                MaxPendingAgeMinutes = 1
-            }),
-            NullLogger<OutboxHealthCheck>.Instance,
-            clock,
-            new OutboxWorkerStatus());
-
-        var staleResult = await healthCheck.CheckHealthAsync(new HealthCheckContext());
-        Assert.Equal(HealthStatus.Unhealthy, staleResult.Status);
-        Assert.Equal(2d, staleResult.Data["oldestPendingAgeMinutes"]);
-
-        stale.DeadLetteredAt = now.UtcDateTime;
-        stale.Attempts = 1;
-        await context.SaveChangesAsync();
-
-        var deadLetterResult = await healthCheck.CheckHealthAsync(new HealthCheckContext());
-        Assert.Equal(HealthStatus.Degraded, deadLetterResult.Status);
-        Assert.Equal(1, deadLetterResult.Data["deadLetterCount"]);
-    }
 
     private static OutboxProcessor CreateOutboxProcessor(
         Infrastructure.Data.AppDbContext context,

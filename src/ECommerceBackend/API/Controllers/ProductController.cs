@@ -13,7 +13,6 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/products")]
     [Route("api/v{version:apiVersion}/products")]
     [Produces("application/json")]
     public class ProductController : ControllerBase

@@ -38,11 +38,11 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         using var client = await _factory.CreateInitializedClientAsync();
 
         var health = await client.GetAsync("/health/live");
-        var products = await client.GetAsync("/api/products?page=1&pageSize=10");
+        var products = await client.GetAsync("/api/v1/products?page=1&pageSize=10");
         var productSummaries = await client.GetAsync(
-            "/api/products/summaries?page=1&pageSize=10");
-        var categories = await client.GetAsync("/api/categories");
-        var paymentMethods = await client.GetAsync("/api/payments/methods");
+            "/api/v1/products/summaries?page=1&pageSize=10");
+        var categories = await client.GetAsync("/api/v1/categories");
+        var paymentMethods = await client.GetAsync("/api/v1/payments/methods");
         var openApi = await client.GetAsync("/swagger/v1/swagger.json");
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
@@ -52,9 +52,6 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.Equal(HttpStatusCode.OK, paymentMethods.StatusCode);
         Assert.Equal(HttpStatusCode.OK, openApi.StatusCode);
         Assert.True(health.Headers.CacheControl?.NoStore);
-
-        var healthDetails = await client.GetAsync("/health/details");
-        Assert.Equal(HttpStatusCode.Unauthorized, healthDetails.StatusCode);
     }
 
     [Fact]
@@ -67,7 +64,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         using var openApiResponse = await client.GetAsync("/swagger/v1/swagger.json");
         using var openApi = await ReadJsonAsync(openApiResponse);
 
-        Assert.Equal(HttpStatusCode.OK, legacy.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, legacy.StatusCode);
         Assert.Equal(HttpStatusCode.OK, versioned.StatusCode);
         Assert.Contains(
             "1.0",
@@ -88,26 +85,26 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             await client.GetAsync("/api/not-a-real-endpoint"),
             HttpStatusCode.NotFound,
             "endpoint_not_found",
-            "Không tìm thấy endpoint được yêu cầu.");
+            "Kh\u00f4ng t\u00ecm th\u1ea5y endpoint \u0111\u01b0\u1ee3c y\u00eau c\u1ea7u.");
         await AssertVietnameseProblemAsync(
             await client.GetAsync("/api/v2/products"),
             HttpStatusCode.NotFound,
             "endpoint_not_found",
-            "Không tìm thấy endpoint được yêu cầu.");
+            "Kh\u00f4ng t\u00ecm th\u1ea5y endpoint \u0111\u01b0\u1ee3c y\u00eau c\u1ea7u.");
         await AssertVietnameseProblemAsync(
             await client.SendAsync(new HttpRequestMessage(
                 HttpMethod.Patch,
-                "/api/products")),
+                "/api/v1/products")),
             HttpStatusCode.MethodNotAllowed,
             "method_not_allowed",
-            "Phương thức HTTP không được hỗ trợ cho endpoint này.");
+            "Ph\u01b0\u01a1ng th\u1ee9c HTTP kh\u00f4ng \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3 cho endpoint n\u00e0y.");
         await AssertVietnameseProblemAsync(
             await client.PostAsync(
-                "/api/auth/login",
+                "/api/v1/auth/login",
                 new StringContent("plain", Encoding.UTF8, "text/plain")),
             HttpStatusCode.UnsupportedMediaType,
             "unsupported_media_type",
-            "Định dạng dữ liệu gửi lên không được hỗ trợ.");
+            "\u0110\u1ecbnh d\u1ea1ng d\u1eef li\u1ec7u g\u1eedi l\u00ean kh\u00f4ng \u0111\u01b0\u1ee3c h\u1ed7 tr\u1ee3.");
     }
 
     [Fact]
@@ -212,20 +209,6 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             .GetProperty("headers")
             .TryGetProperty("Retry-After", out _));
 
-        var stripeWebhook = paths
-            .GetProperty("/api/v1/payments/webhooks/stripe")
-            .GetProperty("post");
-        Assert.False(stripeWebhook.TryGetProperty("security", out _));
-        AssertRequiredParameter(
-            stripeWebhook,
-            "Stripe-Signature",
-            "header");
-
-        var initializePayment = paths
-            .GetProperty("/api/v1/payments/orders/{orderId}/initialize")
-            .GetProperty("post");
-        Assert.True(initializePayment.TryGetProperty("security", out _));
-        AssertRequiredParameter(initializePayment, "orderId", "path");
     }
 
     [Fact]
@@ -233,7 +216,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     {
         using var client = await _factory.CreateInitializedClientAsync();
 
-        var response = await client.GetAsync("/api/users/me");
+        var response = await client.GetAsync("/api/v1/users/me");
         using var problem = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -248,7 +231,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
     {
         using var client = await _factory.CreateInitializedClientAsync();
 
-        var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
+        var response = await client.PostAsJsonAsync("/api/v1/auth/register", new RegisterRequest
         {
             UserName = string.Empty,
             Email = "not-an-email",
@@ -279,8 +262,8 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             Password = string.Empty
         };
 
-        using var first = await client.PostAsJsonAsync("/api/auth/login", request);
-        using var second = await client.PostAsJsonAsync("/api/auth/login", request);
+        using var first = await client.PostAsJsonAsync("/api/v1/auth/login", request);
+        using var second = await client.PostAsJsonAsync("/api/v1/auth/login", request);
         using var problem = await ReadJsonAsync(second);
 
         Assert.Equal(HttpStatusCode.BadRequest, first.StatusCode);
@@ -322,7 +305,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         var session = await CreateRoleSessionAsync(client, RoleNames.Customer);
         SetBearerToken(client, session.AccessToken);
 
-        using var response = await client.GetAsync("/api/users/me");
+        using var response = await client.GetAsync("/api/v1/users/me");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains(measurements, measurement =>
@@ -333,9 +316,9 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             && HasOutcome(measurement.Tags, "success"));
 
         using var logout = await client.PostAsJsonAsync(
-            "/api/auth/logout",
+            "/api/v1/auth/logout",
             new LogoutRequest { RefreshToken = session.RefreshToken });
-        using var staleSessionResponse = await client.GetAsync("/api/users/me");
+        using var staleSessionResponse = await client.GetAsync("/api/v1/users/me");
 
         Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, staleSessionResponse.StatusCode);
@@ -361,7 +344,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         var userName = $"api_{suffix[..12]}";
         const string password = "Customer@123";
 
-        var registered = await PostAuthAsync(client, "/api/auth/register", new RegisterRequest
+        var registered = await PostAuthAsync(client, "/api/v1/auth/register", new RegisterRequest
         {
             UserName = userName,
             Email = $"{userName}@example.com",
@@ -370,20 +353,19 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         });
         SetBearerToken(client, registered.AccessToken);
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/users/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/cart")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/orders/my")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/users/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/cart")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/orders/my")).StatusCode);
         Assert.Equal(
             HttpStatusCode.OK,
-            (await client.GetAsync("/api/orders/my/summaries")).StatusCode);
+            (await client.GetAsync("/api/v1/orders/my/summaries")).StatusCode);
         Assert.Equal(
             HttpStatusCode.Forbidden,
-            (await client.GetAsync("/api/orders/summaries")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/reports/sales-summary")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/admin/dashboard/summary")).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/health/details")).StatusCode);
+            (await client.GetAsync("/api/v1/orders/summaries")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/reports/sales-summary")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/v1/admin/dashboard/summary")).StatusCode);
 
-        using var checkout = new HttpRequestMessage(HttpMethod.Post, "/api/orders")
+        using var checkout = new HttpRequestMessage(HttpMethod.Post, "/api/v1/orders")
         {
             Content = JsonContent.Create(new PlaceOrderRequest
             {
@@ -398,32 +380,22 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.Equal("business_error", checkoutProblem.RootElement.GetProperty("code").GetString());
 
         client.DefaultRequestHeaders.Authorization = null;
-        var login = await PostAuthAsync(client, "/api/auth/login", new LoginRequest
+        var login = await PostAuthAsync(client, "/api/v1/auth/login", new LoginRequest
         {
             UserName = userName,
             Password = password
         });
-        var refreshed = await PostAuthAsync(client, "/api/auth/refresh", new RefreshTokenRequest
+        var refreshed = await PostAuthAsync(client, "/api/v1/auth/refresh", new RefreshTokenRequest
         {
             RefreshToken = login.RefreshToken
         });
         SetBearerToken(client, refreshed.AccessToken);
-        var logout = await client.PostAsJsonAsync("/api/auth/logout", new LogoutRequest
+        var logout = await client.PostAsJsonAsync("/api/v1/auth/logout", new LogoutRequest
         {
             RefreshToken = refreshed.RefreshToken
         });
         Assert.Equal(HttpStatusCode.OK, logout.StatusCode);
 
-        client.DefaultRequestHeaders.Authorization = null;
-        var secondLogin = await PostAuthAsync(client, "/api/auth/login", new LoginRequest
-        {
-            UserName = userName,
-            Password = password
-        });
-        SetBearerToken(client, secondLogin.AccessToken);
-        Assert.Equal(
-            HttpStatusCode.OK,
-            (await client.PostAsync("/api/auth/logout-all", content: null)).StatusCode);
     }
 
     [Fact]
@@ -434,29 +406,23 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
 
         foreach (var path in new[]
         {
-            "/api/users?page=1&pageSize=10",
-            "/api/orders?page=1&pageSize=10",
-            "/api/orders/summaries?page=1&pageSize=10",
-            "/api/promotions?page=1&pageSize=10",
-            "/api/admin/promotions/analytics?page=1&pageSize=10&sortBy=usage",
-            "/api/inventory/low-stock?page=1&pageSize=10",
-            "/api/admin/inventory?page=1&pageSize=10",
-            "/api/admin/customers?page=1&pageSize=10",
-            "/api/reports/sales-summary",
-            "/api/admin/reports/revenue?groupBy=day",
-            "/api/admin/reports/orders",
-            "/api/admin/reports/products?limit=5",
-            "/api/admin/reports/customers?limit=5",
-            "/api/admin/reports/returns?reasonLimit=5",
-            "/api/admin/dashboard/summary",
-            "/api/admin/dashboard/revenue?groupBy=day",
-            "/api/admin/dashboard/orders-by-status",
-            "/api/admin/dashboard/top-products?limit=5",
-            "/api/admin/dashboard/low-stock?page=1&pageSize=10",
-            "/api/admin/dashboard/recent-activities?limit=5",
-            "/api/operations/outbox/dead-letters?page=1&pageSize=10",
-            "/api/operations/audit-events?page=1&pageSize=10",
-            "/health/details"
+            "/api/v1/users?page=1&pageSize=10",
+            "/api/v1/orders?page=1&pageSize=10",
+            "/api/v1/orders/summaries?page=1&pageSize=10",
+            "/api/v1/promotions?page=1&pageSize=10",
+            "/api/v1/inventory/low-stock?page=1&pageSize=10",
+            "/api/v1/admin/inventory?page=1&pageSize=10",
+            "/api/v1/admin/customers?page=1&pageSize=10",
+            "/api/v1/reports/sales-summary",
+            "/api/v1/admin/reports/revenue?groupBy=day",
+            "/api/v1/admin/reports/orders",
+            "/api/v1/admin/reports/products?limit=5",
+            "/api/v1/admin/dashboard/summary",
+            "/api/v1/admin/dashboard/revenue?groupBy=day",
+            "/api/v1/admin/dashboard/orders-by-status",
+            "/api/v1/admin/dashboard/top-products?limit=5",
+            "/api/v1/admin/dashboard/low-stock?page=1&pageSize=10",
+            "/api/v1/operations/audit-events?page=1&pageSize=10"
         })
         {
             await AssertStatusAsync(client, path, HttpStatusCode.OK);
@@ -494,22 +460,22 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         }
 
         using var missingPrecondition = await client.PutAsJsonAsync(
-            $"/api/products/{productId}/stock",
+            $"/api/v1/products/{productId}/stock",
             new AdjustProductStockRequest
             {
                 TargetQuantity = 7,
-                Reason = "Kiểm kê API"
+                Reason = "Kiá»ƒm kÃª API"
             });
         Assert.Equal((HttpStatusCode)428, missingPrecondition.StatusCode);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Put,
-            $"/api/products/{productId}/stock")
+            $"/api/v1/products/{productId}/stock")
         {
             Content = JsonContent.Create(new AdjustProductStockRequest
             {
                 TargetQuantity = 7,
-                Reason = "  Kiểm kê API  "
+                Reason = "  Kiá»ƒm kÃª API  "
             })
         };
         request.Headers.TryAddWithoutValidation(
@@ -531,7 +497,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             .SingleAsync(item => item.ProductId == productId);
         Assert.Equal(InventoryTransactionType.ManualAdjustment, transaction.Type);
         Assert.Equal(2, transaction.QuantityChange);
-        Assert.Equal("Kiểm kê API", transaction.Reason);
+        Assert.Equal("Kiá»ƒm kÃª API", transaction.Reason);
     }
 
     [Fact]
@@ -565,19 +531,19 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         }
 
         using var missingPrecondition = await client.PostAsJsonAsync(
-            $"/api/admin/inventory/{productId}/stock-in",
-            new StockInRequest { Quantity = 3, Reason = "Nhập hàng" });
+            $"/api/v1/admin/inventory/{productId}/stock-in",
+            new StockInRequest { Quantity = 3, Reason = "Nháº­p hÃ ng" });
         Assert.Equal((HttpStatusCode)428, missingPrecondition.StatusCode);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            $"/api/admin/inventory/{productId}/stock-in")
+            $"/api/v1/admin/inventory/{productId}/stock-in")
         {
             Content = JsonContent.Create(new StockInRequest
             {
                 Quantity = 3,
                 Reference = " GRN-API-001 ",
-                Reason = " Nhập hàng API "
+                Reason = " Nháº­p hÃ ng API "
             })
         };
         request.Headers.TryAddWithoutValidation(
@@ -601,7 +567,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         Assert.Equal(3, transaction.QuantityChange);
         Assert.Equal(8, transaction.BalanceAfter);
         Assert.Equal("GRN-API-001", transaction.Reference);
-        Assert.Equal("Nhập hàng API", transaction.Reason);
+        Assert.Equal("Nháº­p hÃ ng API", transaction.Reason);
     }
 
     [Fact]
@@ -610,21 +576,19 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         using var client = await _factory.CreateInitializedClientAsync();
         SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Staff)).AccessToken);
 
-        await AssertStatusAsync(client, "/api/orders?page=1&pageSize=10", HttpStatusCode.OK);
+        await AssertStatusAsync(client, "/api/v1/orders?page=1&pageSize=10", HttpStatusCode.OK);
         await AssertStatusAsync(
             client,
-            "/api/orders/summaries?page=1&pageSize=10",
+            "/api/v1/orders/summaries?page=1&pageSize=10",
             HttpStatusCode.OK);
-        await AssertStatusAsync(client, "/api/inventory/low-stock?page=1&pageSize=10", HttpStatusCode.OK);
-        await AssertStatusAsync(client, "/api/admin/inventory?page=1&pageSize=10", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/admin/customers?page=1&pageSize=10", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/users?page=1&pageSize=10", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/promotions?page=1&pageSize=10", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/admin/promotions/analytics?page=1&pageSize=10&sortBy=usage", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/reports/sales-summary", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/admin/reports/revenue?groupBy=day", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/api/operations/audit-events", HttpStatusCode.Forbidden);
-        await AssertStatusAsync(client, "/health/details", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/inventory/low-stock?page=1&pageSize=10", HttpStatusCode.OK);
+        await AssertStatusAsync(client, "/api/v1/admin/inventory?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/admin/customers?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/users?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/promotions?page=1&pageSize=10", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/reports/sales-summary", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/admin/reports/revenue?groupBy=day", HttpStatusCode.Forbidden);
+        await AssertStatusAsync(client, "/api/v1/operations/audit-events", HttpStatusCode.Forbidden);
     }
 
     [Fact]
@@ -649,7 +613,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         }
 
         SetBearerToken(client, (await CreateRoleSessionAsync(client, RoleNames.Admin)).AccessToken);
-        using var response = await client.GetAsync($"/api/operations/audit-events/{auditEventId}");
+        using var response = await client.GetAsync($"/api/v1/operations/audit-events/{auditEventId}");
         using var payload = await ReadJsonAsync(response);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -668,23 +632,23 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
         SetBearerToken(client, administrator.AccessToken);
 
         using (var lockResponse = await client.PostAsync(
-                   $"/api/admin/customers/{customer.UserId}/lock",
+                   $"/api/v1/admin/customers/{customer.UserId}/lock",
                    content: null))
         {
             Assert.Equal(HttpStatusCode.OK, lockResponse.StatusCode);
         }
 
         SetBearerToken(client, customer.AccessToken);
-        await AssertStatusAsync(client, "/api/users/me", HttpStatusCode.Unauthorized);
+        await AssertStatusAsync(client, "/api/v1/users/me", HttpStatusCode.Unauthorized);
 
         SetBearerToken(client, administrator.AccessToken);
         using var unlockResponse = await client.PostAsync(
-            $"/api/admin/customers/{customer.UserId}/unlock",
+            $"/api/v1/admin/customers/{customer.UserId}/unlock",
             content: null);
         Assert.Equal(HttpStatusCode.OK, unlockResponse.StatusCode);
 
         SetBearerToken(client, customer.AccessToken);
-        await AssertStatusAsync(client, "/api/users/me", HttpStatusCode.Unauthorized);
+        await AssertStatusAsync(client, "/api/v1/users/me", HttpStatusCode.Unauthorized);
     }
 
     private async Task<AuthResponse> CreateRoleSessionAsync(HttpClient client, string roleName)
@@ -713,7 +677,7 @@ public sealed class ApiContractTests : IClassFixture<TestApiFactory>
             await context.SaveChangesAsync();
         }
 
-        return await PostAuthAsync(client, "/api/auth/login", new LoginRequest
+        return await PostAuthAsync(client, "/api/v1/auth/login", new LoginRequest
         {
             UserName = userName,
             Password = password

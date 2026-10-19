@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Security.Claims;
 using System.Text;
 using Asp.Versioning;
 using ECommerceBackend.Application.Common;
@@ -15,7 +14,6 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/payments")]
     [Route("api/v{version:apiVersion}/payments")]
     [Produces("application/json")]
     public sealed class PaymentController : ControllerBase
@@ -25,28 +23,18 @@ namespace ECommerceBackend.API.Controllers
             throwOnInvalidBytes: true);
 
         private readonly IPaymentWebhookService _webhookService;
-        private readonly IPaymentCommandService _paymentCommands;
         private readonly IPaymentProviderResolver _providers;
         private readonly int _maxPayloadBytes;
 
         public PaymentController(
             IPaymentWebhookService webhookService,
-            IPaymentCommandService paymentCommands,
             IOptions<PaymentWebhookOptions> options,
             IPaymentProviderResolver providers)
         {
             _webhookService = webhookService;
-            _paymentCommands = paymentCommands;
             _providers = providers;
             _maxPayloadBytes = options.Value.MaxPayloadBytes;
         }
-
-        private Guid CurrentUserId => Guid.Parse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-        private bool CanProcessOrders => User.HasClaim(
-            AuthClaimTypes.Permission,
-            PermissionNames.ProcessOrders);
 
         [HttpGet("methods")]
         [AllowAnonymous]
@@ -67,21 +55,6 @@ namespace ECommerceBackend.API.Controllers
             return Ok(methods);
         }
 
-        [HttpPost("orders/{orderId:guid}/initialize")]
-        [Authorize]
-        [EnableRateLimiting("checkout")]
-        [ProducesResponseType(
-            typeof(ExternalPaymentResponse),
-            StatusCodes.Status200OK)]
-        public async Task<IActionResult> InitializeExternalPayment(
-            Guid orderId,
-            CancellationToken cancellationToken)
-            => Ok(await _paymentCommands.InitializeExternalPaymentAsync(
-                orderId,
-                CurrentUserId,
-                CanProcessOrders,
-                cancellationToken));
-
         [HttpPost("webhooks/{providerCode}")]
         [AllowAnonymous]
         [EnableRateLimiting("webhook")]
@@ -99,28 +72,6 @@ namespace ECommerceBackend.API.Controllers
                 new PaymentWebhookRequest(eventId, signature, payload),
                 cancellationToken);
 
-            return Ok(result);
-        }
-
-        [HttpPost("webhooks/stripe")]
-        [AllowAnonymous]
-        [EnableRateLimiting("webhook")]
-        [Consumes("application/json")]
-        [ProducesResponseType(
-            typeof(PaymentWebhookResponse),
-            StatusCodes.Status200OK)]
-        public async Task<IActionResult> HandleStripeWebhook(
-            [FromHeader(Name = "Stripe-Signature")] string signature,
-            CancellationToken cancellationToken)
-        {
-            var payload = await ReadPayloadAsync(cancellationToken);
-            var result = await _webhookService.HandleAsync(
-                "stripe",
-                new PaymentWebhookRequest(
-                    string.Empty,
-                    signature,
-                    payload),
-                cancellationToken);
             return Ok(result);
         }
 

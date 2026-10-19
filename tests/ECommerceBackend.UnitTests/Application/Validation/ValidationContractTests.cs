@@ -15,6 +15,63 @@ public sealed class ValidationContractTests
         Assert.False(validate().IsValid);
     }
 
+    [Fact]
+    public void PasswordValidators_RequireMinimumSixCharacters()
+    {
+        var registerValidator = new RegisterRequestValidator();
+        var changeValidator = new ChangePasswordRequestValidator();
+        var resetValidator = new ResetPasswordRequestValidator();
+
+        var invalidRegister = registerValidator.Validate(new RegisterRequest
+        {
+            UserName = "user123",
+            Email = "user@test.local",
+            Password = "12345",
+            FullName = "User Test"
+        });
+        Assert.False(invalidRegister.IsValid);
+        Assert.Contains(invalidRegister.Errors, e => e.ErrorMessage == "Mật khẩu phải có ít nhất 6 ký tự.");
+
+        var validRegister = registerValidator.Validate(new RegisterRequest
+        {
+            UserName = "user123",
+            Email = "user@test.local",
+            Password = "123456",
+            FullName = "User Test"
+        });
+        Assert.DoesNotContain(validRegister.Errors, e => e.PropertyName == nameof(RegisterRequest.Password));
+
+        var invalidChange = changeValidator.Validate(new ChangePasswordRequest
+        {
+            CurrentPassword = "current_pass",
+            NewPassword = "12345"
+        });
+        Assert.False(invalidChange.IsValid);
+        Assert.Contains(invalidChange.Errors, e => e.ErrorMessage == "Mật khẩu mới phải có ít nhất 6 ký tự.");
+
+        var validChange = changeValidator.Validate(new ChangePasswordRequest
+        {
+            CurrentPassword = "current_pass",
+            NewPassword = "123456"
+        });
+        Assert.True(validChange.IsValid);
+
+        var invalidReset = resetValidator.Validate(new ResetPasswordRequest
+        {
+            Token = "valid-token",
+            NewPassword = "12345"
+        });
+        Assert.False(invalidReset.IsValid);
+        Assert.Contains(invalidReset.Errors, e => e.ErrorMessage == "Mật khẩu mới phải có ít nhất 6 ký tự.");
+
+        var validReset = resetValidator.Validate(new ResetPasswordRequest
+        {
+            Token = "valid-token",
+            NewPassword = "123456"
+        });
+        Assert.True(validReset.IsValid);
+    }
+
     public static IEnumerable<object[]> InvalidRequestCases()
     {
         yield return Case("cart product", () => new AddToCartRequestValidator().Validate(

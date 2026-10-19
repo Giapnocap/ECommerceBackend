@@ -15,34 +15,12 @@ namespace ECommerceBackend.Application.Interfaces
 
     public interface IOperationsService
     {
-        Task<PagedResult<DeadLetterResponse>> GetDeadLettersAsync(
-            DeadLetterQueryParams query,
-            CancellationToken cancellationToken = default);
-
-        Task<RedriveOutboxResponse> RedriveDeadLetterAsync(
-            Guid messageId,
-            Guid actorUserId,
-            CancellationToken cancellationToken = default);
-
         Task<PagedResult<AuditEventResponse>> GetAuditEventsAsync(
             AuditQueryParams query,
             CancellationToken cancellationToken = default);
 
         Task<AuditEventResponse> GetAuditEventAsync(
             Guid id,
-            CancellationToken cancellationToken = default);
-
-        Task<DataRetentionResponse> RunDataRetentionAsync(
-            DataRetentionRequest request,
-            Guid? actorUserId,
-            CancellationToken cancellationToken = default);
-    }
-
-    public interface IUploadReconciliationService
-    {
-        Task<UploadReconciliationResponse> ReconcileAsync(
-            UploadReconciliationRequest request,
-            Guid actorUserId,
             CancellationToken cancellationToken = default);
     }
 

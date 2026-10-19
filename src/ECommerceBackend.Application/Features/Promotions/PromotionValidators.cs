@@ -130,6 +130,10 @@ namespace ECommerceBackend.Application.Validation
                 .InclusiveBetween(1, 10_000)
                 .WithMessage(
                     "Giới hạn sử dụng mỗi khách phải từ 1 đến 10.000.");
+            validator.RuleFor(request => request.ApplicablePaymentMethod)
+                .IsInEnum()
+                .When(request => request.ApplicablePaymentMethod.HasValue)
+                .WithMessage("Phương thức thanh toán áp dụng không hợp lệ.");
         }
     }
 }

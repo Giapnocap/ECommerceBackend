@@ -13,15 +13,6 @@ namespace ECommerceBackend.Application.Interfaces
             Guid promotionId,
             CancellationToken cancellationToken = default);
 
-        Task<PromotionAnalyticsResponse> GetAnalyticsAsync(
-            Guid promotionId,
-            PromotionAnalyticsRangeQuery query,
-            CancellationToken cancellationToken = default);
-
-        Task<PagedResult<PromotionAnalyticsResponse>> GetAnalyticsAsync(
-            PromotionAnalyticsQuery query,
-            CancellationToken cancellationToken = default);
-
         Task<PromotionResponse> CreateAsync(
             CreatePromotionRequest request,
             Guid actorUserId,

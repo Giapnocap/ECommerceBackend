@@ -26,10 +26,6 @@ namespace ECommerceBackend.Application
             services.AddScoped<AuthLoginUseCase>();
             services.AddScoped<AuthRefreshUseCase>();
             services.AddScoped<AuthLogoutUseCase>();
-            services.AddScoped<AuthLogoutAllUseCase>();
-            services.AddScoped<PasswordResetUseCase>();
-            services.AddScoped<AuthSessionManagementUseCase>();
-            services.AddScoped<EmailVerificationUseCase>();
             services.AddScoped<AuthTokenIssuer>();
             services.AddScoped<IUserService, UserService>();
             services.AddScoped<ICustomerManagementService, CustomerManagementService>();
@@ -40,7 +36,6 @@ namespace ECommerceBackend.Application
             services.AddScoped<ICategoryService, CategoryService>();
             services.AddScoped<IProductService, ProductService>();
             services.AddScoped<IUploadService, UploadService>();
-            services.AddScoped<IUploadReconciliationService, UploadReconciliationService>();
             services.AddScoped<IPromotionService, PromotionService>();
         }
 
@@ -65,12 +60,8 @@ namespace ECommerceBackend.Application
             services.AddScoped<OrderReturnReviewUseCase>();
             services.AddScoped<OrderReturnReceiptUseCase>();
             services.AddScoped<OrderRefundUseCase>();
-            services.AddScoped<OnlinePaymentRefundUseCase>();
             services.AddScoped<OrderQueryUseCase>();
             services.AddScoped<IInventoryService, InventoryService>();
-            services.AddScoped<IPaymentCommandService, PaymentCommandService>();
-            services.AddScoped<ExternalPaymentCreationUseCase>();
-            services.AddScoped<PaymentReconciliationUseCase>();
             services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         }
 
@@ -81,9 +72,7 @@ namespace ECommerceBackend.Application
             services.AddScoped<IOutboxWriter, OutboxWriter>();
             services.AddScoped<IAuditWriter, AuditWriter>();
             services.AddScoped<IOperationsService, OperationsService>();
-            services.AddScoped<DeadLetterUseCase>();
             services.AddScoped<AuditQueryUseCase>();
-            services.AddScoped<DataRetentionUseCase>();
             services.AddScoped<IOutboxMessageHandler, NotificationOutboxMessageHandler>();
         }
     }

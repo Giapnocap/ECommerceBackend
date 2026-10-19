@@ -9,7 +9,6 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/inventory")]
     [Route("api/v{version:apiVersion}/inventory")]
     [Authorize(Policy = PermissionNames.ViewInventory)]
     [Produces("application/json")]

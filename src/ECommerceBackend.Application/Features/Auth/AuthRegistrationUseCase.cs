@@ -18,7 +18,6 @@ namespace ECommerceBackend.Application.Services
         private readonly IDataConsistencyService _consistency;
         private readonly IPasswordHasher _passwordHasher;
         private readonly AuthTokenIssuer _tokenIssuer;
-        private readonly EmailVerificationUseCase _emailVerification;
         private readonly TimeProvider _timeProvider;
 
         public AuthRegistrationUseCase(
@@ -29,7 +28,6 @@ namespace ECommerceBackend.Application.Services
             IDataConsistencyService consistency,
             IPasswordHasher passwordHasher,
             AuthTokenIssuer tokenIssuer,
-            EmailVerificationUseCase emailVerification,
             TimeProvider timeProvider)
         {
             _userRepository = userRepository;
@@ -39,7 +37,6 @@ namespace ECommerceBackend.Application.Services
             _consistency = consistency;
             _passwordHasher = passwordHasher;
             _tokenIssuer = tokenIssuer;
-            _emailVerification = emailVerification;
             _timeProvider = timeProvider;
         }
 
@@ -107,7 +104,6 @@ namespace ECommerceBackend.Application.Services
             await _authSessionRepository.AddRefreshTokenAsync(
                 refreshToken.Entity,
                 cancellationToken);
-            _emailVerification.IssueForRegistration(user, occurredAt);
 
             try
             {

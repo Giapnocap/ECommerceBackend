@@ -18,6 +18,10 @@ namespace ECommerceBackend.Application.Interfaces.Repositories
             string normalizedUserName,
             CancellationToken cancellationToken = default);
 
+        Task<Guid?> GetActiveUserIdByUserNameOrPhoneAsync(
+            string identifier,
+            CancellationToken cancellationToken = default);
+
         Task<Guid?> GetActiveUserIdByEmailAsync(
             string normalizedEmail,
             CancellationToken cancellationToken = default);

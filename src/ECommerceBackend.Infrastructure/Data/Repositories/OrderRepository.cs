@@ -24,6 +24,10 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
         {
             var query = BuildReadQuery()
                 .Where(order => order.UserId == userId)
+                .Where(order => !(order.Payment != null
+                    && order.Payment.Method != PaymentMethod.CashOnDelivery
+                    && order.Status == OrderStatus.Cancelled
+                    && order.Payment.Status != PaymentStatus.Paid))
                 .OrderByDescending(order => order.OrderDate)
                 .ThenByDescending(order => order.Id);
             var totalCount = await query.CountAsync(cancellationToken);
@@ -42,7 +46,11 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             => GetSummaryPageAsync(
                 _context.Orders
                     .AsNoTracking()
-                    .Where(order => order.UserId == userId),
+                    .Where(order => order.UserId == userId)
+                    .Where(order => !(order.Payment != null
+                        && order.Payment.Method != PaymentMethod.CashOnDelivery
+                        && order.Status == OrderStatus.Cancelled
+                        && order.Payment.Status != PaymentStatus.Paid)),
                 skip,
                 take,
                 cancellationToken);
@@ -65,7 +73,11 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             int take,
             CancellationToken cancellationToken = default)
         {
-            var query = BuildReadQuery();
+            var query = BuildReadQuery()
+                .Where(order => !(order.Payment != null
+                    && order.Payment.Method != PaymentMethod.CashOnDelivery
+                    && order.Status == OrderStatus.Cancelled
+                    && order.Payment.Status != PaymentStatus.Paid));
             if (status.HasValue)
                 query = query.Where(order => order.Status == status.Value);
             if (userId.HasValue)
@@ -89,7 +101,11 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             int take,
             CancellationToken cancellationToken = default)
         {
-            var query = _context.Orders.AsNoTracking();
+            var query = _context.Orders.AsNoTracking()
+                .Where(order => !(order.Payment != null
+                    && order.Payment.Method != PaymentMethod.CashOnDelivery
+                    && order.Status == OrderStatus.Cancelled
+                    && order.Payment.Status != PaymentStatus.Paid));
             if (status.HasValue)
                 query = query.Where(order => order.Status == status.Value);
             if (userId.HasValue)
@@ -141,6 +157,9 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             CancellationToken cancellationToken = default)
             => _context.Entry(order)
                 .Collection(candidate => candidate.OrderDetails)
+                .Query()
+                .Include(detail => detail.Product)
+                    .ThenInclude(product => product!.Images)
                 .LoadAsync(cancellationToken);
 
         public void Add(Order order)
@@ -212,6 +231,8 @@ namespace ECommerceBackend.Infrastructure.Data.Repositories
             => _context.Orders
                 .AsNoTracking()
                 .Include(order => order.OrderDetails)
+                    .ThenInclude(detail => detail.Product)
+                        .ThenInclude(product => product!.Images)
                 .Include(order => order.Payment)
                     .ThenInclude(payment =>
                         payment!.StatusHistory.OrderBy(

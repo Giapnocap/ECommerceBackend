@@ -1,5 +1,4 @@
 using ECommerceBackend.API.Health;
-using ECommerceBackend.Application.Common;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 namespace ECommerceBackend.API.Extensions
@@ -25,11 +24,6 @@ namespace ECommerceBackend.API.Extensions
             {
                 ResponseWriter = HealthCheckResponseWriter.WritePublicAsync
             }).AllowAnonymous();
-
-            endpoints.MapHealthChecks("/health/details", new HealthCheckOptions
-            {
-                ResponseWriter = HealthCheckResponseWriter.WriteDetailedAsync
-            }).RequireAuthorization(policy => policy.RequireRole(RoleNames.Admin));
 
             return endpoints;
         }

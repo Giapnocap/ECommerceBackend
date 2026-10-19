@@ -9,7 +9,6 @@ namespace ECommerceBackend.API.Controllers
 {
     [ApiController]
     [ApiVersion(1.0)]
-    [Route("api/reports")]
     [Route("api/v{version:apiVersion}/reports")]
     [Authorize(Policy = PermissionNames.ViewReports)]
     [Produces("application/json")]
